@@ -1,0 +1,47 @@
+services:
+  # --- BASE DE DATOS ---
+  db:
+    image: postgres:15-alpine
+    container_name: propatient-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password123  # <--- CONFIGURAR AQUÍ
+      POSTGRES_DB: propatient
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # --- BACKEND (GO) ---
+  backend:
+    build: ./PropatientGo
+    container_name: propatient-api
+    ports:
+      - "8095:8095"
+    depends_on:
+      - db
+    environment:
+      # @db es el nombre del servicio de arriba. Docker resuelve la IP solo.
+      - DATABASE_URL=postgres://postgres:password123@db:5432/propatient?sslmode=disable
+      - JWT_SECRET=mi_clave_secreta_para_tokens
+      - PORT=8095
+    volumes:
+      - ./PropatientGo:/app
+
+  # --- FRONTEND (REACT) ---
+  frontend:
+    build: ./propatient-frontend
+    container_name: propatient-web
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_URL=http://localhost:8095/api
+    volumes:
+      - ./propatient-frontend:/app
+      - /app/node_modules
+
+volumes:
+  postgres_data:

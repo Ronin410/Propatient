@@ -1,0 +1,182 @@
+.consultation-manager-container {
+    padding: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+
+    .consultation-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        padding-bottom: 1.5rem;
+        border-bottom: 1px solid var(--color-border);
+
+        .patient-summary {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+
+            .btn-back {
+                background: none;
+                border: 1px solid var(--color-border);
+                border-radius: 8px;
+                padding: 0.5rem;
+                cursor: pointer;
+                color: var(--color-secondary);
+                &:hover { background: var(--color-light); }
+            }
+
+            .info {
+                h1 { margin: 0; font-size: 1.5rem; color: var(--color-dark); }
+                p { 
+                    margin: 0.25rem 0 0; 
+                    color: var(--color-secondary);
+                    .divider { margin: 0 0.75rem; color: var(--color-border); }
+                }
+            }
+        }
+    }
+
+    .consultation-content-grid {
+        display: grid;
+        grid-template-columns: 300px 1fr;
+        gap: 2rem;
+        align-items: start;
+    }
+
+    .patient-sidebar {
+        .card {
+            padding: 1.5rem;
+            h3 { font-size: 1.1rem; margin-top: 0; border-bottom: 2px solid var(--color-primary-light); padding-bottom: 0.5rem; }
+            .quick-info {
+                display: flex;
+                flex-direction: column;
+                gap: 0.75rem;
+                p { margin: 0; font-size: 0.9rem; strong { color: var(--color-dark); } }
+            }
+        }
+    }
+
+    .consultation-form-area {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+
+        .patient-data-section {
+            padding: 0;
+            overflow: hidden;
+
+            .form-tabs {
+                display: flex;
+                background: #f8faff;
+                border-bottom: 1px solid var(--color-border-light);
+
+                .tab-link {
+                    padding: 1rem 1.5rem;
+                    border: none;
+                    background: none;
+                    cursor: pointer;
+                    font-weight: 600;
+                    color: var(--color-secondary);
+                    transition: all 0.2s;
+                    border-bottom: 3px solid transparent;
+
+                    &.active {
+                        color: var(--color-primary);
+                        border-bottom-color: var(--color-primary);
+                        background: white;
+                    }
+                }
+            }
+
+            .tab-content { padding: 1.5rem; }
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.25rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            &.full-width { grid-column: span 2; }
+            
+            label { font-size: 0.85rem; font-weight: 700; color: var(--color-secondary); text-transform: uppercase; }
+            input, textarea {
+                padding: 0.75rem;
+                border: 1px solid var(--color-border);
+                border-radius: 6px;
+                font-size: 1rem;
+                &:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-light); }
+            }
+        }
+
+        .document-upload-section {
+            .section-header-flex {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 1rem;
+                .sync-badge { font-size: 0.75rem; color: var(--color-primary); font-weight: 600; animation: pulse 2s infinite; }
+            }
+
+            .upload-options {
+                display: flex;
+                gap: 1rem;
+                .upload-card {
+                    flex: 1;
+                    border: 2px dashed var(--color-border);
+                    border-radius: 8px;
+                    padding: 1rem;
+                    text-align: center;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    color: var(--color-secondary);
+                    &:hover { border-color: var(--color-primary); background: var(--color-primary-light); color: var(--color-primary); }
+                    .material-icons-outlined { font-size: 2rem; margin-bottom: 0.5rem; }
+                    p { margin: 0; font-size: 0.85rem; font-weight: 600; }
+                }
+            }
+
+            .qr-display {
+                margin-top: 1rem;
+                text-align: center;
+                padding: 1.5rem;
+                img { width: 180px; height: 180px; margin-bottom: 1rem; border: 1px solid #eee; }
+            }
+
+            .file-list {
+                list-style: none; padding: 0; margin: 0;
+                .file-item {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 0.75rem;
+                    border-bottom: 1px solid #f0f0f0;
+                    &:last-child { border-bottom: none; }
+                    .file-info {
+                        display: flex; align-items: center; gap: 0.75rem;
+                        .file-name { font-size: 0.9rem; font-weight: 500; }
+                        .server-label { font-size: 0.7rem; background: #e8f5e9; color: #2e7d32; padding: 2px 6px; border-radius: 4px; font-weight: 700; }
+                    }
+                }
+            }
+        }
+    }
+}
+
+.autosave-toast {
+    position: fixed; bottom: 2rem; right: 2rem;
+    background: rgba(44, 62, 80, 0.9); color: white;
+    padding: 0.75rem 1.25rem; border-radius: 50px;
+    display: flex; align-items: center; gap: 0.75rem;
+    font-size: 0.85rem; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 9999; animation: slideInUp 0.3s ease-out;
+    .material-icons-outlined { font-size: 1.2rem; color: #2ecc71; }
+}
+
+@keyframes slideInUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }

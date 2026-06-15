@@ -1,0 +1,64 @@
+.patients-container {
+    padding: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+
+        h1 { margin: 0; color: var(--color-dark); }
+        .subtitle { color: var(--color-secondary); margin: 0.5rem 0 0 0; }
+    }
+
+    .search-bar-container {
+        margin-bottom: 1.5rem;
+        padding: 1rem;
+
+        .search-input {
+            width: 100%;
+            padding: 0.8rem 1rem;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 1rem;
+            &:focus { outline: none; border-color: var(--color-primary); }
+        }
+    }
+
+    .patients-table {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+
+        th {
+            padding: 1rem;
+            background-color: #f8f9fa;
+            color: var(--color-secondary);
+            font-weight: 600;
+            border-bottom: 2px solid #eee;
+        }
+
+        td {
+            padding: 1rem;
+            border-bottom: 1px solid #eee;
+            color: var(--color-dark);
+        }
+
+        .patient-name {
+            font-weight: 600;
+            color: var(--color-primary);
+        }
+
+        .empty-table {
+            text-align: center;
+            padding: 3rem;
+            color: var(--color-secondary);
+        }
+
+        tr:hover {
+            background-color: #fcfcfc;
+        }
+    }
+}

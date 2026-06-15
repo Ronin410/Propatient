@@ -1,0 +1,77 @@
+/* Importa las variables globales si usas SCSS */
+
+.login-wrapper {
+    /* Ocupa el 100% de la altura de la vista (viewport height) */
+    height: 100vh; 
+    
+    /* Usa Flexbox para centrar el contenido (la tarjeta) */
+    display: flex;
+    justify-content: center; /* Centrado horizontal */
+    align-items: center; /* Centrado vertical */
+    
+    /* El padding asegura espacio en dispositivos pequeños */
+    padding: 1rem; 
+}
+
+.login-card {
+    /* La tarjeta se hace más pequeña que el 100% del contenedor */
+    max-width: 400px;
+    width: 100%;
+    
+    /* Asegura que el contenido esté centrado dentro de la tarjeta */
+    text-align: center; 
+    
+    /* El padding y box-shadow provienen de la clase .card global */
+}
+
+/* --- Logo y Título --- */
+
+.logo-container {
+    margin-bottom: 1.5rem;
+}
+
+.medical-logo {
+    width: 60px;
+    height: 60px;
+    margin-bottom: 0.5rem;
+}
+
+.office-name {
+    color: var(--color-secondary);
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+.access-title {
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: var(--color-dark);
+    margin-top: 0;
+    margin-bottom: 2rem;
+}
+
+/* --- Formulario y Elementos --- */
+
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem; /* Espaciado entre elementos del formulario */
+}
+
+.login-button {
+    /* Asegura que el botón use el ancho completo del formulario */
+    width: 100%; 
+    padding: 0.85rem 1.5rem; /* Un poco más alto que el botón estándar */
+    font-size: 1.1rem;
+    font-weight: 700;
+    
+    /* Sombra para darle un efecto 3D sutil, como en el diseño */
+    box-shadow: 0 4px 6px rgba(0, 123, 255, 0.4); 
+}
+
+.forgot-password-link {
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--color-primary);
+    text-align: center;
+}
