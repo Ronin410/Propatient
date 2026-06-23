@@ -19,6 +19,14 @@ type Doctor struct {
 	Email            string         `gorm:"unique" json:"email"`
 	Phone            string         `json:"phone"`
 	LicenseNumber    string         `json:"licenseNumber"`
+	BirthDate        *time.Time     `json:"birthDate"` // Puntero para soportar nulos iniciales antes del onboarding
+	Address          string         `json:"address"`
+	PostalCode       string         `json:"postalCode"`
+	RFC              string         `json:"rfc"`
+	CURP             string         `json:"curp"`
+	University       string         `json:"university"`
+	ProfileCompleted bool           `gorm:"default:false" json:"profileCompleted"`
+	CedulaValidated  string         `gorm:"type:varchar(20);default:'PENDIENTE'" json:"cedulaValidated"`
 	Patients         []Patient      `gorm:"many2many:doctor_patients;" json:"-"`
 }
 
@@ -79,4 +87,11 @@ type MedicalDocument struct {
 	UpdateAt      time.Time `json:"createdAt"`
 	CreateAt      time.Time `json:"updatedAt"`
 	DeleteAt      time.Time `json:"deletedAt"`
+}
+
+type GoogleTokenClaims struct {
+	Email         string `json:"email"`
+	EmailVerified string `json:"email_verified"`
+	Name          string `json:"name"`
+	Picture       string `json:"picture"`
 }

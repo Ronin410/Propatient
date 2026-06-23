@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-
+import { OnboardingGuard } from './context/OnboardingGuard';
 // Páginas de Estructura y Login
 import { Login } from './pages/Login';
 import { DashboardLayout } from './pages/DashboardLayout';
@@ -13,6 +13,8 @@ import { PatientForm } from './pages/PatientForm';
 import { AppointmentCalendar } from './pages/AppointmentCalendar';
 import { AppointmentForm } from './pages/AppointmentForm';
 import { ConsultationManager } from './pages/ConsultationManager';
+import { CompleteProfile } from './pages/CompleteProfile';
+import { ValidateLicense } from './pages/ValidateLicense';
 
 // Componente para proteger rutas privadas
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -34,6 +36,28 @@ function App() {
           {/* Ruta Pública */}
           <Route path="/login" element={<Login />} />
           
+{/* ========================================================= */}
+          {/* 2. PANTALLAS DE REGISTRO AISLADAS (Sin menús laterales)    */}
+          {/* ========================================================= */}
+          <Route 
+            path="/registro/perfil" 
+            element={
+              <ProtectedRoute>
+                <CompleteProfile />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/registro/validar-cedula" 
+            element={
+              <ProtectedRoute>
+                <ValidateLicense />
+              </ProtectedRoute>
+            } 
+          />
+
+
+<Route element={<OnboardingGuard />}>
           {/* Rutas Privadas (Dentro del Dashboard) */}
           <Route 
             path="/" 
@@ -48,7 +72,8 @@ function App() {
             
             {/* Inicio: Seguimiento de Citas (Dashboard Home) */}
             <Route path="inicio" element={<AppointmentTracking />} />
-            
+
+
             {/* Pacientes: Lista y gestión */}
             <Route path="pacientes" element={<PatientList />} />
             <Route path="pacientes/:id" element={<PatientDetail />} />
@@ -65,6 +90,7 @@ function App() {
             {/* Perfil: Ajustes del doctor */}
             <Route path="profile" element={<div>Perfil del Doctor</div>} />
           </Route>
+        </Route>
 
           {/* Manejo de rutas inexistentes: manda al login o al inicio según auth */}
           <Route path="*" element={<Navigate to="/inicio" replace />} />

@@ -27,7 +27,7 @@ services:
       - JWT_SECRET=mi_clave_secreta_para_tokens
       - PORT=8095
     volumes:
-      - ./PropatientGo:/app
+      - ./PropatientGo:/app:Z
 
   # --- FRONTEND (REACT) ---
   frontend:
@@ -40,7 +40,7 @@ services:
     environment:
       - VITE_API_URL=http://localhost:8095/api
     volumes:
-      - ./propatient-frontend:/app
+      - ./propatient-frontend:/app:Z
       - /app/node_modules
 
 volumes:

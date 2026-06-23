@@ -10,7 +10,9 @@
             "mode": "auto",
             "program": "${workspaceFolder}/main.go",
             "env": {
-                "DATABASE_URL": "postgresql://admin:vto19bkZHO5LQBdfBjMI9zSt2hQFZOa6@dpg-d6f2uljh46gs73e3t5dg-a.oregon-postgres.render.com/guarderias",
+                //"DATABASE_URL": "postgresql://admin:vto19bkZHO5LQBdfBjMI9zSt2hQFZOa6@dpg-d6f2uljh46gs73e3t5dg-a.oregon-postgres.render.com/guarderias",
+                "DATABASE_URL": "postgres://postgres:password123@localhost:5433/propatient?sslmode=disable",
+                                //"DATABASE_URL": "postgresql://admin:vto19bkZHO5LQBdfBj@postgres.render.com/propatient-",
                 "JWT_SECRET": "MiClaveSuperSecreta123",
                 "PORT": "8095"
             }

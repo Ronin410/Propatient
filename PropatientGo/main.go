@@ -69,6 +69,7 @@ func main() {
 		{
 			authRoutes.POST("/login", auth.LoginHandler(db))
 			authRoutes.POST("/register", auth.RegisterDoctor(db))
+			authRoutes.POST("/google-login", auth.GoogleLoginHandler(db))
 		}
 
 		// --- RUTAS PROTEGIDAS ---
@@ -81,6 +82,14 @@ func main() {
 			{
 				dashboard.GET("/summary", handlers.GetTodaySummary(db))
 				dashboard.GET("/upcoming", handlers.GetUpcomingAppointments(db))
+			}
+
+			users := protected.Group("/user")
+			{
+				users.POST("/update-profile", auth.UpdateProfileHandler(db))
+				users.POST("/update-license", auth.UpdateLicenseHandler(db))
+				users.POST("/update-license-full", auth.UpdateLicenseFullHandler(db))
+				// userRoutes.POST("/verify-cedula", auth.VerifyCedulaHandler(db))
 			}
 
 			// Patients
