@@ -27,6 +27,7 @@ type Doctor struct {
 	University       string         `json:"university"`
 	ProfileCompleted bool           `gorm:"default:false" json:"profileCompleted"`
 	CedulaValidated  string         `gorm:"type:varchar(20);default:'PENDIENTE'" json:"cedulaValidated"`
+	IneDocumentPath  string         `json:"ineDocumentPath"`
 	Patients         []Patient      `gorm:"many2many:doctor_patients;" json:"-"`
 }
 

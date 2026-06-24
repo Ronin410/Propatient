@@ -1,12 +1,13 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { OnboardingGuard } from './context/OnboardingGuard';
+
 // Páginas de Estructura y Login
 import { Login } from './pages/Login';
 import { DashboardLayout } from './pages/DashboardLayout';
 
 // Nuevas Pantallas que estamos migrando
-import { AppointmentTracking } from './pages/AppointmentTracking'; // La que creamos recién
+import { AppointmentTracking } from './pages/AppointmentTracking';
 import { PatientList } from './pages/PatientList';
 import { PatientDetail } from './pages/PatientDetail';
 import { PatientForm } from './pages/PatientForm';
@@ -16,13 +17,12 @@ import { ConsultationManager } from './pages/ConsultationManager';
 import { CompleteProfile } from './pages/CompleteProfile';
 import { ValidateLicense } from './pages/ValidateLicense';
 
-// Componente para proteger rutas privadas
+// Componente para proteger rutas privadas básicas
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated } = useAuth();
   
-  // Si no está autenticado, lo manda al login
   if (!isAuthenticated) {
-    return <Navigate to="/login" />;
+    return <Navigate to="/login" replace />;
   }
 
   return <>{children}</>;
@@ -33,66 +33,51 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Ruta Pública */}
+          {/* 🔓 RUTA PÚBLICA */}
           <Route path="/login" element={<Login />} />
-          
-{/* ========================================================= */}
-          {/* 2. PANTALLAS DE REGISTRO AISLADAS (Sin menús laterales)    */}
-          {/* ========================================================= */}
-          <Route 
-            path="/registro/perfil" 
+
+          {/* 📑 SECCIÓN ONBOARDING: Totalmente independiente de la estructura del Dashboard */}
+          <Route
+            path="/registro/perfil"
             element={
               <ProtectedRoute>
                 <CompleteProfile />
               </ProtectedRoute>
-            } 
+            }
           />
-          <Route 
-            path="/registro/validar-cedula" 
+          <Route
+            path="/registro/validar-cedula"
             element={
               <ProtectedRoute>
                 <ValidateLicense />
               </ProtectedRoute>
-            } 
+            }
           />
 
-
-<Route element={<OnboardingGuard />}>
-          {/* Rutas Privadas (Dentro del Dashboard) */}
-          <Route 
-            path="/" 
-            element={
-              <ProtectedRoute>
-                <DashboardLayout />
-              </ProtectedRoute>
-            }
-          >
-            {/* Al entrar a "/" redirige automáticamente a "/inicio" */}
-            <Route index element={<Navigate to="/inicio" replace />} />
-            
-            {/* Inicio: Seguimiento de Citas (Dashboard Home) */}
-            <Route path="inicio" element={<AppointmentTracking />} />
-
-
-            {/* Pacientes: Lista y gestión */}
-            <Route path="pacientes" element={<PatientList />} />
-            <Route path="pacientes/:id" element={<PatientDetail />} />
-            <Route path="pacientes/nuevo" element={<PatientForm />} />
-            <Route path="pacientes/editar/:id" element={<PatientForm />} />
-            
-            {/* Citas: El Calendario completo */}
-            <Route path="calendar" element={<AppointmentCalendar />} />
-            <Route path="appointments/new" element={<AppointmentForm />} />
-            
-            {/* Flujo de Atención Médica */}
-            <Route path="consulta/:appointmentId" element={<ConsultationManager />} />
-            
-            {/* Perfil: Ajustes del doctor */}
-            <Route path="profile" element={<div>Perfil del Doctor</div>} />
+          {/* 💻 SISTEMA MÉDICO PRINCIPAL: Envuelto por el OnboardingGuard */}
+          <Route element={<OnboardingGuard />}>
+            <Route
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout />
+                </ProtectedRoute>
+              }
+            >
+              {/* Rutas Hijas que sí llevan el menú lateral y barra de navegación */}
+              <Route index element={<Navigate to="/inicio" replace />} />
+              <Route path="inicio" element={<AppointmentTracking />} />
+              <Route path="pacientes" element={<PatientList />} />
+              <Route path="pacientes/:id" element={<PatientDetail />} />
+              <Route path="pacientes/nuevo" element={<PatientForm />} />
+              <Route path="pacientes/editar/:id" element={<PatientForm />} />
+              <Route path="calendar" element={<AppointmentCalendar />} />
+              <Route path="appointments/new" element={<AppointmentForm />} />
+              <Route path="consulta/:appointmentId" element={<ConsultationManager />} />
+              <Route path="profile" element={<div>Perfil del Doctor</div>} />
+            </Route>
           </Route>
-        </Route>
 
-          {/* Manejo de rutas inexistentes: manda al login o al inicio según auth */}
+          {/* Fallback general */}
           <Route path="*" element={<Navigate to="/inicio" replace />} />
         </Routes>
       </BrowserRouter>

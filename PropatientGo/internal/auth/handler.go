@@ -2,10 +2,12 @@ package auth
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/smtp"
+	"os"
 	"path/filepath"
 	"propatient-api/internal/models"
-	"strconv"
 	"strings"
 	"time"
 
@@ -18,6 +20,11 @@ type LoginRequest struct {
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
 }
+
+const (
+	SMTPServer = "smtp.gmail.com"
+	SMTPPort   = "587"
+)
 
 func GoogleLoginHandler(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -87,7 +94,8 @@ func GoogleLoginHandler(db *gorm.DB) gin.HandlerFunc {
 
 		// 5. Responder con la estructura que espera tu Login.tsx modificado
 		c.JSON(http.StatusOK, gin.H{
-			"token": token,
+			"token":    token,
+			"fullName": doctor.FullName,
 			"userStatus": gin.H{
 				"perfilCompletado": doctor.ProfileCompleted,
 				"cedulaValidada":   doctor.CedulaValidated,
@@ -103,7 +111,7 @@ func UpdateProfileHandler(db *gorm.DB) gin.HandlerFunc {
 		doctorID, _ := c.Get("doctorID")
 
 		var req struct {
-			//FullName         string `json:"fullName" binding:"required"`
+			FullName         string `json:"fullName" binding:"required"`
 			MedicalSpecialty string `json:"medicalSpecialty" binding:"required"`
 			Phone            string `json:"phone" binding:"required"`
 			BirthDate        string `json:"birthDate"`
@@ -127,7 +135,7 @@ func UpdateProfileHandler(db *gorm.DB) gin.HandlerFunc {
 
 		// Actualizamos los datos del doctor y marcamos perfil como completado
 		err = db.Model(&models.Doctor{}).Where("id = ?", doctorID).Updates(models.Doctor{
-			//FullName:         req.FullName,
+			FullName:         req.FullName,
 			MedicalSpecialty: req.MedicalSpecialty,
 			Phone:            req.Phone,
 			ProfileCompleted: true,
@@ -150,58 +158,96 @@ func UpdateProfileHandler(db *gorm.DB) gin.HandlerFunc {
 
 func UpdateLicenseFullHandler(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 1. Extraer ID del doctor inyectado por tu Middleware JWT
-		doctorID, exists := c.Get("doctorID")
+		// 1. OBTENER AL DOCTOR LOGUEADO DESDE EL CONTEXTO JWT DE FORMA SEGURA
+		doctorContext, exists := c.Get("doctorID")
 		if !exists {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Acceso denegado. Sesión no válida."})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "No autorizado. Inicie sesión de nuevo."})
 			return
 		}
 
-		// 2. Extraer campos de texto tradicionales mediante PostForm
-		licenseNumber := c.PostForm("licenseNumber")
-		rfc := c.PostForm("rfc")
-		curp := c.PostForm("curp")
-		//feeStr := c.PostForm("baseConsultationFee")
+		// Convertir a uint tolerando cualquier tipo de dato numérico del claim JWT (int, float64, etc.)
+		var doctorID uint
+		switch v := doctorContext.(type) {
+		case uint:
+			doctorID = v
+		case int:
+			doctorID = uint(v)
+		case float64:
+			doctorID = uint(v)
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Formato de ID de usuario inválido en el servidor"})
+			return
+		}
+
+		// 2. LEER LOS CAMPOS DEL FORMULARIO MULTIPART (Enviados desde el FormData de React)
+		licenseNumber := strings.TrimSpace(c.PostForm("licenseNumber"))
+		rfc := strings.TrimSpace(strings.ToUpper(c.PostForm("rfc")))
+		curp := strings.TrimSpace(strings.ToUpper(c.PostForm("curp")))
 
 		if licenseNumber == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "El número de cédula es obligatorio"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "El número de cédula profesional es un campo obligatorio."})
 			return
 		}
 
-		//fee, _ := strconv.ParseFloat(feeStr, 64)
-
-		// 3. Procesar el archivo adjunto de la INE
+		// 3. RECUPERAR EL ARCHIVO FÍSICO DE LA IDENTIFICACIÓN
 		file, err := c.FormFile("ineDocument")
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "La fotografía de tu identificación (INE) es obligatoria"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "La foto o documento de tu identificación oficial (INE/Pasaporte) es requerido."})
 			return
 		}
 
-		// Opcional: Guardar el archivo físicamente en un directorio local del servidor
-		// Puedes crear una carpeta llamada "uploads" en tu raíz
-		filename := "dr_" + strconv.FormatUint(uint64(doctorID.(uint)), 10) + "_" + filepath.Base(file.Filename)
-		uploadPath := filepath.Join("uploads", filename)
+		// 4. CREAR NOMBRE ÚNICO E INMUTABLE PARA EL ARCHIVO LIGADO AL DOCTOR
+		ext := filepath.Ext(file.Filename)
+		uniqueFileName := fmt.Sprintf("ine_doctor_%d_%d%s", doctorID, time.Now().Unix(), ext)
 
-		if err := c.SaveUploadedFile(file, uploadPath); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo almacenar el archivo de identidad"})
+		// Carpeta destino (Asegúrate de que este directorio exista en tu servidor o créalo dinámicamente)
+		uploadFolder := "./uploads/documentos_identidad/"
+		dst := filepath.Join(uploadFolder, uniqueFileName)
+
+		// Guardar el archivo físicamente en el disco
+		if err := c.SaveUploadedFile(file, dst); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo almacenar el archivo de identidad en el servidor."})
 			return
 		}
 
-		// 4. Actualizar el modelo del Doctor en Postgres usando GORM
-		err = db.Model(&models.Doctor{}).Where("id = ?", doctorID).Updates(map[string]interface{}{
-			"license_number": licenseNumber,
-			"rfc":            rfc,
-			"curp":           curp,
-			//"base_consultation_fee": fee,
-			"cedula_validated": "CAPTURADA", // 🚀 Cambiamos el estatus para dejarlo en revisión
-		}).Error
-
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al actualizar la información en base de datos"})
+		// 5. SELECCIONAR Y ACTUALIZAR EL REGISTRO EN LA BASE DE DATOS
+		var doctor models.Doctor
+		if err := db.First(&doctor, doctorID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Doctor no encontrado"})
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"message": "Información y documentación recibida de forma exitosa"})
+		// Mapear los campos al registro recuperado
+		doctor.LicenseNumber = licenseNumber
+		doctor.RFC = rfc
+		doctor.CURP = curp
+		doctor.IneDocumentPath = dst         // Guardamos la ruta relativa del archivo guardado
+		doctor.CedulaValidated = "CAPTURADA" // Cambia el estado para que el Login detecte el mensaje de espera
+
+		// Persistir cambios con GORM
+		if err := db.Save(&doctor).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al guardar los datos profesionales en la base de datos."})
+			return
+		}
+
+		// 🚀 6. DISPARAR ENVÍO DE CORREO EN SEGUNDO PLANO (ASÍNCRONO)
+		// Usamos una Goroutine para que el API responda de inmediato y no se quede colgada esperando al servidor SMTP
+		go func(email string, name string) {
+			if email != "" {
+				err := SendValidationEmail(email, name)
+				if err != nil {
+					fmt.Printf("❌ Fallo crítico al enviar correo de validación a [%s]: %v\n", email, err)
+				} else {
+					fmt.Printf("📩 Correo de validación enviado exitosamente a [%s]\n", email)
+				}
+			}
+		}(doctor.Email, doctor.FullName)
+
+		// 7. RESPUESTA EXITOSA HACIA TU COMPONENTE REACT
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Información y documentación adjuntada con éxito.",
+			"status":  doctor.CedulaValidated,
+		})
 	}
 }
 
@@ -314,4 +360,41 @@ func RegisterDoctor(db *gorm.DB) gin.HandlerFunc {
 
 		c.JSON(http.StatusCreated, gin.H{"message": "Doctor registrado exitosamente"})
 	}
+}
+
+func SendValidationEmail(toEmail string, doctorName string) error {
+
+	senderEmail := os.Getenv("SMTP_EMAIL")
+	senderPass := os.Getenv("SMTP_PASSWORD")
+
+	auth := smtp.PlainAuth("", senderEmail, senderPass, SMTPServer)
+
+	subject := "Subject: ProPatient - Tu cuenta está en proceso de validación\n"
+	mime := "MIME-version: 1.0;\nContent-Type: text/html; charset=\"UTF-8\";\n\n"
+
+	body := fmt.Sprintf(`
+		<html>
+		<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+			<div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+				<h2 style="color: #6a11cb; text-align: center;">¡Hola, Dr(a). %s!</h2>
+				<p>Hemos recibido correctamente tu documentación e información profesional (Cédula, CURP, RFC e Identificación Oficial).</p>
+				
+				<div style="background-color: #f8f9fa; padding: 15px; border-left: 4px solid #aa3bff; margin: 20px 0;">
+					<p style="margin: 0; font-weight: bold;">Estado actual de tu cuenta: <span style="color: #d97706;">PENDIENTE DE VALIDACIÓN</span></p>
+				</div>
+
+				<p>Nuestro equipo técnico está verificando la autenticidad de tu cédula profesional ante el Registro Nacional de Profesionistas. Este proceso toma habitualmente entre 12 y 24 horas hábiles.</p>
+				<p>Una vez aprobada tu identidad médica, recibirás un correo de confirmación y podrás acceder de forma completa a todas las herramientas de <strong>ProPatient Medical System</strong>.</p>
+				
+				<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+				<p style="font-size: 12px; color: #888; text-align: center;">Este es un correo automático, por favor no respondas a este mensaje.</p>
+			</div>
+		</body>
+		</html>
+	`, doctorName)
+
+	msg := []byte(subject + mime + body)
+	addr := SMTPServer + ":" + SMTPPort
+
+	return smtp.SendMail(addr, auth, senderEmail, []string{toEmail}, msg)
 }
