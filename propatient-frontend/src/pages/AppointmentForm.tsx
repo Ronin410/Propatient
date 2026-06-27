@@ -9,13 +9,19 @@ export const AppointmentForm: React.FC = () => {
   const navigate = useNavigate();
   const patientIdParam = searchParams.get('patientId');
 
+  // Importante: 'new Date()' obtiene la hora del sistema del cliente (computadora del paciente/doctor)
+  const now = new Date();
+  const tzOffset = now.getTimezoneOffset() * 60000;
+  const minDateTime = new Date(now.getTime() - tzOffset).toISOString().slice(0, 16);
+
   const [mode, setMode] = useState<'search' | 'manual'>(patientIdParam ? 'search' : 'search');
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   
   // Campos para paciente nuevo
   const [newPatient, setNewPatient] = useState({ firstName: '', lastName: '', phone: '', email: '' });
 
-  const [dateTime, setDateTime] = useState('');
+  //const [dateTime, setDateTime] = useState('');
+  const [dateTime, setDateTime] = useState(minDateTime);
   const [reason, setReason] = useState('');
   const [observations, setObservations] = useState('');
   const [loading, setLoading] = useState(false);
@@ -25,10 +31,6 @@ export const AppointmentForm: React.FC = () => {
   const [searchResults, setSearchResults] = useState<Patient[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
-  // Calculamos la fecha y hora actual en formato local para el atributo 'min'
-  const now = new Date();
-  const tzOffset = now.getTimezoneOffset() * 60000;
-  const minDateTime = new Date(now.getTime() - tzOffset).toISOString().slice(0, 16);
 
   useEffect(() => {
     if (patientIdParam) {
@@ -89,8 +91,11 @@ export const AppointmentForm: React.FC = () => {
         ...(mode === 'search' 
           ? { patientId: patientId } 
           : { 
-              patientName: `${newPatient.firstName} ${newPatient.lastName}`, 
-              patientPhone: newPatient.phone 
+              //patientName: `${newPatient.firstName} ${newPatient.lastName}`, 
+              patientFirstName: newPatient.firstName, 
+              patientLastName: newPatient.lastName,
+              patientPhone: newPatient.phone, 
+              patientEmail: newPatient.email
             }
         )
       };

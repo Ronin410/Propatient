@@ -1,9 +1,9 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
 	"propatient-api/internal/models"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -23,8 +23,11 @@ type CreateAppointmentRequest struct {
 	PatientID uint `json:"patientId,omitempty"`
 
 	// Campos para paciente nuevo (si PatientID es 0)
-	PatientName  string `json:"patientName,omitempty"`  // Ej: "John Doe"
-	PatientPhone string `json:"patientPhone,omitempty"` // Ej: "1234567890"
+	//PatientName  string `json:"patientName,omitempty"`  // Ej: "John Doe"
+	PatientFirstName string `json:"patientFirstName,omitempty"`
+	PatientLastName  string `json:"patientLastName,omitempty"`
+	PatientPhone     string `json:"patientPhone,omitempty"` // Ej: "1234567890"
+	PatientEmail     string `json:"patientEmail"`
 }
 
 func CreateAppointment(db *gorm.DB) gin.HandlerFunc {
@@ -37,44 +40,56 @@ func CreateAppointment(db *gorm.DB) gin.HandlerFunc {
 
 		// 1. Obtener ID del Doctor desde el Token
 		doctorID := c.MustGet("doctorID").(uint)
+		log.Println("linea 40")
 
 		var patient models.Patient
+		log.Println("name:" + req.PatientFirstName)
+		log.Println("name:" + req.PatientLastName)
 
 		// 2. Lógica de Paciente (Existente o Nuevo)
 		if req.PatientID != 0 { // Si se proporciona PatientID, es un paciente existente
 			if err := db.First(&patient, req.PatientID).Error; err != nil {
+				log.Println("linea 48")
+
 				c.JSON(http.StatusNotFound, gin.H{"error": "Paciente existente no encontrado"})
 				return
 			}
 		} else { // Si no se proporciona PatientID, es un paciente nuevo (registro rápido)
-			if req.PatientName == "" {
+			log.Println("linea 54")
+
+			if req.PatientFirstName == "" {
+				log.Println(req.PatientFirstName)
+
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Nombre del paciente es requerido para nuevo registro"})
 				return
 			}
+			log.Println("linea 60")
+			log.Println("Email|:" + req.PatientEmail)
+			log.Println(req.AppointmentDateTime)
+			log.Println("Notas:" + req.Notes)
+			//log.Println("id:" + req.PatientID)
+			log.Println("name:" + req.PatientFirstName)
+			log.Println("telefono:" + req.PatientPhone)
+			log.Println("status:" + req.RegistrationStatus)
 
-			// Parsear PatientName en FirstName y LastName
-			names := strings.Fields(req.PatientName)
-			firstName := ""
-			lastName := ""
-			if len(names) > 0 {
-				firstName = names[0]
-				if len(names) > 1 {
-					lastName = strings.Join(names[1:], " ")
-				}
-			}
-
+			log.Println("linea 75")
 			patient = models.Patient{
-				FirstName: firstName,
-				LastName:  lastName,
+				FirstName: req.PatientFirstName,
+				LastName:  req.PatientLastName,
 				Phone:     req.PatientPhone,
+				Email:     req.PatientEmail,
 				// Email, BirthDate, Gender no se envían en el flujo de registro rápido del frontend
 			}
+			log.Println("linea 81")
 			if err := db.Create(&patient).Error; err != nil {
+				log.Println("lError al crear al paciente|")
+				log.Println(err.Error())
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al crear el paciente"})
 				return
 			}
 		}
-
+		log.Println("Patient id")
+		log.Println(patient.ID)
 		// 3. Vincular al paciente con el doctor si aún no lo está
 		// Usamos una transacción para asegurar que la vinculación sea atómica
 		// (La creación del paciente ya está manejada fuera de esta transacción si es nuevo)

@@ -63,6 +63,10 @@ export const AppointmentTracking: React.FC = () => {
       <header className="dashboard-header">
         <h1>Panel de Control</h1>
         <p className="subtitle">Bienvenido de nuevo, Dr.</p>
+
+        <button className="btn-primary" onClick={() => navigate('/appointments/new')}>
+          + Nueva Cita
+        </button>
       </header>
 
       <div className="stats-grid">
