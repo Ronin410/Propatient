@@ -67,9 +67,16 @@ export const AppointmentTracking: React.FC = () => {
 
   return (
     <div className="tracking-page">
+      {/* HEADER MODIFICADO CON EL NUEVO BOTÓN */}
       <header className="dashboard-header">
-        <h1>Panel de Control</h1>
-        <p className="subtitle">Seguimiento y flujo de pacientes en tiempo real para el día de hoy.</p>
+        <div>
+          <h1>Panel de Control</h1>
+          <p className="subtitle">Seguimiento y flujo de pacientes en tiempo real para el día de hoy.</p>
+        </div>
+        <button className="btn-submit" onClick={() => navigate('/appointments/new')}>
+          <span className="material-icons-outlined">add_task</span>
+          Agendar Cita
+        </button>
       </header>
 
       <div className="stats-grid">

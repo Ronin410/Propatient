@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { formatToLocalTime, formatToLocalDate } from '../utils/dateFormatter';
-import type { Appointment, Patient } from '../types'; 
+import type { Appointment } from '../types'; 
 import './AppointmentCalendar.scss';
 
 export const AppointmentCalendar: React.FC = () => {
@@ -12,7 +12,6 @@ export const AppointmentCalendar: React.FC = () => {
   const [viewMode, setViewMode] = useState<'month' | 'week'>('month');
   const [loading, setLoading] = useState(false);
 
-  // Helper para obtener YYYY-MM-DD sin desfases de UTC
   const toISODate = (date: Date) => {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -20,39 +19,39 @@ export const AppointmentCalendar: React.FC = () => {
     return `${y}-${m}-${d}`;
   };
 
-  // Obtener el primer y último día del mes actual para la API
   const getMonthRange = (date: Date) => {
     const start = new Date(date.getFullYear(), date.getMonth(), 1);
     const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
     return {
       start: toISODate(start),
-      end: toISODate(end)
+      end: toISODate(end),
     };
   };
 
-  // Obtener el rango de la semana actual (Dom a Sáb)
   const getWeekRange = (date: Date) => {
+    const currentDay = date.getDay();
     const start = new Date(date);
-    const day = start.getDay();
-    const diff = start.getDate() - day;
-    const weekStart = new Date(start.setDate(diff));
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekStart.getDate() + 6);
+    start.setDate(date.getDate() - currentDay);
+    
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    
     return {
-      start: toISODate(weekStart),
-      end: toISODate(weekEnd)
+      start: toISODate(start),
+      end: toISODate(end),
     };
   };
 
   const fetchAppointments = async () => {
     setLoading(true);
-    const { start, end } = viewMode === 'month' ? getMonthRange(currentDate) : getWeekRange(currentDate);
     try {
-      // Tu handler en Go acepta ?start=...&end=...
-      const response = await api.get(`/appointments?start=${start}&end=${end}`);
-      setAppointments(response.data || []);
+      const range = viewMode === 'month' ? getMonthRange(currentDate) : getWeekRange(currentDate);
+      const response = await api.get(`/appointments/range?start=${range.start}&end=${range.end}`);
+      if (response.data) {
+        setAppointments(response.data);
+      }
     } catch (error) {
-      console.error("Error al cargar citas del calendario:", error);
+      console.error("Error cargando citas del rango calendario:", error);
     } finally {
       setLoading(false);
     }
@@ -62,104 +61,137 @@ export const AppointmentCalendar: React.FC = () => {
     fetchAppointments();
   }, [currentDate, viewMode]);
 
-  const handleNext = () => {
-    if (viewMode === 'month') {
-      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
-    } else {
-      const nextWeek = new Date(currentDate);
-      nextWeek.setDate(currentDate.getDate() + 7);
-      setCurrentDate(nextWeek);
-    }
-  };
-
   const handlePrev = () => {
+    const next = new Date(currentDate);
     if (viewMode === 'month') {
-      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+      next.setMonth(currentDate.getMonth() - 1);
     } else {
-      const prevWeek = new Date(currentDate);
-      prevWeek.setDate(currentDate.getDate() - 7);
-      setCurrentDate(prevWeek);
+      next.setDate(currentDate.getDate() - 7);
     }
+    setCurrentDate(next);
   };
 
-  const goToToday = () => setCurrentDate(new Date());
+  const handleNext = () => {
+    const next = new Date(currentDate);
+    if (viewMode === 'month') {
+      next.setMonth(currentDate.getMonth() + 1);
+    } else {
+      next.setDate(currentDate.getDate() + 7);
+    }
+    setCurrentDate(next);
+  };
+
+  const goToToday = () => {
+    setCurrentDate(new Date());
+  };
 
   const getTitle = () => {
+    const options: Intl.DateTimeFormatOptions = viewMode === 'month' 
+      ? { month: 'long', year: 'numeric' }
+      : { month: 'short', day: 'numeric' };
+      
     if (viewMode === 'month') {
-      return currentDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
+      return currentDate.toLocaleDateString('es-MX', options).toUpperCase();
+    } else {
+      const { start } = getWeekRange(currentDate);
+      const startDay = new Date(start + 'T00:00:00');
+      return `Semana del ${startDay.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}`.toUpperCase();
     }
-    const { start, end } = getWeekRange(currentDate);
-    const startD = new Date(start + "T00:00:00");
-    const endD = new Date(end + "T00:00:00");
-    return `${startD.getDate()} - ${endD.getDate()} ${startD.toLocaleString('es-ES', { month: 'short' })}, ${startD.getFullYear()}`;
-  };
-
-  const renderDaySlot = (dayNumber: number, dateStr: string) => {
-    const dayAppointments = appointments.filter(app => app.appointmentDateTime?.startsWith(dateStr));
-    const isToday = toISODate(new Date()) === dateStr;
-    
-    return (
-      <div key={dateStr} className={`calendar-day ${isToday ? 'today' : ''} ${viewMode === 'week' ? 'week-slot' : ''}`}>
-        <span className="day-number">{dayNumber}</span>
-        <div className="day-events">
-          {Array.isArray(dayAppointments) && dayAppointments.map(app => (
-            <div key={app.id} className={`event-tag ${app.status.toLowerCase()}`}>
-              <span className="event-time">{formatToLocalTime(app.appointmentDateTime)}</span>
-              <span className="event-patient">
-                {app.patient?.firstName} {app.patient?.lastName?.charAt(0)}.
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
   };
 
   const renderDays = () => {
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
     const days = [];
+    const todayStr = toISODate(new Date());
 
     if (viewMode === 'month') {
-      const firstDayOfMonth = new Date(year, month, 1).getDay();
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      
-      for (let i = 0; i < firstDayOfMonth; i++) {
-        days.push(<div key={`empty-${i}`} className="calendar-day empty"></div>);
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+      const firstDayIndex = new Date(year, month, 1).getDay();
+      const totalDays = new Date(year, month + 1, 0).getDate();
+
+      // Celdas vacías del inicio del mes
+      for (let i = 0; i < firstDayIndex; i++) {
+        days.push(<div key={`empty-${i}`} className="calendar-day empty" />);
       }
 
-      for (let d = 1; d <= daysInMonth; d++) {
-        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-        days.push(renderDaySlot(d, dateStr));
+      // Celdas de los días del mes
+      for (let day = 1; day <= totalDays; day++) {
+        const thisDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const dayEvents = appointments.filter(app => {
+          const appDate = app.appointment_date ? app.appointment_date.split('T')[0] : '';
+          return appDate === thisDateStr;
+        });
+
+        const isToday = thisDateStr === todayStr;
+
+        days.push(
+          <div key={`day-${day}`} className={`calendar-day ${isToday ? 'today' : ''}`}>
+            <span className="day-number">{day}</span>
+            <div className="day-events">
+              {dayEvents.map(ev => (
+                <div 
+                  key={ev.id} 
+                  className={`event-tag ${ev.status === 'pending' ? 'pending' : ev.status === 'completed' ? 'completed' : ''}`}
+                  onClick={() => navigate(`/pacientes/${ev.patient_id || ev.PatientId}`)}
+                  title={`${formatToLocalTime(ev.appointment_date)} - ${(ev.patient || ev.Patient)?.firstName || 'Paciente'}`}
+                >
+                  {formatToLocalTime(ev.appointment_date)} {(ev.patient || ev.Patient)?.firstName || 'Paciente'}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
       }
     } else {
-      const { start } = getWeekRange(currentDate);
-      const startDate = new Date(start + "T00:00:00");
+      // VISTA SEMANAL
+      const currentDay = currentDate.getDay();
+      const startOfWeek = new Date(currentDate);
+      startOfWeek.setDate(currentDate.getDate() - currentDay);
+
       for (let i = 0; i < 7; i++) {
-        const dayDate = new Date(startDate);
-        dayDate.setDate(startDate.getDate() + i);
-        days.push(renderDaySlot(dayDate.getDate(), toISODate(dayDate)));
+        const dayIter = new Date(startOfWeek);
+        dayIter.setDate(startOfWeek.getDate() + i);
+        const thisDateStr = toISODate(dayIter);
+
+        const dayEvents = appointments.filter(app => {
+          const appDate = app.appointment_date ? app.appointment_date.split('T')[0] : '';
+          return appDate === thisDateStr;
+        });
+
+        const isToday = thisDateStr === todayStr;
+
+        days.push(
+          <div key={`week-day-${i}`} className={`calendar-day week-slot ${isToday ? 'today' : ''}`}>
+            <span className="day-number">{dayIter.getDate()} {dayIter.toLocaleDateString('es-MX', { month: 'short' })}</span>
+            <div className="day-events">
+              {dayEvents.map(ev => (
+                <div 
+                  key={ev.id} 
+                  className={`event-tag ${ev.status === 'pending' ? 'pending' : ev.status === 'completed' ? 'completed' : ''}`}
+                  onClick={() => navigate(`/pacientes/${ev.patient_id || ev.PatientId}`)}
+                  title={`${formatToLocalTime(ev.appointment_date)} - ${(ev.patient || ev.Patient)?.firstName || 'Paciente'}`}
+                >
+                  {formatToLocalTime(ev.appointment_date)} - {(ev.patient || ev.Patient)?.firstName || 'Paciente'}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
       }
     }
+
     return days;
   };
 
   return (
     <div className="calendar-page-container">
       <header className="calendar-header">
-        <div className="header-left">
-          <h1>Agenda de Citas</h1>
+        <div>
+          <h1>Agenda Médica</h1>
+          <p className="subtitle">Visualiza y controla el flujo de consultas agendadas por mes y semana.</p>
         </div>
-        <div className="view-mode-toggle">
-          <button 
-            className={`toggle-btn ${viewMode === 'month' ? 'active' : ''}`}
-            onClick={() => setViewMode('month')}
-          >Mes</button>
-          <button 
-            className={`toggle-btn ${viewMode === 'week' ? 'active' : ''}`}
-            onClick={() => setViewMode('week')}
-          >Semana</button>
-        </div>
+
+        {/* CONTROLES DE NAVEGACIÓN CENTRALES */}
         <div className="calendar-controls">
           <button className="btn-icon" onClick={handlePrev}>
             <span className="material-icons-outlined">chevron_left</span>
@@ -170,15 +202,33 @@ export const AppointmentCalendar: React.FC = () => {
             <span className="material-icons-outlined">chevron_right</span>
           </button>
         </div>
-        <button className="btn-primary" onClick={() => navigate('/appointments/new')}>
-          + Nueva Cita
-        </button>
+
+        {/* ACCIONES Y FILTROS */}
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <div className="view-mode-toggle">
+            <button 
+              className={`toggle-btn ${viewMode === 'month' ? 'active' : ''}`}
+              onClick={() => setViewMode('month')}
+            >Mes</button>
+            <button 
+              className={`toggle-btn ${viewMode === 'week' ? 'active' : ''}`}
+              onClick={() => setViewMode('week')}
+            >Semana</button>
+          </div>
+
+          <button className="btn-submit" onClick={() => navigate('/appointments/new')}>
+            <span className="material-icons-outlined">add_task</span>
+            Nueva Cita
+          </button>
+        </div>
       </header>
 
       {loading ? (
-        <div className="loading-state">Actualizando calendario...</div>
+        <div className="loading-state">
+          <p>Actualizando calendario médico...</p>
+        </div>
       ) : (
-        <div className="calendar-card card">
+        <div className="card-layout">
           <div className="calendar-weekdays">
             <div>Dom</div><div>Lun</div><div>Mar</div><div>Mié</div><div>Jue</div><div>Vie</div><div>Sáb</div>
           </div>

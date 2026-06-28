@@ -1,64 +1,227 @@
 .patients-container {
-    padding: 2rem;
-    max-width: 1200px;
-    margin: 0 auto;
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
 
-    .page-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 2rem;
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2.5rem;
 
-        h1 { margin: 0; color: var(--color-dark); }
-        .subtitle { color: var(--color-secondary); margin: 0.5rem 0 0 0; }
+    h1 { 
+      margin: 0; 
+      color: var(--color-dark); 
+      font-size: 1.8rem;
+      font-weight: 700;
+    }
+    .subtitle { 
+      color: var(--color-secondary); 
+      margin: 0.5rem 0 0 0; 
+      font-size: 0.95rem;
     }
 
-    .search-bar-container {
-        margin-bottom: 1.5rem;
-        padding: 1rem;
+    /* Botón principal del Header del listado */
+    .btn-submit {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.5rem;
+      font-weight: 500;
+      border-radius: 8px;
+      background-color: var(--color-primary, #005073);
+      color: #ffffff;
+      border: none;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
 
-        .search-input {
-            width: 100%;
-            padding: 0.8rem 1rem;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-size: 1rem;
-            &:focus { outline: none; border-color: var(--color-primary); }
-        }
+      &:hover {
+        background-color: var(--color-primary-dark, #003b56);
+      }
     }
+  }
 
-    .patients-table {
+  /* Tarjeta contenedora global de búsqueda y tabla */
+  .card-layout {
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+  }
+
+  .search-bar-container {
+    padding: 1.5rem;
+    border-bottom: 1px solid #f1f3f5;
+
+    .search-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+
+      .search-icon {
+        position: absolute;
+        left: 1rem;
+        color: #adb5bd;
+        font-size: 1.25rem;
+        pointer-events: none;
+      }
+
+      .search-input {
         width: 100%;
-        border-collapse: collapse;
-        text-align: left;
+        padding: 0.8rem 1rem 0.8rem 2.8rem;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        transition: all 0.2s ease;
+        color: var(--color-dark);
 
-        th {
-            padding: 1rem;
-            background-color: #f8f9fa;
-            color: var(--color-secondary);
-            font-weight: 600;
-            border-bottom: 2px solid #eee;
+        &:focus { 
+          outline: none; 
+          border-color: var(--color-primary); 
+          box-shadow: 0 0 0 3px rgba(0, 80, 115, 0.1);
         }
 
-        td {
-            padding: 1rem;
-            border-bottom: 1px solid #eee;
-            color: var(--color-dark);
+        &::placeholder {
+          color: #adb5bd;
         }
+      }
+    }
+  }
+
+  .table-wrapper {
+    overflow-x: auto;
+  }
+
+  .patients-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+
+    th {
+      padding: 1.2rem 1.5rem;
+      background-color: #f8f9fa;
+      color: #6c757d;
+      font-weight: 600;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid #f1f3f5;
+    }
+
+    td {
+      padding: 1.2rem 1.5rem;
+      border-bottom: 1px solid #f1f3f5;
+      color: var(--color-dark);
+      font-size: 0.95rem;
+      vertical-align: middle;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover {
+      background-color: #f8f9fa;
+    }
+
+    /* Celda del perfil del paciente con Avatar */
+    .patient-profile-cell {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+
+      .avatar-patient {
+        width: 40px;
+        height: 40px;
+        background-color: rgba(0, 80, 115, 0.1);
+        color: var(--color-primary, #005073);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 0.95rem;
+      }
+
+      .patient-info-meta {
+        display: flex;
+        flex-direction: column;
 
         .patient-name {
-            font-weight: 600;
+          font-weight: 600;
+          color: var(--color-dark);
+          text-decoration: none;
+          transition: color 0.2s;
+
+          &:hover {
             color: var(--color-primary);
+          }
         }
-
-        .empty-table {
-            text-align: center;
-            padding: 3rem;
-            color: var(--color-secondary);
-        }
-
-        tr:hover {
-            background-color: #fcfcfc;
-        }
+      }
     }
+
+    .phone-text, .email-text {
+      color: #495057;
+    }
+
+    .date-badge {
+      display: inline-block;
+      padding: 0.25rem 0.5rem;
+      background-color: #e9ecef;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      color: #495057;
+    }
+
+    /* Botón Ver Historial dentro de la tabla */
+    .btn-outline-sm {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.5rem 1rem;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--color-primary, #005073);
+      background-color: transparent;
+      border: 1px solid var(--color-primary, #005073);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+
+      &:hover {
+        background-color: var(--color-primary, #005073);
+        color: #ffffff;
+        box-shadow: 0 2px 8px rgba(0, 80, 115, 0.15);
+      }
+
+      &:active {
+        transform: scale(0.98);
+      }
+    }
+
+    .empty-table {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--color-secondary);
+
+      .material-icons-outlined {
+        font-size: 3rem;
+        color: #dee2e6;
+        margin-bottom: 1rem;
+      }
+
+      p {
+        margin: 0;
+        font-size: 1rem;
+      }
+    }
+  }
+
+  .loading-state {
+    text-align: center;
+    padding: 4rem;
+    color: var(--color-secondary);
+    font-size: 1.1rem;
+  }
 }
