@@ -31,4 +31,7 @@ podman start propatient-api
 podman start propatient-web
 
 
+wsl --shutdown
 
+
+podman rm -f propatient-web

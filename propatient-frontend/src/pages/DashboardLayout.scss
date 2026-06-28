@@ -4,169 +4,183 @@
 
 .dashboard-container {
     display: grid;
-    /* Sidebar fijo de 260px y el resto (1fr) para el contenido */
     grid-template-columns: 260px 1fr;
     height: 100vh;
     width: 100vw;
     margin: 0;
     padding: 0;
-    background-color: var(--bg-main, #f8f9fa);
-    overflow: hidden; /* Evita scrolls dobles */
+    background-color: #e6e4e0; /* Fondo arena unificado */
+    overflow: hidden;
 }
 
 /* ================================================= */
-/* 2. BARRA LATERAL (SIDEBAR)                       */
+/* 2. BARRA LATERAL (SIDEBAR CORPORATIVO)            */
 /* ================================================= */
 
 .sidebar {
-    background-color: var(--bg, #ffffff);
-    border-right: 1px solid var(--border, #e5e4e7);
+    background: linear-gradient(145deg, #005073 0%, #002d42 100%); /* Azul profundo exacto del Login */
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    padding: 1.5rem 1rem;
+    padding: 2rem 1.2rem;
     height: 100%;
     box-sizing: border-box;
     z-index: 10;
+    color: #ffffff;
 }
 
 /* Cabecera del Sidebar */
 .sidebar-header {
-    margin-bottom: 2rem;
+    margin-bottom: 2.5rem;
     
     .logo-container {
         display: flex;
-        flex-direction: column;
         align-items: center;
-        gap: 0.5rem;
-
+        gap: 12px;
+        padding-left: 8px;
+        
         .medical-logo {
-            width: 50px;
-            height: 50px;
+            width: 28px;
+            height: 28px;
+            
+            path {
+                fill: #ffffff; /* Isotipo blanco sobre azul */
+            }
         }
 
         .office-name {
-            font-weight: 700;
-            font-size: 1.2rem;
-            color: var(--accent, #aa3bff);
             margin: 0;
-            letter-spacing: 1px;
-            margin-top: 10px;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #ffffff;
+            letter-spacing: 0.5px;
         }
     }
 }
 
-/* Navegación */
+/* Navegación Enlaces */
 .sidebar-nav {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    flex-grow: 1; /* Empuja el footer hacia abajo */
-}
 
-.nav-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    text-decoration: none;
-    color: var(--text, #6b6375);
-    border-radius: 8px;
-    transition: all 0.2s ease;
-    font-weight: 500;
-    cursor: pointer;
-
-    .material-icons-outlined {
-        font-size: 24px;
-        color: inherit; /* Sigue el color del texto del item */
-    }
-
-    &:hover {
-        background-color: var(--accent-bg, rgba(170, 59, 255, 0.1));
-        color: var(--accent, #aa3bff);
-    }
-
-    &.active {
-        background-color: var(--accent, #aa3bff);
-        color: #ffffff;
-        font-weight: 600;
-        box-shadow: 0 4px 10px var(--accent-border, rgba(170, 59, 255, 0.3));
+    .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 12px 16px;
+        color: rgba(255, 255, 255, 0.7);
+        text-decoration: none;
+        font-size: 0.95rem;
+        font-weight: 500;
+        border-radius: 8px;
+        transition: all 0.2s ease;
 
         .material-icons-outlined {
+            font-size: 22px;
+            color: rgba(255, 255, 255, 0.6);
+            transition: color 0.2s ease;
+        }
+
+        &:hover {
+            background-color: rgba(255, 255, 255, 0.08);
             color: #ffffff;
+            
+            .material-icons-outlined {
+                color: #ffffff;
+            }
+        }
+
+        &.active {
+            background-color: #ffffff;
+            color: #005073;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+
+            .material-icons-outlined {
+                color: #005073;
+            }
         }
     }
 }
 
-/* Pie de página del Sidebar */
+/* Perfil inferior en Sidebar */
 .sidebar-footer {
-    border-top: 1px solid var(--border, #e5e4e7);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
     padding-top: 1.5rem;
-    
-    .doctor-profile {
-        text-align: center;
-        margin-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+
+    .doctor-profile-summary {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 8px;
+
+        .avatar-mini {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.2);
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 14px;
+        }
 
         .doctor-name {
             margin: 0;
             font-size: 0.9rem;
             font-weight: 600;
-            color: var(--text-h, #08060d);
+            color: #ffffff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
     }
 
     .logout-link {
-        color: #dc3545;
+        color: #ff6b6b;
         border: none;
         background: none;
         width: 100%;
         display: flex;
         align-items: center;
         gap: 12px;
-        padding: 12px 16px;
+        padding: 10px 16px;
         border-radius: 8px;
         cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 500;
         transition: background 0.2s;
 
         &:hover {
-            background-color: rgba(220, 53, 69, 0.1);
+            background-color: rgba(255, 107, 107, 0.1);
         }
     }
 }
 
 /* ================================================= */
-/* 3. CONTENIDO PRINCIPAL (MAIN CONTENT)            */
+/* 3. CONTENIDO PRINCIPAL (MAIN CONTENT AREA)        */
 /* ================================================= */
 
 .main-content {
-    background-color: var(--bg-main, #f8f9fa);
+    background-color: #e6e4e0; /* Fondo arena sutil de la app */
     height: 100vh;
-    overflow-y: auto; /* El scroll ocurre solo aquí */
-    padding: 2rem;
+    overflow-y: auto;
+    padding: 2.5rem;
     box-sizing: border-box;
 }
 
-/* ================================================= */
-/* 4. RESPONSIVO                                    */
-/* ================================================= */
-
-@media (max-width: 1024px) {
+@media (max-width: 992px) {
     .dashboard-container {
-        grid-template-columns: 80px 1fr;
+        grid-template-columns: 1fr;
     }
-
-    .office-name, 
-    .doctor-name, 
-    .nav-item span:not(.material-icons-outlined) {
-        display: none;
-    }
-
-    .nav-item {
-        justify-content: center;
-        padding: 1rem;
-    }
-    
-    .sidebar-header .logo-container {
-        gap: 0;
+    .sidebar {
+        display: none; /* Ideal para complementar con un menú hamburguesa posteriormente */
     }
 }

@@ -17,24 +17,22 @@ export const AppointmentTracking: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  // Estados para el modal de confirmación
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [selectedApp, setSelectedApp] = useState<Appointment | null>(null);
 
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      // Generar una cadena ISO que incluya el offset local (ej: 2026-04-12T22:04:12-06:00)
       const now = new Date();
       const tzo = -now.getTimezoneOffset();
       const dif = tzo >= 0 ? '+' : '-';
       const pad = (num: number) => num.toString().padStart(2, '0');
       const clientTime = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}${dif}${pad(Math.floor(Math.abs(tzo) / 60))}:${pad(Math.abs(tzo) % 60)}`;
-
-      const response = await api.get(`/dashboard/summary?clientTime=${clientTime}`);
-      setSummary(response.data);
-    } catch (error) {
-      console.error("Error cargando dashboard:", error);
+      
+      const res = await api.get(`/doctor/dashboard-summary?clientTime=${encodeURIComponent(clientTime)}`);
+      setSummary(res.data);
+    } catch (err) {
+      console.error("Error al cargar datos del dashboard:", err);
     } finally {
       setLoading(false);
     }
@@ -44,129 +42,127 @@ export const AppointmentTracking: React.FC = () => {
     fetchDashboardData();
   }, []);
 
-  const handleOpenModal = (app: Appointment) => {
+  const handleStartConsultationClick = (app: Appointment) => {
     setSelectedApp(app);
     setIsConfirmModalOpen(true);
   };
 
   const handleConfirmConsultation = () => {
-    if (selectedApp) navigate(`/consulta/${selectedApp.id}`);
+    if (!selectedApp) return;
     setIsConfirmModalOpen(false);
+    navigate(`/consulta/${selectedApp.id || selectedApp.ID}`);
   };
 
-  if (loading) return <div className="loading-state">Cargando resumen del día...</div>;
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh', color: '#005073' }}>
+        <div className="spinner-border" role="status"></div>
+      </div>
+    );
+  }
 
-  const todayApps = summary?.todayAppointments || [];
+  const nextPatientName = summary?.nextPatient 
+    ? `${(summary.nextPatient.patient || summary.nextPatient.Patient)?.firstName || ''} ${(summary.nextPatient.patient || summary.nextPatient.Patient)?.lastName || ''}`
+    : 'Sin pacientes en espera';
 
   return (
     <div className="tracking-page">
       <header className="dashboard-header">
         <h1>Panel de Control</h1>
-        <p className="subtitle">Bienvenido de nuevo, Dr.</p>
+        <p className="subtitle">Seguimiento y flujo de pacientes en tiempo real para el día de hoy.</p>
       </header>
 
       <div className="stats-grid">
-        <div className="card stat-card">
-          <span className="label">Citas de Hoy</span>
+        <div className="stat-card">
+          <span className="label">Citas del Día</span>
           <span className="value">{summary?.todayCount || 0}</span>
+          <span className="desc">Consultas agendadas hoy</span>
         </div>
-        <div className="card stat-card highlight">
-          <span className="label">Total Pendientes</span>
+
+        <div className="stat-card">
+          <span className="label">Pacientes por Atender</span>
           <span className="value">{summary?.pendingCount || 0}</span>
+          <span className="desc">En sala de espera / pendientes</span>
         </div>
-        {summary?.nextPatient && (
-          <div className="card stat-card next-patient-card">
-            <span className="label">Siguiente Paciente</span>
-            <span className="patient-name">
-              {(summary.nextPatient?.patient || summary.nextPatient?.Patient)?.firstName || 
-               (summary.nextPatient?.patient || summary.nextPatient?.Patient)?.FirstName || 'Paciente'} 
-              {' '}
-              {(summary.nextPatient?.patient || summary.nextPatient?.Patient)?.lastName || 
-               (summary.nextPatient?.patient || summary.nextPatient?.Patient)?.LastName || ''}
-            </span>
-            <span className="time">{summary.nextPatient.appointmentDateTime ? formatToLocalTime(summary.nextPatient.appointmentDateTime) : 'N/A'}</span>
-            <button className="btn-primary-sm" onClick={() => handleOpenModal(summary.nextPatient!)}>
-              Atender Ahora
-            </button>
-          </div>
-        )}
+
+        <div className="stat-card next-patient-card">
+          <span className="label">Siguiente Paciente</span>
+          <span className="value">{nextPatientName}</span>
+          <span className="desc">
+            {summary?.nextPatient ? `Horario: ${formatToLocalTime(summary.nextPatient.appointmentDate || summary.nextPatient.AppointmentDate)}` : 'Línea de espera vacía'}
+          </span>
+        </div>
       </div>
 
-      <section className="agenda-section">
-        <h2>Agenda del Día</h2>
-        <div className="card table-container">
-          {todayApps.length > 0 ? (
-            <div className="table-responsive">
-              <table className="dashboard-table completed-table">
-                <thead>
-                  <tr>
-                    <th>Hora</th>
-                    <th>Paciente</th>
-                    <th>Motivo</th>
-                    <th>Estado</th>
-                    <th>Acción</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {todayApps.map((app) => {
-                    const p = app.patient || app.Patient;
-                    return (
-                      <tr key={app.id}>
-                        <td className="time-cell">{app.appointmentDateTime ? formatToLocalTime(app.appointmentDateTime) : 'N/A'}</td>
-                        <td className="patient-cell">
-                          {p?.firstName || p?.FirstName || 'N/A'} {p?.lastName || p?.LastName || ''}
-                        </td>
-                        <td className="reason-cell">{app.reason}</td>
-                        <td>
-                          <span className={`status-badge ${app.status.toLowerCase()}`}>
-                            {app.status.toUpperCase() === 'IN_COURSE' ? 'En Curso' : 
-                             app.status.toUpperCase() === 'COMPLETED' ? 'Finalizada' : 'Pendiente'}
+      <section className="table-section">
+        <h2 className="section-title">Lista de Atención del Día</h2>
+        
+        <div className="table-responsive">
+          {summary && summary.todayAppointments && summary.todayAppointments.length > 0 ? (
+            <table className="appointments-table">
+              <thead>
+                <tr>
+                  <th>Horario</th>
+                  <th>Paciente</th>
+                  <th>Motivo de Consulta</th>
+                  <th className="action-cell">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.todayAppointments.map((app) => {
+                  const patient = app.patient || app.Patient;
+                  const pName = `${patient?.firstName || patient?.FirstName || 'Paciente'} ${patient?.lastName || patient?.LastName || ''}`;
+                  const appTime = formatToLocalTime(app.appointmentDate || app.AppointmentDate);
+                  const isCompleted = app.status === 'completed' || app.Status === 'completed';
+
+                  return (
+                    <tr key={app.id || app.ID}>
+                      <td className="time-cell">
+                        <span className="material-icons-outlined" style={{ fontSize: '18px' }}>schedule</span>
+                        {appTime}
+                      </td>
+                      <td className="patient-name">{pName}</td>
+                      <td className="reason-cell" title={app.reason || app.Reason}>
+                        {app.reason || app.Reason || 'Consulta General'}
+                      </td>
+                      <td className="action-cell">
+                        {isCompleted ? (
+                          <span style={{ fontSize: '13px', color: '#137333', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            ✓ Atendido
                           </span>
-                        </td>
-                        <td className="action-cell">
-                          {app.status.toUpperCase() !== 'COMPLETED' && (
-                            <button 
-                              className="btn-primary-sm" 
-                              style={{ marginRight: '8px' }} 
-                              onClick={() => handleOpenModal(app)}
-                            >
-                              Atender
-                            </button>
-                          )}
-                          {(p?.id || (p as any)?.ID) && ( 
-                            <button className="btn-text" onClick={() => navigate(`/pacientes/${p?.id || (p as any)?.ID}`)}>Ver Ficha</button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                        ) : (
+                          <button className="btn-primary" onClick={() => handleStartConsultationClick(app)}>
+                            <span className="material-icons-outlined" style={{ fontSize: '16px' }}>play_arrow</span>
+                            Iniciar Atencion
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           ) : (
-            <p className="empty-msg">No hay citas programadas para hoy.</p>
+            <p className="empty-msg">No hay citas programadas para el día de hoy.</p>
           )}
         </div>
       </section>
 
-      {/* Modal de Confirmación de Inicio de Consulta */}
       {isConfirmModalOpen && selectedApp && (
         <div className="modal-overlay">
-          <div className="modal-content card">
+          <div className="modal-content">
             <div className="modal-header">
-              <span className="material-icons-outlined alert-icon">medical_services</span>
-              <h3>¿Iniciar Consulta Médica?</h3>
+              <span className="material-icons-outlined alert-icon">start</span>
+              <h3>¿Abrir Expediente Clínico?</h3>
             </div>
             <p>
-              Estás a punto de iniciar la atención para: <br />
+              Estás por iniciar la consulta médica y registrar la evolución para: <br />
               <strong>
-                {(selectedApp.patient || selectedApp.Patient)?.firstName || (selectedApp.patient || selectedApp.Patient)?.FirstName || 'Paciente'} 
-                {' '}
-                {(selectedApp.patient || selectedApp.Patient)?.lastName || (selectedApp.patient || selectedApp.Patient)?.LastName || ''}
+                {(selectedApp.patient || selectedApp.Patient)?.firstName || ''} {(selectedApp.patient || selectedApp.Patient)?.lastName || ''}
               </strong>
             </p>
             <div className="modal-footer">
-              <button className="btn-text" onClick={() => setIsConfirmModalOpen(false)}>Cancelar</button>
+              <button className="btn-text" onClick={() => setIsConfirmModalOpen(false)}>Regresar</button>
               <button className="btn-primary" onClick={handleConfirmConsultation}>Confirmar e Iniciar</button>
             </div>
           </div>
