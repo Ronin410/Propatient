@@ -46,7 +46,7 @@ export const AppointmentCalendar: React.FC = () => {
     setLoading(true);
     try {
       const range = viewMode === 'month' ? getMonthRange(currentDate) : getWeekRange(currentDate);
-      const response = await api.get(`/appointments/range?start=${range.start}&end=${range.end}`);
+      const response = await api.get(`/appointments?start=${range.start}&end=${range.end}`);
       if (response.data) {
         setAppointments(response.data);
       }
@@ -117,8 +117,11 @@ export const AppointmentCalendar: React.FC = () => {
       // Celdas de los días del mes
       for (let day = 1; day <= totalDays; day++) {
         const thisDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        
         const dayEvents = appointments.filter(app => {
-          const appDate = app.appointment_date ? app.appointment_date.split('T')[0] : '';
+          // Extraemos la fecha resolviendo de manera segura las diferentes nomenclaturas posibles
+          const appDateRaw = app.appointmentDateTime || app.appointment_date || app.appointmentDate || app.AppointmentDate;
+          const appDate = appDateRaw ? appDateRaw.split('T')[0] : '';
           return appDate === thisDateStr;
         });
 
@@ -128,16 +131,22 @@ export const AppointmentCalendar: React.FC = () => {
           <div key={`day-${day}`} className={`calendar-day ${isToday ? 'today' : ''}`}>
             <span className="day-number">{day}</span>
             <div className="day-events">
-              {dayEvents.map(ev => (
-                <div 
-                  key={ev.id} 
-                  className={`event-tag ${ev.status === 'pending' ? 'pending' : ev.status === 'completed' ? 'completed' : ''}`}
-                  onClick={() => navigate(`/pacientes/${ev.patient_id || ev.PatientId}`)}
-                  title={`${formatToLocalTime(ev.appointment_date)} - ${(ev.patient || ev.Patient)?.firstName || 'Paciente'}`}
-                >
-                  {formatToLocalTime(ev.appointment_date)} {(ev.patient || ev.Patient)?.firstName || 'Paciente'}
-                </div>
-              ))}
+              {dayEvents.map(ev => {
+                const evDateRaw = ev.appointmentDateTime || ev.appointment_date || ev.appointmentDate || ev.AppointmentDate;
+                const patientObj = ev.patient || ev.Patient;
+                const statusStr = (ev.status || ev.Status || '').toLowerCase();
+
+                return (
+                  <div 
+                    key={ev.id || ev.ID} 
+                    className={`event-tag ${statusStr === 'pending' ? 'pending' : statusStr === 'completed' ? 'completed' : ''}`}
+                    onClick={() => navigate(`/pacientes/${ev.patient_id || ev.patientId || ev.PatientId}`)}
+                    title={`${formatToLocalTime(evDateRaw)} - ${patientObj?.firstName || 'Paciente'}`}
+                  >
+                    {formatToLocalTime(evDateRaw)} {patientObj?.firstName || 'Paciente'}
+                  </div>
+                );
+              })}
             </div>
           </div>
         );
@@ -154,7 +163,8 @@ export const AppointmentCalendar: React.FC = () => {
         const thisDateStr = toISODate(dayIter);
 
         const dayEvents = appointments.filter(app => {
-          const appDate = app.appointment_date ? app.appointment_date.split('T')[0] : '';
+          const appDateRaw = app.appointmentDateTime || app.appointment_date || app.appointmentDate || app.AppointmentDate;
+          const appDate = appDateRaw ? appDateRaw.split('T')[0] : '';
           return appDate === thisDateStr;
         });
 
@@ -164,16 +174,22 @@ export const AppointmentCalendar: React.FC = () => {
           <div key={`week-day-${i}`} className={`calendar-day week-slot ${isToday ? 'today' : ''}`}>
             <span className="day-number">{dayIter.getDate()} {dayIter.toLocaleDateString('es-MX', { month: 'short' })}</span>
             <div className="day-events">
-              {dayEvents.map(ev => (
-                <div 
-                  key={ev.id} 
-                  className={`event-tag ${ev.status === 'pending' ? 'pending' : ev.status === 'completed' ? 'completed' : ''}`}
-                  onClick={() => navigate(`/pacientes/${ev.patient_id || ev.PatientId}`)}
-                  title={`${formatToLocalTime(ev.appointment_date)} - ${(ev.patient || ev.Patient)?.firstName || 'Paciente'}`}
-                >
-                  {formatToLocalTime(ev.appointment_date)} - {(ev.patient || ev.Patient)?.firstName || 'Paciente'}
-                </div>
-              ))}
+              {dayEvents.map(ev => {
+                const evDateRaw = ev.appointmentDateTime || ev.appointment_date || ev.appointmentDate || ev.AppointmentDate;
+                const patientObj = ev.patient || ev.Patient;
+                const statusStr = (ev.status || ev.Status || '').toLowerCase();
+
+                return (
+                  <div 
+                    key={ev.id || ev.ID} 
+                    className={`event-tag ${statusStr === 'pending' ? 'pending' : statusStr === 'completed' ? 'completed' : ''}`}
+                    onClick={() => navigate(`/pacientes/${ev.patient_id || ev.patientId || ev.PatientId}`)}
+                    title={`${formatToLocalTime(evDateRaw)} - ${patientObj?.firstName || 'Paciente'}`}
+                  >
+                    {formatToLocalTime(evDateRaw)} - {patientObj?.firstName || 'Paciente'}
+                  </div>
+                );
+              })}
             </div>
           </div>
         );
@@ -229,7 +245,7 @@ export const AppointmentCalendar: React.FC = () => {
         </div>
       ) : (
         <div className="card-layout">
-          <div className="calendar-weekdays">
+          <div className="calendar-weekdays">|
             <div>Dom</div><div>Lun</div><div>Mar</div><div>Mié</div><div>Jue</div><div>Vie</div><div>Sáb</div>
           </div>
           <div className="calendar-grid">

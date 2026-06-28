@@ -1,12 +1,24 @@
-select * from  appointments limit 10;
+select * from  appointments WHERE STATUS = 'PENDING' limit 100;
+
+select phone,* from patients where id = 6
+
 
 select * from  doctor_patients limit 10;
 
-select * from  doctors limit 10;
+select * from  doctors limit 100;
+
+select * from  patients limit 100;
+
 
 select * from  medical_histories limit 10;
 
-select * from  patients limit 10;
+select * from  medical_documents limit 10;
+
+update doctor_patients set doctor_id = 2 where patient_id = 1;
+
+update patients set first_name ='Alejandra', last_name = 'Ordoñez Zuluaga' where id = 3
+
+UPDATE doctors SET cedula_validated = 'VALIDADA' WHERE id = 3
 
 
 # Crear la red interna

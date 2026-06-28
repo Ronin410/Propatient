@@ -15,8 +15,6 @@ export const AppointmentForm: React.FC = () => {
   // Campos para paciente nuevo
   const [newPatient, setNewPatient] = useState({ firstName: '', lastName: '', phone: '', email: '' });
 
-  const [dateTime, setDateTime] = useState('');
-  const [reason, setReason] = useState('');
   const [observations, setObservations] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -29,6 +27,8 @@ export const AppointmentForm: React.FC = () => {
   const now = new Date();
   const tzOffset = now.getTimezoneOffset() * 60000;
   const minDateTime = new Date(now.getTime() - tzOffset).toISOString().slice(0, 16);
+  const [dateTime, setDateTime] = useState(minDateTime);  const [reason, setReason] = useState('');
+
 
   useEffect(() => {
     if (patientIdParam) {
@@ -89,8 +89,10 @@ export const AppointmentForm: React.FC = () => {
         ...(mode === 'search' 
           ? { patientId: patientId } 
           : { 
-              patientName: `${newPatient.firstName} ${newPatient.lastName}`, 
-              patientPhone: newPatient.phone 
+              patientFirstName: newPatient.firstName, 
+              patientLastName: newPatient.lastName,
+              patientPhone: newPatient.phone, 
+              patientEmail: newPatient.email
             }
         )
       };

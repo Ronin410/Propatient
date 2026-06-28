@@ -28,7 +28,12 @@ type Doctor struct {
 	ProfileCompleted bool           `gorm:"default:false" json:"profileCompleted"`
 	CedulaValidated  string         `gorm:"type:varchar(20);default:'PENDIENTE'" json:"cedulaValidated"`
 	IneDocumentPath  string         `json:"ineDocumentPath"`
-	Patients         []Patient      `gorm:"many2many:doctor_patients;" json:"-"`
+	Resume           string         `json:"recipeLegend"`
+	RecipeLegend     string         `json:"resume"`
+	AvatarUrl        string         `json:"avatarUrl"`
+	LogoUrl          string         `json:"logoUrl"`
+
+	Patients []Patient `gorm:"many2many:doctor_patients;" json:"-"`
 }
 
 // Patient representa la entidad Patient.java

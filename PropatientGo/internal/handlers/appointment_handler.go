@@ -3,7 +3,6 @@ package handlers
 import (
 	"net/http"
 	"propatient-api/internal/models"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -23,8 +22,10 @@ type CreateAppointmentRequest struct {
 	PatientID uint `json:"patientId,omitempty"`
 
 	// Campos para paciente nuevo (si PatientID es 0)
-	PatientName  string `json:"patientName,omitempty"`  // Ej: "John Doe"
-	PatientPhone string `json:"patientPhone,omitempty"` // Ej: "1234567890"
+	PatientFirstName string `json:"patientFirstName,omitempty"`
+	PatientLastName  string `json:"patientLastName,omitempty"`
+	PatientPhone     string `json:"patientPhone,omitempty"` // Ej: "1234567890"
+	PatientEmail     string `json:"patientEmail"`
 }
 
 func CreateAppointment(db *gorm.DB) gin.HandlerFunc {
@@ -47,26 +48,16 @@ func CreateAppointment(db *gorm.DB) gin.HandlerFunc {
 				return
 			}
 		} else { // Si no se proporciona PatientID, es un paciente nuevo (registro rápido)
-			if req.PatientName == "" {
+			if req.PatientFirstName == "" {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Nombre del paciente es requerido para nuevo registro"})
 				return
 			}
 
-			// Parsear PatientName en FirstName y LastName
-			names := strings.Fields(req.PatientName)
-			firstName := ""
-			lastName := ""
-			if len(names) > 0 {
-				firstName = names[0]
-				if len(names) > 1 {
-					lastName = strings.Join(names[1:], " ")
-				}
-			}
-
 			patient = models.Patient{
-				FirstName: firstName,
-				LastName:  lastName,
+				FirstName: req.PatientFirstName,
+				LastName:  req.PatientLastName,
 				Phone:     req.PatientPhone,
+				Email:     req.PatientEmail,
 				// Email, BirthDate, Gender no se envían en el flujo de registro rápido del frontend
 			}
 			if err := db.Create(&patient).Error; err != nil {

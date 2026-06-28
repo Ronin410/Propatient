@@ -29,7 +29,7 @@ export const AppointmentTracking: React.FC = () => {
       const pad = (num: number) => num.toString().padStart(2, '0');
       const clientTime = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}${dif}${pad(Math.floor(Math.abs(tzo) / 60))}:${pad(Math.abs(tzo) % 60)}`;
       
-      const res = await api.get(`/doctor/dashboard-summary?clientTime=${encodeURIComponent(clientTime)}`);
+      const res = await api.get(`/dashboard/summary?clientTime=${encodeURIComponent(clientTime)}`);
       setSummary(res.data);
     } catch (err) {
       console.error("Error al cargar datos del dashboard:", err);
@@ -96,7 +96,7 @@ export const AppointmentTracking: React.FC = () => {
           <span className="label">Siguiente Paciente</span>
           <span className="value">{nextPatientName}</span>
           <span className="desc">
-            {summary?.nextPatient ? `Horario: ${formatToLocalTime(summary.nextPatient.appointmentDate || summary.nextPatient.AppointmentDate)}` : 'Línea de espera vacía'}
+            {summary?.nextPatient ? `Horario: ${formatToLocalTime(summary.nextPatient.appointmentDateTime || summary.nextPatient.appointmentDateTime)}` : 'Línea de espera vacía'}
           </span>
         </div>
       </div>
@@ -119,7 +119,7 @@ export const AppointmentTracking: React.FC = () => {
                 {summary.todayAppointments.map((app) => {
                   const patient = app.patient || app.Patient;
                   const pName = `${patient?.firstName || patient?.FirstName || 'Paciente'} ${patient?.lastName || patient?.LastName || ''}`;
-                  const appTime = formatToLocalTime(app.appointmentDate || app.AppointmentDate);
+                  const appTime = formatToLocalTime(app.appointmentDateTime || app.appointmentDateTime);
                   const isCompleted = app.status === 'completed' || app.Status === 'completed';
 
                   return (

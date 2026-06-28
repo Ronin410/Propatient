@@ -22,7 +22,7 @@ export const DoctorProfile = () => {
   const [profile, setProfile] = useState<ProfileData>({
     rfc: 'BEMA930812XXX',
     curp: 'BEMA930812HDFXNX01',
-    cedulaProfesional: '12345678',
+    cedulaProfesional: '1282',
     fullName: localStorage.getItem('suggested_fullname') || '',
     email: '',
     telefono: '',
@@ -59,12 +59,26 @@ export const DoctorProfile = () => {
     const fetchProfileData = async () => {
       setIsLoading(true);
       try {
-        const res = await api.get('/doctor/profile');
+        const res = await api.get('/doctor/me');
         if (res.data) {
           setProfile(prev => ({ ...prev, ...res.data }));
           if (res.data.avatarUrl) setAvatarPreview(res.data.avatarUrl);
           if (res.data.logoUrl) setLogoPreview(res.data.logoUrl);
+
+          profile.fullName = res.data.fullName;
+          profile.acercaDeMi = res.data.resume;
+          profile.rfc = res.data.rfc;
+          profile.curp = res.data.curp;
+          profile.cedulaProfesional = res.data.licenseNumber;
+          profile.telefono = res.data.phone;
+          profile.especialidad = res.data.medicalSpecialty;
+          profile.universidad = res.data.university;
+          profile.direccionConsultorio = res.data.address;
+          profile.leyendaReceta = res.data.recipeLegend;
+          profile.avatarUrl = res.data.avatarUrl;
+          profile.logoUrl = res.data.logoUrl;
         }
+        
       } catch (err) {
         console.error("Error al obtener el perfil", err);
       } finally {
@@ -98,7 +112,7 @@ export const DoctorProfile = () => {
     setMessage(null);
 
     try {
-      await api.put('/doctor/profile', profile);
+      await api.put('/doctor/me', profile);
       setMessage({ type: 'success', text: 'Perfil actualizado correctamente.' });
     } catch (err: any) {
       setMessage({ type: 'error', text: err.response?.data?.error || 'Error al guardar los cambios.' });

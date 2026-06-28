@@ -5,7 +5,6 @@ import (
 	"propatient-api/internal/models"
 
 	"github.com/gin-gonic/gin"
-	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -39,11 +38,14 @@ func UpdateCurrentDoctor(db *gorm.DB) gin.HandlerFunc {
 
 		// Estructura temporal para recibir los datos del update
 		var updateReq struct {
-			FullName         string `json:"full_name"`
-			MedicalSpecialty string `json:"medical_specialty"`
+			AvatarUrl        string `json:"avatarUrl"`
+			LogoUrl          string `json:"logoUrl"`
+			FullName         string `json:"fullName"`
+			MedicalSpecialty string `json:"medicalSpecialty"`
 			Phone            string `json:"phone"`
-			LicenseNumber    string `json:"license_number"`
-			Password         string `json:"password"` // Opcional
+			University       string `json:"university"`
+			Address          string `json:"address"`
+			RecipeLegend     string `json:"recipeLegend"`
 		}
 
 		if err := c.ShouldBindJSON(&updateReq); err != nil {
@@ -52,20 +54,14 @@ func UpdateCurrentDoctor(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		// Actualizamos campos básicos
+		doctor.AvatarUrl = updateReq.AvatarUrl
+		doctor.LogoUrl = updateReq.LogoUrl
 		doctor.FullName = updateReq.FullName
 		doctor.MedicalSpecialty = updateReq.MedicalSpecialty
 		doctor.Phone = updateReq.Phone
-		doctor.LicenseNumber = updateReq.LicenseNumber
-
-		// Si envió una nueva contraseña, la encriptamos
-		if updateReq.Password != "" {
-			hashedPassword, err := bcrypt.GenerateFromPassword([]byte(updateReq.Password), bcrypt.DefaultCost)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al procesar la contraseña"})
-				return
-			}
-			doctor.PasswordHash = string(hashedPassword)
-		}
+		doctor.University = updateReq.University
+		doctor.Address = updateReq.Address
+		doctor.RecipeLegend = updateReq.RecipeLegend
 
 		if err := db.Save(&doctor).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo actualizar el perfil"})
