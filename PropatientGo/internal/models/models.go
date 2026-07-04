@@ -28,8 +28,8 @@ type Doctor struct {
 	ProfileCompleted bool           `gorm:"default:false" json:"profileCompleted"`
 	CedulaValidated  string         `gorm:"type:varchar(20);default:'PENDIENTE'" json:"cedulaValidated"`
 	IneDocumentPath  string         `json:"ineDocumentPath"`
-	Resume           string         `json:"recipeLegend"`
-	RecipeLegend     string         `json:"resume"`
+	Resume           string         `json:"resume"`
+	RecipeLegend     string         `json:"recipeLegend"`
 	AvatarUrl        string         `json:"avatarUrl"`
 	LogoUrl          string         `json:"logoUrl"`
 
@@ -55,44 +55,45 @@ type Patient struct {
 
 // MedicalHistory representa tu MedicalHistory.java
 type MedicalHistory struct {
-	ID                   uint           `gorm:"primaryKey" json:"id"`
-	CreatedAt            time.Time      `json:"created_at"`
-	UpdatedAt            time.Time      `json:"updated_at"`
-	DeletedAt            gorm.DeletedAt `gorm:"index" json:"-"`
-	PatientID            uint           `gorm:"unique" json:"patientId"`       // Un historial por paciente
-	Patient              *Patient       `gorm:"foreignKey:PatientID" json:"-"` // Ocultamos la relación en JSON
-	AllergiesDescription string         `gorm:"type:text" json:"allergiesDescription"`
-	ChronicDiseaseDesc   string         `gorm:"type:text" json:"chronicDiseaseDescription"`
-	FamilyHistory        string         `gorm:"type:text" json:"familyHistory"`
+	ID                     uint     `gorm:"primaryKey" json:"id"`
+	PatientID              uint     `gorm:"unique" json:"patientId"`       // Un historial por paciente
+	Patient                *Patient `gorm:"foreignKey:PatientID" json:"-"` // Ocultamos la relación en JSON
+	Allergies              string   `json:"allergies"`
+	PathologicalHistory    string   `json:"pathological_history"`
+	NonPathologicalHistory string   `json:"non_pathological_history"`
+	SurgicalHistory        string   `json:"surgical_history"`
+	CurrentMedication      string   `json:"current_medication"`
+	HereditaryHistory      string   `json:"hereditaryHistory"`
+	GynecoObstetric        string   `json:"gynecoObstetric"`
+	HabitsLifestyle        string   `json:"habitsLifestyle"`
 }
 
 // Appointment representa tu Appointment.java
 type Appointment struct {
-	ID                  uint           `gorm:"primaryKey" json:"id"`
-	CreatedAt           time.Time      `json:"created_at"`
-	UpdatedAt           time.Time      `json:"updated_at"`
-	DeletedAt           gorm.DeletedAt `gorm:"index" json:"-"`
-	PatientID           uint           `json:"patientId"`
-	Patient             *Patient       `gorm:"foreignKey:PatientID" json:"patient"` // Volvemos al estándar 'patient'
-	DoctorID            uint           `json:"doctorId"`
-	AppointmentDateTime time.Time      `json:"appointmentDateTime"` // Asegurar que coincida con el .ts de Angular
-	Reason              string         `json:"reason"`
-	Status              string         `gorm:"default:'PENDING'" json:"status"`
-	Diagnosis           string         `gorm:"type:text" json:"diagnosis"`
-	TreatmentPlan       string         `gorm:"type:text" json:"treatmentPlan"`
-	Notes               string         `gorm:"type:text" json:"notes"`
-	RegistrationStatus  string         `gorm:"default:'REGISTERED'" json:"registrationStatus"`
+	ID                  uint              `gorm:"primaryKey" json:"id"`
+	CreatedAt           time.Time         `json:"created_at"`
+	UpdatedAt           time.Time         `json:"updated_at"`
+	DeletedAt           gorm.DeletedAt    `gorm:"index" json:"-"`
+	PatientID           uint              `json:"patientId"`
+	Patient             *Patient          `gorm:"foreignKey:PatientID" json:"patient"` // Volvemos al estándar 'patient'
+	DoctorID            uint              `json:"doctorId"`
+	AppointmentDateTime time.Time         `json:"appointmentDateTime"` // Asegurar que coincida con el .ts de Angular
+	Reason              string            `json:"reason"`
+	Status              string            `gorm:"default:'PENDING'" json:"status"`
+	Diagnosis           string            `gorm:"type:text" json:"diagnosis"`
+	TreatmentPlan       string            `gorm:"type:text" json:"treatmentPlan"`
+	Notes               string            `gorm:"type:text" json:"notes"`
+	RegistrationStatus  string            `gorm:"default:'REGISTERED'" json:"registrationStatus"`
+	MedicalDocuments    []MedicalDocument `gorm:"foreignKey:AppointmentID" json:"documents"`
 }
 
 type MedicalDocument struct {
-	FileName      string    `json:"filename"`
-	FileType      string    `json:"fileType"`
-	Data          []byte    `json:"data"`
-	AppointmentID uint      `json:"appointmentId"`
-	Prescription  bool      `json:"prescription"`
-	UpdateAt      time.Time `json:"createdAt"`
-	CreateAt      time.Time `json:"updatedAt"`
-	DeleteAt      time.Time `json:"deletedAt"`
+	ID            uint   `gorm:"primaryKey" json:"id"`
+	FileName      string `json:"filename"`
+	FileType      string `json:"fileType"`
+	FilePath      string `json:"file_path"`
+	AppointmentID uint   `json:"appointmentId"`
+	Prescription  bool   `json:"prescription"`
 }
 
 type GoogleTokenClaims struct {
@@ -100,4 +101,8 @@ type GoogleTokenClaims struct {
 	EmailVerified string `json:"email_verified"`
 	Name          string `json:"name"`
 	Picture       string `json:"picture"`
+}
+
+type UpdateDocumentInput struct {
+	Filename string `json:"filename" binding:"required"`
 }

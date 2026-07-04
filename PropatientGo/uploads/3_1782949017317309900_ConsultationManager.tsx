@@ -77,16 +77,6 @@ export const ConsultationManager: React.FC = () => {
   const [showAutosaveToast, setShowAutosaveToast] = useState(false);
   const [qrImageUrl, setQrImageUrl] = useState('');
 
-  // --- REFERENCIAS DE CONTROL CRUCIALES ---
-const [isCompleted, setIsCompleted] = useState(false);
-  const isRestoredRef = useRef(false); // Evita que se pregunte más de una vez
-  const uploadedFilesRef = useRef(uploadedFiles);
-  
-  useEffect(() => {
-    uploadedFilesRef.current = uploadedFiles;
-  }, [uploadedFiles]);
-
-  // --- 1. FUNCIÓN DE CARGA DE RED (GO BACKEND) ---
   const loadConsultation = useCallback(async () => {
     try {
       setLoading(true);
@@ -94,20 +84,10 @@ const [isCompleted, setIsCompleted] = useState(false);
       const data = response.data;
       setAppointment(data);
 
-      // ◄ REGLA DE NEGOCIO: Si la cita ya está completada, bloqueamos y limpiamos residuos locales
-      if (data.status === 'COMPLETED' || data.Status === 'COMPLETED') {
-        localStorage.removeItem(`consultation_draft_${appointmentId}`);
-        setIsCompleted(true);
-        isRestoredRef.current = true; // Evita activar el respaldo local
-        setLoading(false);
-        return; // Salimos de la función inmediatamente
-      }
-
       const p = data.patient || data.Patient;
       const h = p?.MedicalHistory || p?.medicalHistory;
 
-      const initialPatientData: Patient = {
-        id: p?.id || 0,
+      const initialPatientData = {
         firstName: p?.firstName || p?.FirstName || '',
         lastName: p?.lastName || p?.LastName || '',
         birthDate: (p?.birthDate || p?.BirthDate)?.split('T')[0] || '',
@@ -116,6 +96,7 @@ const [isCompleted, setIsCompleted] = useState(false);
         email: p?.email || p?.Email || '',
         address: p?.address || p?.Address || '',
         medicalHistory: {
+          // Soportamos tanto la nomenclatura directa de Go como la snake_case tradicional
           hereditaryHistory: h?.hereditaryHistory || h?.hereditary_history || '',
           allergies: h?.allergies || h?.Allergies || '',
           pathological_history: h?.pathological_history || h?.pathologicalHistory || '',
@@ -128,112 +109,29 @@ const [isCompleted, setIsCompleted] = useState(false);
       };
 
       setPatientFormData(initialPatientData);
-      
-      const initialNotes = {
-        reason: data.reason || '',
-        subjective: data.notes?.includes('SUBJETIVO:') ? data.notes.split('\n')[0].replace('SUBJETIVO: ', '') : '',
-        objective: data.notes?.includes('OBJECTIVO:') ? data.notes.split('\n')[1].replace('OBJECTIVO: ', '') : '',
-        diagnosis: data.diagnosis || '',
-        treatmentPlan: data.treatmentPlan || ''
-      };
-      setConsultationNotes(initialNotes);
+
+      lastSavedDataRef.current = JSON.stringify({ 
+        patientForm: initialPatientData, 
+        consultationNotes: { subjective: '', objective: '', diagnosis: '', treatmentPlan: '' } 
+      });
 
       if (data.documents) {
-        const mappedInitialFiles = data.documents.map((doc: any) => ({
-          id: doc.id,
-          name: doc.filename || doc.FileName || '',
-          type: doc.fileType || '',
-          size: 0,
-          url: `${baseurl}${doc.file_path || ''}`,
-          isServerFile: true
-        }));
-        setUploadedFiles(mappedInitialFiles);
+        mapServerFiles(data.documents);
       }
 
-      lastSavedDataRef.current = JSON.stringify({ patientForm: initialPatientData, consultationNotes: initialNotes });
-
-    } catch (err: any) {
-      console.error(err);
-      setError(err.response?.data?.error || 'Error al obtener detalles de la consulta');
+      if (data.status === 'PENDING') {
+        await api.put(`/appointments/${appointmentId}`, { 
+          ...data, 
+          status: 'IN_COURSE' 
+        });
+      }
+    } catch (err) {
+      console.error("Error cargando consulta:", err);
+      setError("No se pudo cargar la información de la consulta.");
     } finally {
       setLoading(false);
     }
   }, [appointmentId]);
-
-  // --- 2. EFFECT DE MONTAJE INICIAL (UNA SOLA EJECUCIÓN) ---
-  useEffect(() => {
-    loadConsultation();
-  }, [appointmentId]); // Cambiado dependencias para evitar disparos cíclicos
-
-  // --- 3. EVALUACIÓN Y RESTAURACIÓN DEL RESPALDO (SE DISPARA AL APAGAR EL LOADING) ---
-useEffect(() => {
-    if (loading || isRestoredRef.current || !appointmentId) return;
-
-    const savedDraft = localStorage.getItem(`consultation_draft_${appointmentId}`);
-    if (savedDraft) {
-      try {
-        const draft = JSON.parse(savedDraft);
-        if (draft && draft.timestamp) {
-          
-          // En lugar de comparar strings complejos que fallan por formato, 
-          // validamos si de verdad hay diferencias clave con lo que llegó de la BD de Go
-          const tieneCambiosProcesables = 
-            JSON.stringify(draft.patientForm) !== JSON.stringify(patientFormData) ||
-            JSON.stringify(draft.consultationNotes) !== JSON.stringify(consultationNotes);
-
-          if (tieneCambiosProcesables) {
-            const message = `Se encontró un borrador guardado automáticamente el ${new Date(draft.timestamp).toLocaleString()}.\n\n¿Desea recuperar los cambios modificados pendientes?`;
-            
-            if (window.confirm(message)) {
-              if (draft.patientForm) setPatientFormData(draft.patientForm);
-              if (draft.consultationNotes) setConsultationNotes(draft.consultationNotes);
-              if (draft.uploadedFiles) setUploadedFiles(draft.uploadedFiles);
-              
-              // Sincronizamos la referencia con los datos del borrador que acabamos de inyectar
-              lastSavedDataRef.current = JSON.stringify({ 
-                patientForm: draft.patientForm, 
-                consultationNotes: draft.consultationNotes 
-              });
-            } else {
-              // Si el usuario decide ignorarlo, limpiamos para no molestar más
-              localStorage.removeItem(`consultation_draft_${appointmentId}`);
-            }
-          }
-        }
-      } catch (e) {
-        console.error("Error al parsear el borrador:", e);
-      }
-    }
-    isRestoredRef.current = true;
-  }, [loading, appointmentId]); // Quitamos las dependencias mutables de los formularios aquí
-
-  // --- 4. CICLO DE AUTOGUARDADO ACTIVO (CADA 15 SEGUNDOS) ---
- useEffect(() => {
-    if (loading || !appointmentId || !isRestoredRef.current) return;
-
-    const saveDraft = () => {
-      const currentDataStr = JSON.stringify({ patientForm, consultationNotes });
-      
-      // Si visualmente los inputs siguen idénticos al último estado guardado en memoria, salimos
-      if (currentDataStr === lastSavedDataRef.current) return;
-
-      const draftData = {
-        patientForm,
-        consultationNotes,
-        uploadedFiles: uploadedFilesRef.current,
-        timestamp: new Date().toISOString(),
-      };
-      
-      localStorage.setItem(`consultation_draft_${appointmentId}`, JSON.stringify(draftData));
-      lastSavedDataRef.current = currentDataStr; // Actualizamos la marca de tiempo del cambio
-
-      setShowAutosaveToast(true);
-      setTimeout(() => setShowAutosaveToast(false), 3000);
-    };
-
-    const interval = setInterval(saveDraft, 15000);
-    return () => clearInterval(interval);
-  }, [loading, appointmentId, patientForm, consultationNotes]);
 
   const mapServerFiles = (docs: any[]) => {
     const files: AppointmentFile[] = docs.map(doc => ({
@@ -255,15 +153,17 @@ useEffect(() => {
       if (response.data.documents) {
         const serverDocs = response.data.documents;
         
+        // Mapeamos lo que viene del servidor de forma normal
         const mappedServerFiles: AppointmentFile[] = serverDocs.map((doc: any) => ({
           id: doc.id,
-          name: doc.filename || doc.FileName || doc.fileName,
+          name: doc.filename,
           type: doc.fileType,
           size: doc.data ? Math.round(doc.data.length * 0.75) : 0,
           url: `${baseurl}${doc.file_path}`,
-          isServerFile: true // ◄ CAMBIO AQUÍ: Agrega esta bandera obligatoria
+          isServerFile: true
         }));
 
+        // NUEVO: Sincronización inteligente sin destruir tus cambios locales
         setUploadedFiles(prevFiles => {
           const localOnlyFiles = prevFiles.filter(f => !f.isServerFile);
           const localNamesMap = new Map(prevFiles.map(f => [f.id || f.url, f.name]));
@@ -272,7 +172,7 @@ useEffect(() => {
             const key = sf.id || sf.url;
             return {
               ...sf,
-              name: localNamesMap.has(key) ? localNamesMap.get(key)! : sf.name
+              name: localNamesMap.has(key) ? localNamesMap.get(key)! : sf.name // Respeta el nombre editado
             };
           });
 
@@ -343,11 +243,7 @@ useEffect(() => {
     setShowQR(!showQR);
   };
 
-// Añade esta pequeña referencia justo arriba del useEffect de autoguardado para no crear bucles
-  useEffect(() => {
-    uploadedFilesRef.current = uploadedFiles;
-  }, [uploadedFiles]);
-
+// --- EFFECT: AUTOGUARDADO EN LOCALSTORAGE (CADA 30 SEGUNDOS) ---
   useEffect(() => {
     if (loading || !appointmentId) return;
 
@@ -355,17 +251,16 @@ useEffect(() => {
       const currentData = {
         patientForm,
         consultationNotes,
-        uploadedFiles: uploadedFilesRef.current // Uso seguro de la referencia
+        uploadedFiles, // ◄ PUNTO CLAVE: Agregado para que se incluya en la copia de seguridad
       };
       
-      const currentDataStr = JSON.stringify({ patientForm, consultationNotes });
+      const currentDataStr = JSON.stringify(currentData);
       if (currentDataStr === lastSavedDataRef.current) return;
 
       const draftData = {
         ...currentData,
         timestamp: new Date().toISOString(),
       };
-      
       localStorage.setItem(`consultation_draft_${appointmentId}`, JSON.stringify(draftData));
       lastSavedDataRef.current = currentDataStr;
 
@@ -373,10 +268,28 @@ useEffect(() => {
       setTimeout(() => setShowAutosaveToast(false), 3000);
     };
 
-    // Cambiado a 15 segundos para que responda más rápido en tus pruebas
-    const interval = setInterval(saveDraft, 15000); 
+    const interval = setInterval(saveDraft, 30000);
     return () => clearInterval(interval);
+    // ◄ IMPORTANTE: Dejamos el arreglo de dependencias exactamente igual al tuyo original
   }, [loading, appointmentId, patientForm, consultationNotes]);
+
+const checkAndRestoreDraft = useCallback(() => {
+    const savedDraft = localStorage.getItem(`consultation_draft_${appointmentId}`);
+    if (savedDraft) {
+      const draft = JSON.parse(savedDraft);
+      if (window.confirm(`Se encontró un borrador guardado automáticamente el ${new Date(draft.timestamp).toLocaleString()}. ¿Desea recuperarlo?`)) {
+        setPatientFormData(draft.patientForm);
+        setConsultationNotes(draft.consultationNotes);
+        
+        // NUEVO: Si la copia del localstorage tiene archivos guardados, los reinyecta
+        if (draft.uploadedFiles && draft.uploadedFiles.length > 0) {
+          setUploadedFiles(draft.uploadedFiles);
+        }
+        
+        lastSavedDataRef.current = JSON.stringify({ patientForm: draft.patientForm, consultationNotes: draft.consultationNotes });
+      }
+    }
+  }, [appointmentId]);
 
   const handleFinalize = async () => {
     if (!consultationNotes.diagnosis || !consultationNotes.treatmentPlan) {
@@ -418,24 +331,10 @@ useEffect(() => {
       const patientId = appointment?.patient?.id || appointment?.Patient?.id || (appointment?.patient as any)?.ID;
       await api.put(`/patients/${patientId}`, patientUpdatePayload);
 
-const serverFilesToUpdate = uploadedFiles.filter(f => f.id !== undefined && f.id !== null);
-      
-      console.log("Archivos del servidor encontrados para actualizar:", serverFilesToUpdate); // Para tu debug
-      for (const file of serverFilesToUpdate) {
-        // Asumiendo la ruta estándar REST para actualizar metadatos del documento
-        await api.put(`/appointments/${appointmentId}/documents/${file.id}`, {
-          filename: file.name
-        });
-      }
-
-      // 3. Subir archivos nuevos locales renombrados (si existen)
-      const localFiles = uploadedFiles.filter(f => !f.isServerFile && f.id);
+      const localFiles = uploadedFiles.filter(f => !f.isServerFile && f.originalFile);
       if (localFiles.length > 0) {
         const formData = new FormData();
-        localFiles.forEach(f => {
-          // Pasamos el f.name modificado en el tercer parámetro del append para que Multer/Go lo reciba con el nuevo nombre
-          formData.append('files', f.originalFile!, f.name);
-        });
+        localFiles.forEach(f => formData.append('files', f.originalFile!));
         formData.append('isPrescription', 'false');
         await api.post(`/appointments/${appointmentId}/upload-document`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
@@ -465,51 +364,16 @@ const serverFilesToUpdate = uploadedFiles.filter(f => f.id !== undefined && f.id
     const init = async () => {
       if (appointmentId) {
         await loadConsultation();
+        checkAndRestoreDraft();
       }
     };
     init();
     const interval = setInterval(refreshFiles, 20000);
     return () => clearInterval(interval);
-  }, [appointmentId, loadConsultation]);
+  }, [appointmentId, loadConsultation, checkAndRestoreDraft]);
 
   if (loading) return <div className="consultation-manager-container loading-state"><div className="spinner"></div><p>Iniciando consulta médica...</p></div>;
-  if (error) {
-      return (
-        <div className="consultation-error">
-          <span className="material-icons-outlined">error_outline</span>
-          <p>{error}</p>
-          <button className="btn-primary" onClick={() => navigate('/inicio')}>Volver al Inicio</button>
-        </div>
-      );
-    
-
-    if (isCompleted) {
-    const patientId = appointment?.patient?.id || appointment?.Patient?.id || (appointment?.patient as any)?.ID;
-    return (
-      <div className="consultation-completed-lock-overlay">
-        <div className="lock-card">
-          <span className="material-icons-outlined lock-icon">task_alt</span>
-          <h2>Esta cita ya fue completada</h2>
-          <p>
-            Los datos clínicos de esta consulta han sido guardados de manera definitiva en el expediente electrónico y no pueden ser modificados.
-          </p>
-          <p className="hint">
-            Por favor, vaya al historial del paciente para poder visualizar el resumen completo de su evolución.
-          </p>
-          <div className="lock-actions">
-            <button className="btn-secondary" onClick={() => navigate('/inicio')}>
-              Ir al Inicio
-            </button>
-            {patientId && (
-              <button className="btn-primary" onClick={() => navigate(`/patients/${patientId}/history`)}>
-                Ver Historial del Paciente
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  if (error || !appointment) return <div className="consultation-manager-container error-state"><p>{error}</p></div>;
 
 return (
     <div className="consultation-manager-container">
@@ -761,33 +625,20 @@ return (
                       <span className="material-icons-outlined file-ic">
                         {file.type.includes('image') ? 'image' : 'description'}
                       </span>
-                     <input
+                      <input
                         type="text"
+                        className="file-rename-input"
                         value={file.name}
-                        onChange={(e) => {
-                          const newName = e.target.value;
-                          setUploadedFiles(prev => {
-                            const updated = [...prev];
-                            if (updated[idx]) {
-                              // ◄ REEMPLAZO CLAVE: Creamos un objeto totalmente nuevo conservando id, isServerFile, url, etc.
-                              updated[idx] = {
-                                ...updated[idx],
-                                name: newName
-                              };
-                            }
-                            return updated;
-                          });
-                        }}
+                        onChange={(e) => handleRenameFile(idx, e.target.value)}
                         style={{
                           border: 'none',
                           borderBottom: '1px dashed #ccc',
                           background: 'transparent',
-                          outline: 'none',
-                          color: '#002d42',
                           padding: '2px 4px',
-                          fontSize: 'inherit',
-                          fontFamily: 'inherit',
-                          width: '100%'
+                          fontSize: '0.9rem',
+                          fontWeight: 500,
+                          width: '100%',
+                          color: '#002d42'
                         }}
                       />
                                   

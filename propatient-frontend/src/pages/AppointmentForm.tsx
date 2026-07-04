@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api/axios';
 import type { Patient } from '../types';
+import { Popup } from '../components/Popup'; // Asegura la ruta correcta de tu componente genérico
 import './AppointmentForm.scss';
 
 export const AppointmentForm: React.FC = () => {
@@ -16,6 +17,7 @@ export const AppointmentForm: React.FC = () => {
   const [newPatient, setNewPatient] = useState({ firstName: '', lastName: '', phone: '', email: '' });
 
   const [observations, setObservations] = useState('');
+  const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(false);
 
   // Estado para la búsqueda de pacientes
@@ -23,215 +25,298 @@ export const AppointmentForm: React.FC = () => {
   const [searchResults, setSearchResults] = useState<Patient[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
+  // Configuración del Popup Genérico
+  const [popupConfig, setPopupConfig] = useState({
+    isOpen: false,
+    type: 'success' as 'success' | 'error',
+    title: '',
+    message: ''
+  });
+
   // Calculamos la fecha y hora actual en formato local para el atributo 'min'
   const now = new Date();
   const tzOffset = now.getTimezoneOffset() * 60000;
   const minDateTime = new Date(now.getTime() - tzOffset).toISOString().slice(0, 16);
-  const [dateTime, setDateTime] = useState(minDateTime);  const [reason, setReason] = useState('');
+  const [dateTime, setDateTime] = useState('');
 
-
+  // Carga inicial si viene un ID de paciente por URL
   useEffect(() => {
     if (patientIdParam) {
       const fetchPatient = async () => {
         try {
-          const response = await api.get(`/patients/${patientIdParam}`);
-          setSelectedPatient(response.data);
-        } catch (error) {
-          console.error("Error al cargar paciente pre-seleccionado:", error);
+          const res = await api.get(`/patients/${patientIdParam}`);
+          if (res.data) {
+            setSelectedPatient(res.data);
+            setMode('search');
+          }
+        } catch (err) {
+          console.error("Error cargando paciente de la URL:", err);
         }
       };
       fetchPatient();
     }
   }, [patientIdParam]);
 
-  const searchPatients = async (query: string) => {
-    setSearchTerm(query);
-    if (query.length > 2) {
+  // Búsqueda en tiempo real
+  useEffect(() => {
+    if (mode !== 'search' || !searchTerm.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    const delayDebounce = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const response = await api.get(`/patients/search?query=${query}`);
-        setSearchResults(response.data || []);
-      } catch (error) {
-        console.error("Error buscando pacientes:", error);
+        const res = await api.get(`/patients/search?query=${encodeURIComponent(searchTerm)}`);
+        setSearchResults(res.data || []);
+      } catch (err) {
+        console.error("Error buscando pacientes:", err);
       } finally {
         setIsSearching(false);
       }
-    } else {
-      setSearchResults([]);
-    }
-  };
+    }, 3000); // Mantenemos tus 3 segundos de debounce fijados
+
+    return () => clearTimeout(delayDebounce);
+  }, [searchTerm, mode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (mode === 'search' && !selectedPatient) {
-      alert("Por favor selecciona un paciente.");
-      return;
-    }
-
-    if (mode === 'manual' && newPatient.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newPatient.email)) {
-      alert("El formato del correo electrónico para el nuevo paciente no es válido.");
-      return;
-    }
-
     setLoading(true);
+
     try {
-      // REGLA CRÍTICA: Convertimos la fecha local del input a UTC antes de enviar
-      const localDate = new Date(dateTime);
-      const utcDateTime = localDate.toISOString();
+      let patientId = selectedPatient?.id || 0;
 
-      const patientId = selectedPatient?.id || (selectedPatient as any)?.ID;
+      // Si es modo manual, primero registramos al nuevo paciente
+      if (mode === 'manual') {
+        const patientRes = await api.post('/patients', newPatient);
+        patientId = patientRes.data.id;
+      }
 
-      const payload = {
-        appointmentDateTime: utcDateTime,
-        service: reason, // El backend Java mapea 'service' al campo 'reason'
-        notes: observations, // El backend Java mapea 'notes' al campo 'notes'
-        registrationStatus: mode === 'search' ? 'REGISTERED' : 'PENDING_RECORD',
-        ...(mode === 'search' 
-          ? { patientId: patientId } 
-          : { 
-              patientFirstName: newPatient.firstName, 
-              patientLastName: newPatient.lastName,
-              patientPhone: newPatient.phone, 
-              patientEmail: newPatient.email
-            }
-        )
-      };
+      if (!patientId) {
+        setPopupConfig({
+          isOpen: true,
+          type: 'error',
+          title: 'Falta Paciente',
+          message: 'Por favor selecciona un paciente existente o registra uno nuevo.'
+        });
+        setLoading(false);
+        return;
+      }
 
-      await api.post('/appointments', payload);
+      // Agendar la cita médica
+      await api.post('/appointments', {
+        patientId,
+        appointmentDateTime: new Date(dateTime).toISOString(), // ✨ Cambiado de dateTime a appointmentDateTime
+        service: reason,                                       // ✨ Cambiado de reason a service (asumiendo que guardas el motivo aquí)
+        observations: observations
+      });
+      
+      setPopupConfig({
+        isOpen: true,
+        type: 'success',
+        title: 'Cita Agendada',
+        message: 'La cita médica se ha registrado exitosamente en la agenda del consultorio.'
+      });
 
-      // Redirigir al calendario tras éxito
-      navigate('/calendar');
-    } catch (error) {
-      console.error("Error al crear la cita:", error);
-      alert("Hubo un error al agendar la cita.");
+    } catch (err: any) {
+      console.error(err);
+      setPopupConfig({
+        isOpen: true,
+        type: 'error',
+        title: 'Error de Registro',
+        message: err.response?.data?.error || 'No se pudo agendar la cita médica. Verifica los datos.'
+      });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePopupClose = () => {
+    setPopupConfig(prev => ({ ...prev, isOpen: false }));
+    if (popupConfig.type === 'success') {
+      navigate('/appointments'); // Redirección al calendario al terminar con éxito
     }
   };
 
   return (
     <div className="appointment-form-container">
       <header className="page-header">
-        <h1>Agendar Nueva Cita</h1>
-        <button className="btn-outline-sm" onClick={() => navigate(-1)}>Cancelar</button>
+        <div>
+          <h1>Agendar Nueva Cita Médica</h1>
+          <p>Asigna un espacio en tu agenda, vincula expedientes y configura el motivo de la consulta.</p>
+        </div>
+        <button className="btn-text-back" onClick={() => navigate('/appointments')}>
+          <span className="material-icons-outlined">arrow_back</span> Regresar 
+        </button>
       </header>
 
-      <form onSubmit={handleSubmit} className="card form-card">
-        <div className="mode-selector">
-          <button 
-            type="button" 
-            className={`tab-btn ${mode === 'search' ? 'active' : ''}`} 
-            onClick={() => setMode('search')}
-          >Paciente Registrado</button>
-          <button 
-            type="button" 
-            className={`tab-btn ${mode === 'manual' ? 'active' : ''}`} 
-            onClick={() => setMode('manual')}
-          >Paciente Nuevo (Rápido)</button>
-        </div>
+      <form onSubmit={handleSubmit} className="profile-form">
+        
+        {/* SECCIÓN 1: ASIGNACIÓN DE PACIENTE */}
+        <div className="profile-card-section">
+          <h2 className="section-title">Información del Paciente</h2>
+          
+          <div className="mode-selector">
+            <button
+              type="button"
+              className={`tab-btn ${mode === 'search' ? 'active' : ''}`}
+              onClick={() => { setMode('search'); setSelectedPatient(null); }}
+            >
+              <span className="material-icons-outlined">search</span> Buscar Paciente Existente
+            </button>
+            <button
+              type="button"
+              className={`tab-btn ${mode === 'manual' ? 'active' : ''}`}
+              onClick={() => { setMode('manual'); setSelectedPatient(null); }}
+            >
+              <span className="material-icons-outlined">person_add</span> Registrar Paciente Nuevo
+            </button>
+          </div>
 
-        <div className="form-group">
           {mode === 'search' ? (
-            selectedPatient ? (
-            <div className="selected-patient-box">
-              <span><strong>{selectedPatient.firstName} {selectedPatient.lastName}</strong></span>
-              <button type="button" className="btn-text-danger" onClick={() => setSelectedPatient(null)}>Cambiar</button>
+            <div className="search-wrapper">
+              {selectedPatient ? (
+                <div className="selected-patient-box">
+                  <div className="patient-meta">
+                    <span className="material-icons-outlined">account_circle</span>
+                    <div>
+                      <strong>{selectedPatient.firstName} {selectedPatient.lastName}</strong>
+                      <span>Tel: {selectedPatient.phone || '—'} | Email: {selectedPatient.email || '—'}</span>
+                    </div>
+                  </div>
+                  <button type="button" className="btn-remove" onClick={() => setSelectedPatient(null)}>
+                    <span className="material-icons-outlined">close</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="form-group full-width relative-input">
+                  <label>Buscar por Nombre, Apellido o RFC</label>
+                  <div className="input-with-icon">
+                    <span className="material-icons-outlined input-icon">search</span>
+                    <input
+                      type="text"
+                      placeholder="Escribe para buscar..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+                  
+                  {isSearching && <div className="searching-loader">Buscando en expedientes...</div>}
+                  
+                  {searchResults.length > 0 && (
+                    <ul className="search-results">
+                      {searchResults.map((p) => (
+                        <li key={p.ID} onClick={() => { setSelectedPatient(p); setSearchResults([]); setSearchTerm(''); }}>
+                          <span className="material-icons-outlined">assignment_ind</span>
+                          <div className="result-info">
+                            <span className="name">{p.firstName} {p.lastName}</span>
+                            <span className="sub">{p.email || 'Sin correo'} • {p.phone || 'Sin teléfono'}</span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
-            <div className="search-wrapper">
-              <input
-                type="text"
-                placeholder="Buscar paciente por nombre o teléfono..."
-                value={searchTerm}
-                onChange={(e) => searchPatients(e.target.value)}
-                className="search-input"
-              />
-              {searchResults.length > 0 && (
-                <ul className="search-results">
-                  {searchResults.map(p => (
-                    <li key={p.id} onClick={() => setSelectedPatient(p)}>
-                      {p.firstName} {p.lastName} <small>({p.phone})</small>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {isSearching && <div className="searching-msg">Buscando...</div>}
-            </div>
-          )) : (
-            <div className="manual-patient-fields">
-              <div className="row">
-                <input 
-                  type="text" 
-                  placeholder="Nombre(s)" 
+            <div className="form-grid">
+              <div className="form-group">
+                <label>Nombre(s)</label>
+                <input
+                  type="text"
+                  required={mode === 'manual'}
                   value={newPatient.firstName}
-                  onChange={(e) => setNewPatient({...newPatient, firstName: e.target.value})}
-                  required 
-                />
-                <input 
-                  type="text" 
-                  placeholder="Apellido(s)" 
-                  value={newPatient.lastName}
-                  onChange={(e) => setNewPatient({...newPatient, lastName: e.target.value})}
-                  required 
+                  onChange={(e) => setNewPatient({ ...newPatient, firstName: e.target.value })}
                 />
               </div>
-              <div className="row mt-2">
-                <input 
-                  type="tel" 
-                  placeholder="Teléfono" 
-                  value={newPatient.phone}
-                  onChange={(e) => setNewPatient({...newPatient, phone: e.target.value})}
+              <div className="form-group">
+                <label>Apellido(s)</label>
+                <input
+                  type="text"
+                  required={mode === 'manual'}
+                  value={newPatient.lastName}
+                  onChange={(e) => setNewPatient({ ...newPatient, lastName: e.target.value })}
                 />
-                <input 
-                  type="email" 
-                  placeholder="Correo (Opcional)" 
+              </div>
+              <div className="form-group">
+                <label>Teléfono Celular</label>
+                <input
+                  type="tel"
+                  value={newPatient.phone}
+                  onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label>Correo Electrónico</label>
+                <input
+                  type="email"
                   value={newPatient.email}
-                  onChange={(e) => setNewPatient({...newPatient, email: e.target.value})}
+                  onChange={(e) => setNewPatient({ ...newPatient, email: e.target.value })}
                 />
               </div>
             </div>
           )}
         </div>
 
-        <div className="form-group">
-          <label htmlFor="datetime">Fecha y Hora</label>
-          <input
-            id="datetime"
-            type="datetime-local"
-            value={dateTime}
-            onChange={(e) => setDateTime(e.target.value)}
-            min={minDateTime}
-            required
-          />
+        {/* SECCIÓN 2: DETALLES DE LA CITA */}
+        <div className="profile-card-section">
+          <h2 className="section-title">Fecha, Horario y Diagnóstico Inicial</h2>
+          
+          <div className="form-grid">
+            <div className="form-group">
+              <label htmlFor="datetime">Fecha y Hora Programada</label>
+              <input
+                id="datetime"
+                type="datetime-local"
+                value={dateTime}
+                onChange={(e) => setDateTime(e.target.value)}
+                min={minDateTime}
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="reason">Motivo Principal de Consulta</label>
+              <input
+                id="reason"
+                type="text"
+                placeholder="Ej: Control mensual, Valoración de estudios, etc."
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="form-group full-width">
+              <label htmlFor="obs">Observaciones y Notas Clínicas Previas (Opcional)</label>
+              <textarea
+                id="obs"
+                rows={4}
+                placeholder="Añade antecedentes sutiles, síntomas descritos por teléfono o requerimientos especiales..."
+                value={observations}
+                onChange={(e) => setObservations(e.target.value)}
+              />
+            </div>
+          </div>
         </div>
 
-        <div className="form-group">
-          <label htmlFor="reason">Motivo de Consulta</label>
-          <input
-            id="reason"
-            type="text"
-            placeholder="Ej: Control mensual, Dolor abdominal..."
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            required
-          />
+        {/* ACCIONES DE ENVÍO */}
+        <div className="actions-container">
+          <button type="submit" className="btn-save-profile" disabled={loading}>
+            {loading ? 'Procesando Agenda...' : 'Confirmar y Agendar Cita'}
+          </button>
         </div>
 
-        <div className="form-group">
-          <label htmlFor="obs">Observaciones (Opcional)</label>
-          <textarea
-            id="obs"
-            rows={4}
-            placeholder="Notas adicionales para la cita..."
-            value={observations}
-            onChange={(e) => setObservations(e.target.value)}
-          />
-        </div>
-
-        <button type="submit" className="btn-primary btn-block" disabled={loading}>
-          {loading ? 'Agendando...' : 'Agendar Cita'}
-        </button>
       </form>
+
+      {/* POPUP DE NOTIFICACIÓN COMPARTIDO */}
+      <Popup
+        isOpen={popupConfig.isOpen}
+        type={popupConfig.type}
+        title={popupConfig.title}
+        message={popupConfig.message}
+        onClose={handlePopupClose}
+      />
     </div>
   );
 };

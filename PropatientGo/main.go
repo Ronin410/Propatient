@@ -41,7 +41,7 @@ func main() {
 
 	// 4. Configuración del Router
 	r := gin.Default()
-
+	r.Static("/uploads", "./uploads")
 	// 5. CORS - DEBE ir antes de cualquier ruta
 	// Esta configuración permite que el navegador valide los permisos antes de enviar el Token
 	r.Use(cors.New(cors.Config{
@@ -115,6 +115,8 @@ func main() {
 				appointments.POST("", handlers.CreateAppointment(db))
 				appointments.GET("/:id", handlers.GetAppointmentDetail(db))
 				appointments.PUT("/:id", handlers.UpdateAppointment(db))
+				appointments.POST("/:id/upload-document", handlers.UploadDocuments(db))
+				appointments.PUT("/:id/documents/:docId", handlers.UpdateAppointmentDocument(db))
 			}
 
 			// Doctor

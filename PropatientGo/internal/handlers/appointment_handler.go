@@ -1,8 +1,12 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"propatient-api/internal/models"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -129,38 +133,48 @@ func UploadDocuments(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		files := form.File["files"] // El frontend envía el campo 'files'
+		files := form.File["files"]
 		isPrescription := c.PostForm("isPrescription") == "true"
 
-		for _, fileHeader := range files {
-			file, err := fileHeader.Open()
-			if err != nil {
-				continue
-			}
-			defer file.Close()
+		// Definir y crear la carpeta de destino local si no existe
+		uploadDir := "./uploads"
+		if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo crear el directorio de subidas"})
+			return
+		}
 
-			// Leer el contenido del archivo a bytes
-			data := make([]byte, fileHeader.Size)
-			_, err = file.Read(data)
-			if err != nil {
+		for _, fileHeader := range files {
+			// Generar un nombre único para evitar que archivos con el mismo nombre se sobrescriban
+			// Ejemplo: 123_timestamp_nombre.png
+			uniqueFileName := fmt.Sprintf("%s_%d_%s", appointmentID, time.Now().UnixNano(), fileHeader.Filename)
+			dst := filepath.Join(uploadDir, uniqueFileName)
+
+			// 3. Guardar el archivo físicamente en la carpeta del Backend
+			if err := c.SaveUploadedFile(fileHeader, dst); err != nil {
+				// Si falla el guardado físico en disco, pasamos al siguiente
 				continue
 			}
+
+			// 4. Definir la URL o ruta pública que se guardará en la BD
+			// Usamos una ruta relativa que luego expondremos de forma estática en Gin
+			fileURL := fmt.Sprintf("/public/uploads/%s", uniqueFileName)
 
 			doc := models.MedicalDocument{
 				FileName:      fileHeader.Filename,
 				FileType:      fileHeader.Header.Get("Content-Type"),
-				Data:          data,
+				FilePath:      fileURL, // <--- Guardamos la URL pública en lugar de los bytes
 				AppointmentID: appointment.ID,
 				Prescription:  isPrescription,
 			}
 
 			if err := db.Create(&doc).Error; err != nil {
-				// Si falla un archivo, continuamos con el siguiente
+				// Si falla el registro en la BD, podrías opcionalmente borrar el archivo físico del disco
+				os.Remove(dst)
 				continue
 			}
 		}
 
-		c.JSON(http.StatusOK, gin.H{"message": "Documentos guardados exitosamente"})
+		c.JSON(http.StatusOK, gin.H{"message": "Documentos guardados en servidor exitosamente"})
 	}
 }
 
@@ -194,8 +208,15 @@ func GetAppointmentDetail(db *gorm.DB) gin.HandlerFunc {
 		doctorID := c.MustGet("doctorID").(uint)
 
 		var appointment models.Appointment
-		// Preload("Patient") trae los datos del dueño de la cita
-		if err := db.Preload("Patient").Where("id = ? AND doctor_id = ?", id, doctorID).First(&appointment).Error; err != nil {
+
+		// Preload utiliza el nombre del campo en el Struct de Go, no el nombre de la tabla SQL
+		err := db.Preload("Patient").
+			Preload("Patient.MedicalHistory").
+			Preload("MedicalDocuments"). // <--- Carga los documentos asociados por appointment_id
+			Where("id = ? AND doctor_id = ?", id, doctorID).
+			First(&appointment).Error
+
+		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Cita no encontrada"})
 			return
 		}
@@ -316,5 +337,41 @@ func GetUpcomingAppointments(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, appointments)
+	}
+}
+
+func UpdateAppointmentDocument(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 1. Obtener y validar el ID del documento desde los parámetros de la ruta
+		docIDStr := c.Param("docId")
+		docID, err := strconv.Atoi(docIDStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "ID de documento inválido"})
+			return
+		}
+
+		// 2. Parsear el cuerpo de la petición (JSON)
+		var input models.UpdateDocumentInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "El campo filename es obligatorio"})
+			return
+		}
+
+		// 3. Ejecutar la actualización en la base de datos
+		// Reemplaza "MedicalDocument" o "documents" por el nombre real de tu modelo/tabla
+		err = db.Model(&models.MedicalDocument{}).
+			Where("id = ?", docID).
+			Update("file_name", input.Filename).Error
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo actualizar el nombre del archivo"})
+			return
+		}
+
+		// 4. Responder con éxito
+		c.JSON(http.StatusOK, gin.H{
+			"message":  "Nombre del documento actualizado con éxito",
+			"filename": input.Filename,
+		})
 	}
 }

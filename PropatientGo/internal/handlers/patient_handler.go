@@ -48,9 +48,10 @@ func UpdatePatient(db *gorm.DB) gin.HandlerFunc {
 		id := c.Param("id")
 		doctorID := c.MustGet("doctorID").(uint)
 
+		// 1. Cargamos al paciente Y PRECRAMOS su historial médico actual
 		var patient models.Patient
-		// Usamos la tabla intermedia doctor_patients para verificar el vínculo
 		err := db.Joins("JOIN doctor_patients ON doctor_patients.patient_id = patients.id").
+			Preload("MedicalHistory"). // <--- CRÍTICO: Carga el MedicalHistory existente con su ID real de la BD
 			Where("patients.id = ? AND doctor_patients.doctor_id = ?", id, doctorID).
 			First(&patient).Error
 
@@ -59,13 +60,35 @@ func UpdatePatient(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		// BindJSON actualizará solo los campos que envíes desde el frontend
+		// Si el paciente no tenía un historial creado previamente en la BD (caso raro pero posible),
+		// inicializamos la estructura para que no sea un puntero nil al bindear
+		if patient.MedicalHistory == nil {
+			patient.MedicalHistory = &models.MedicalHistory{}
+		}
+
+		// 2. Mapeamos los datos que vienen del frontend sobre el objeto ya cargado.
+		// Al hacer esto, los campos de texto cambian, pero los IDs originales de la BD se conservan.
 		if err := c.ShouldBindJSON(&patient); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
-		db.Save(&patient)
+		// 3. Forzar de forma explícita que el PatientID del historial coincida con el del paciente
+		patient.MedicalHistory.PatientID = patient.ID
+
+		// 4. Guardamos todo bajo una sesión de FullSaveAssociations
+		err = db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Session(&gorm.Session{FullSaveAssociations: true}).Save(&patient).Error; err != nil {
+				return err
+			}
+			return nil
+		})
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al actualizar los antecedentes clínicos"})
+			return
+		}
+
 		c.JSON(http.StatusOK, patient)
 	}
 }
