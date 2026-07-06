@@ -29,8 +29,13 @@ export const ConsultationManager: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [selectedSidebarFile, setSelectedSidebarFile] = useState<AppointmentFile | null>(null);
+  const [sidebarWidth, setSidebarWidth] = useState<number>(380); // Ancho inicial en píxeles
+  const isResizingRef = useRef<boolean>(false);
+
   // --- REFERENCIA PARA CONTROL DE CAMBIOS (isDirty) ---
   const lastSavedDataRef = useRef<string>("");
+  const currentChangesRef = useRef({ reason: '', notes: '' });
 
   // --- ESTADOS DEL FORMULARIO ---
   const [activeTab, setActiveTab] = useState<FormSection>('generalData');
@@ -78,9 +83,10 @@ export const ConsultationManager: React.FC = () => {
   const [qrImageUrl, setQrImageUrl] = useState('');
 
   // --- REFERENCIAS DE CONTROL CRUCIALES ---
-const [isCompleted, setIsCompleted] = useState(false);
+  const [isCompleted, setIsCompleted] = useState(false);
   const isRestoredRef = useRef(false); // Evita que se pregunte más de una vez
   const uploadedFilesRef = useRef(uploadedFiles);
+  const isHistoryInterceptedRef = useRef(false);
   
   useEffect(() => {
     uploadedFilesRef.current = uploadedFiles;
@@ -235,6 +241,125 @@ useEffect(() => {
     return () => clearInterval(interval);
   }, [loading, appointmentId, patientForm, consultationNotes]);
 
+  // --- BLOQUEO DE RECARGA / CIERRE DE PESTAÑA (Navegador) ---
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Solo bloqueamos si hay algún dato cargado o modificado
+      e.preventDefault();
+      e.returnValue = '¿Estás seguro de que quieres salir? Los cambios no guardados se perderán.';
+      return e.returnValue;
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
+    
+  // --- BLOQUEO DE NAVEGACIÓN TOTAL (INTERNA Y EXTERNA) ---
+  // --- BLOQUEO DE NAVEGACIÓN TOTAL (OPTIMIZADO SIN DEPENDENCIAS DE ESTADO) ---
+  useEffect(() => {
+    let isHandlingPopState = false;
+
+    // 1. Bloqueo para recarga de página (F5) o cerrar pestaña
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Si no quieres complicarte con JSONs, un chequeo rápido de texto
+      const isDirty = consultationNotes.notes !== "" || (appointment?.reason && appointment.reason !== "");
+      if (!isDirty) return;
+      
+      e.preventDefault();
+      e.returnValue = '¿Estás seguro de que quieres salir? Los cambios de la consulta se perderán.';
+      return e.returnValue;
+    };
+
+    // Guardamos las referencias a los métodos originales de forma segura
+    const originalPushState = window.history.pushState;
+    const originalReplaceState = window.history.replaceState;
+
+    const handleInternalNavigation = () => {
+      const isDirty = consultationNotes.notes !== "" || (appointment?.reason && appointment.reason !== "");
+      if (!isDirty) return true; // Permite navegar directo si no hay texto nuevo
+      
+      return window.confirm(
+        "¡Atención! Tienes una consulta médica activa con cambios sin guardar. ¿Estás seguro de que quieres salir y abandonar los datos?"
+      );
+    };
+
+    // INTERCEPCIÓN SEGURA: Solo modificamos el prototipo si no se ha hecho antes en este ciclo
+    if (!isHistoryInterceptedRef.current) {
+      window.history.pushState = function (...args) {
+        if (handleInternalNavigation()) {
+          return originalPushState.apply(this, args);
+        }
+        originalPushState.apply(window.history, [null, '', window.location.href]);
+      };
+      isHistoryInterceptedRef.current = true;
+    }
+
+    // 2. Interceptamos el botón "Atrás" del propio navegador
+    const handlePopState = () => {
+      if (isHandlingPopState) return;
+      isHandlingPopState = true;
+
+      if (handleInternalNavigation()) {
+        window.removeEventListener('popstate', handlePopState);
+        navigate(-1);
+      } else {
+        originalPushState.apply(window.history, [null, '', window.location.href]);
+        setTimeout(() => {
+          isHandlingPopState = false;
+        }, 100);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('popstate', handlePopState);
+
+    // Limpieza absoluta al desmontar la pantalla de consulta por completo
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handlePopState);
+      window.history.pushState = originalPushState;
+      window.history.replaceState = originalReplaceState;
+      isHistoryInterceptedRef.current = false;
+    };
+  }, [navigate, appointment?.reason, consultationNotes.notes]); // ◄ SOLUCIÓN: Solo depende de navigate, nunca volverá a fallar al mutar otros estados
+
+// --- MANEJADOR PARA REDIMENSIONAR EL PANEL LATERAL ---
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizingRef.current) return;
+      // Calculamos el nuevo ancho restando la posición del mouse del borde derecho
+      const newWidth = window.innerWidth - e.clientX;
+      // Ponemos límites mínimos y máximos para que no rompa el diseño
+      if (newWidth > 250 && newWidth < 800) {
+        setSidebarWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      isResizingRef.current = false;
+      document.body.style.cursor = 'default';
+      document.body.style.userSelect = 'auto';
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
+
+  const startResizing = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizingRef.current = true;
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none'; // Evita seleccionar texto al arrastrar
+  };
+
+
   const mapServerFiles = (docs: any[]) => {
     const files: AppointmentFile[] = docs.map(doc => ({
       id: doc.id,
@@ -349,6 +474,11 @@ useEffect(() => {
   }, [uploadedFiles]);
 
   useEffect(() => {
+    currentChangesRef.current = {
+      reason: appointment?.reason || '',
+      notes: consultationNotes.notes || ''
+    };
+
     if (loading || !appointmentId) return;
 
     const saveDraft = () => {
@@ -418,7 +548,7 @@ useEffect(() => {
       const patientId = appointment?.patient?.id || appointment?.Patient?.id || (appointment?.patient as any)?.ID;
       await api.put(`/patients/${patientId}`, patientUpdatePayload);
 
-const serverFilesToUpdate = uploadedFiles.filter(f => f.id !== undefined && f.id !== null);
+      const serverFilesToUpdate = uploadedFiles.filter(f => f.id !== undefined && f.id !== null);
       
       console.log("Archivos del servidor encontrados para actualizar:", serverFilesToUpdate); // Para tu debug
       for (const file of serverFilesToUpdate) {
@@ -452,6 +582,7 @@ const serverFilesToUpdate = uploadedFiles.filter(f => f.id !== undefined && f.id
       await api.put(`/appointments/${appointmentId}`, appointmentUpdatePayload);
 
       localStorage.removeItem(`consultation_draft_${appointmentId}`);
+      window.onbeforeunload = null;
       navigate('/inicio');
     } catch (err) {
       console.error("Error al cerrar consulta:", err);
@@ -485,6 +616,32 @@ const serverFilesToUpdate = uploadedFiles.filter(f => f.id !== undefined && f.id
 
     if (isCompleted) {
     const patientId = appointment?.patient?.id || appointment?.Patient?.id || (appointment?.patient as any)?.ID;
+    return (
+      <div className="consultation-completed-lock-overlay">
+        <div className="lock-card">
+          <span className="material-icons-outlined lock-icon">task_alt</span>
+          <h2>Esta cita ya fue completada</h2>
+          <p>
+            Los datos clínicos de esta consulta han sido guardados de manera definitiva en el expediente electrónico y no pueden ser modificados.
+          </p>
+          <p className="hint">
+            Por favor, vaya al historial del paciente para poder visualizar el resumen completo de su evolución.
+          </p>
+          <div className="lock-actions">
+            <button className="btn-secondary" onClick={() => navigate('/inicio')}>
+              Ir al Inicio
+            </button>
+            {patientId && (
+              <button className="btn-primary" onClick={() => navigate(`/patients/${patientId}/history`)}>
+                Ver Historial del Paciente
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
     return (
       <div className="consultation-completed-lock-overlay">
         <div className="lock-card">
@@ -754,55 +911,43 @@ return (
             )}
 
             {uploadedFiles.length > 0 && (
-              <ul className="file-list">
-                {uploadedFiles.map((file, idx) => (
-                  <li key={idx} className="file-item">
-                    <div className="file-info">
-                      <span className="material-icons-outlined file-ic">
-                        {file.type.includes('image') ? 'image' : 'description'}
+              <div className="files-list">
+                {files.map((file, idx) => (
+                  <div key={idx} className={`file-item ${selectedSidebarFile?.url === file.url ? 'active-file' : ''}`}>
+                    <div 
+                      className="file-info" 
+                      onClick={() => setSelectedSidebarFile(file)} 
+                      style={{ cursor: 'pointer', flex: 1 }}
+                      title="Haz clic para ver de forma lateral"
+                    >
+                      <span className="material-icons-outlined">
+                        {file.type.startsWith('image/') ? 'image' : 'picture_as_pdf'}
                       </span>
-                     <input
-                        type="text"
-                        value={file.name}
-                        onChange={(e) => {
-                          const newName = e.target.value;
-                          setUploadedFiles(prev => {
-                            const updated = [...prev];
-                            if (updated[idx]) {
-                              // ◄ REEMPLAZO CLAVE: Creamos un objeto totalmente nuevo conservando id, isServerFile, url, etc.
-                              updated[idx] = {
-                                ...updated[idx],
-                                name: newName
-                              };
-                            }
-                            return updated;
-                          });
-                        }}
-                        style={{
-                          border: 'none',
-                          borderBottom: '1px dashed #ccc',
-                          background: 'transparent',
-                          outline: 'none',
-                          color: '#002d42',
-                          padding: '2px 4px',
-                          fontSize: 'inherit',
-                          fontFamily: 'inherit',
-                          width: '100%'
-                        }}
-                      />
-                                  
+                      <span className="file-name">{file.name}</span>
+                      <span className="file-size">({(file.size / 1024).toFixed(1)} KB)</span>
                     </div>
-                    <div className="file-actions">
-                      <button className="btn-icon" onClick={() => window.open(file.url, '_blank')}>
-                        <span className="material-icons-outlined">visibility</span>
-                      </button>
-                      <button className="btn-icon btn-danger" onClick={() => removeFile(file)}>
+                    <div className="file-actions" style={{ display: 'flex', gap: '8px' }}>
+                      {/* Botón para abrir en otra pestaña independiente */}
+                      <a 
+                        href={file.url} 
+                        target="_blank" 
+                        rel="noreferrer" 
+                        className="btn-icon-link"
+                        title="Abrir en pestaña nueva"
+                      >
+                        <span className="material-icons-outlined">open_in_new</span>
+                      </a>
+                      <button 
+                        type="button" 
+                        className="btn-delete" 
+                        onClick={() => handleRemoveFile(idx)}
+                      >
                         <span className="material-icons-outlined">delete</span>
                       </button>
                     </div>
-                  </li>
+                  </div>
                 ))}
-              </ul>
+              </div>
             )}
           </section>
 
@@ -856,6 +1001,65 @@ return (
           <span>Borrador guardado automáticamente</span>
         </div>
       )}
+
+      {selectedSidebarFile && (
+        <div 
+          className="sidebar-preview-container" 
+          style={{ width: `${sidebarWidth}px`, display: 'flex', position: 'relative', borderLeft: '1px solid #e2e8f0', background: '#fff', zIndex: 99 }}
+        >
+          {/* Barra divisoria / Control para arrastrar (Resize Bar) */}
+          <div 
+            className="sidebar-resizer"
+            onMouseDown={startResizing}
+            style={{
+              width: '6px',
+              cursor: 'ew-resize',
+              position: 'absolute',
+              top: 0,
+              left: '-3px',
+              bottom: 0,
+              zIndex: 100,
+              transition: 'background 0.2s'
+            }}
+          />
+
+          {/* Contenido del Panel */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', borderBottom: '1px solid #edf2f7', background: '#f7fafc' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', maxWidth: '75%' }}>
+                <span className="material-icons-outlined" style={{ color: '#4a5568' }}>visibility</span>
+                <span style={{ fontWeight: 600, fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {selectedSidebarFile.name}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <a href={selectedSidebarFile.url} target="_blank" rel="noreferrer" className="btn-icon-link" title="Abrir en pantalla completa">
+                  <span className="material-icons-outlined">open_in_new</span>
+                </a>
+                <button onClick={() => setSelectedSidebarFile(null)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#718096' }}>
+                  <span className="material-icons-outlined">close</span>
+                </button>
+              </div>
+            </div>
+
+            <div style={{ flex: 1, padding: '1rem', background: '#edf2f7', overflowY: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
+              {selectedSidebarFile.type.startsWith('image/') ? (
+                <img 
+                  src={selectedSidebarFile.url} 
+                  alt="Vista previa" 
+                  style={{ maxWidth: '100%', height: 'auto', borderRadius: '4px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} 
+                />
+              ) : (
+                <iframe 
+                  src={selectedSidebarFile.url} 
+                  title="Documento de Consulta" 
+                  style={{ width: '100%', height: 'calc(100vh - 160px)', border: 'none', borderRadius: '4px' }}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
-};
+} 

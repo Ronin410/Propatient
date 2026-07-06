@@ -72,11 +72,13 @@ export const PatientList: React.FC = () => {
             <div className="search-wrapper">
               <span className="material-icons-outlined search-icon">search</span>
               <input
+                key="search-input"
                 type="text"
                 placeholder="Buscar por nombre, apellido o teléfono..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="search-input"
+                autoFocus
               />
             </div>
           </div>
@@ -89,7 +91,7 @@ export const PatientList: React.FC = () => {
                   <th>Nombre Completo</th>
                   <th>Teléfono</th>
                   <th>Correo Electrónico</th>
-                  <th>Última Actividad</th>
+                  <th>Última Cita</th>
                   <th>Acciones</th>
                 </tr>
               </thead>

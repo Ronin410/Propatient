@@ -445,4 +445,16 @@
     flex-direction: column;
     gap: 20px;
   }
+
+  .sidebar-resizer {
+  &:hover, &:active {
+    background: var(--color-primary, #005073);
+    box-shadow: 0 0 8px rgba(0, 80, 115, 0.5);
+  }
+}
+
+.file-item.active-file {
+  background-color: #e6f4ea !important;
+  border-left: 3px solid #137333 !important;
+}
 }

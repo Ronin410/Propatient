@@ -9,6 +9,7 @@ import (
 	"propatient-api/internal/database"
 	"propatient-api/internal/handlers"
 	"propatient-api/internal/models"
+	"propatient-api/internal/workers"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -38,6 +39,8 @@ func main() {
 	// 3. Automigración y Seed
 	db.AutoMigrate(&models.Doctor{}, &models.Patient{}, &models.MedicalHistory{}, &models.Appointment{}, &models.MedicalDocument{})
 	database.SeedDatabase(db)
+
+	workers.StartNightClosureWorker(db)
 
 	// 4. Configuración del Router
 	r := gin.Default()

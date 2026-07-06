@@ -28,9 +28,21 @@ export const AppointmentTracking: React.FC = () => {
       const dif = tzo >= 0 ? '+' : '-';
       const pad = (num: number) => num.toString().padStart(2, '0');
       const clientTime = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}${dif}${pad(Math.floor(Math.abs(tzo) / 60))}:${pad(Math.abs(tzo) % 60)}`;
-      
+
       const res = await api.get(`/dashboard/summary?clientTime=${encodeURIComponent(clientTime)}`);
-      setSummary(res.data);
+
+      const cleanTodayAppointments = (res.data.todayAppointments || []).filter(
+        (app: Appointment) => 
+          app.status !== 'COMPLETED' && 
+          app.Status !== 'COMPLETED' &&
+          app.status !== 'NOSHOW' && 
+          app.Status !== 'NOSHOW'
+      );
+
+      setSummary({
+        ...res.data,
+        todayAppointments: cleanTodayAppointments // Guardamos solo las activas/pendientes
+      });
     } catch (err) {
       console.error("Error al cargar datos del dashboard:", err);
     } finally {
@@ -160,7 +172,7 @@ export const AppointmentTracking: React.FC = () => {
           <div className="modal-content">
             <div className="modal-header">
               <span className="material-icons-outlined alert-icon">start</span>
-              <h3>¿Abrir Expediente Clínico?</h3>
+              <h3>¿Deseas iniciar la consulta?</h3>
             </div>
             <p>
               Estás por iniciar la consulta médica y registrar la evolución para: <br />

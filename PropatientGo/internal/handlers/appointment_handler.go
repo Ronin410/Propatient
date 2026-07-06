@@ -263,9 +263,9 @@ func GetTodaySummary(db *gorm.DB) gin.HandlerFunc {
 
 		// 2. Definir el "Día" según el calendario del cliente
 		// Creamos el inicio y fin del día respetando la zona horaria donde está el doctor
-		y, m, d := now.Date()
-		startOfDay := time.Date(y, m, d, 0, 0, 0, 0, now.Location())
-		endOfDay := startOfDay.Add(24 * time.Hour)
+		//y, m, d := now.Date()
+		//startOfDay := time.Date(y, m, d, 0, 0, 0, 0, now.Location())
+		//endOfDay := startOfDay.Add(24 * time.Hour)
 
 		var stats struct {
 			TodayCount        int64                `json:"todayCount"`
@@ -273,11 +273,10 @@ func GetTodaySummary(db *gorm.DB) gin.HandlerFunc {
 			TodayAppointments []models.Appointment `json:"todayAppointments"`
 			NextPatient       *models.Appointment  `json:"nextPatient"`
 		}
-
+		clientDateStr := now.Format("2006-01-02")
 		// 1. Total de citas agendadas para hoy (independientemente del estado)
 		db.Model(&models.Appointment{}).
-			Where("doctor_id = ? AND appointment_date_time >= ? AND appointment_date_time < ?",
-				doctorID, startOfDay.UTC(), endOfDay.UTC()).
+			Where("doctor_id = ? AND DATE(appointment_date_time) = ?", doctorID, clientDateStr).
 			Count(&stats.TodayCount)
 
 		// 2. Total de citas pendientes generales del doctor (su carga de trabajo total)
@@ -287,8 +286,7 @@ func GetTodaySummary(db *gorm.DB) gin.HandlerFunc {
 
 		// 3. Lista de citas de hoy para la tabla
 		db.Preload("Patient").
-			Where("doctor_id = ? AND appointment_date_time >= ? AND appointment_date_time < ?",
-				doctorID, startOfDay.UTC(), endOfDay.UTC()).
+			Where("doctor_id = ? AND DATE(appointment_date_time) = ?", doctorID, clientDateStr).
 			Order("appointment_date_time ASC").
 			Find(&stats.TodayAppointments)
 

@@ -1,7 +1,13 @@
-select * from  appointments WHERE STATUS = 'PENDING' limit 100;
+select * from  appointments order by appointment_date_time desc  limit 100;
 
-select phone,* from patients where id = 6
+select * from  appointments where status = 'PENDING' AND DOCTOR_ID = 3  limit 100;
 
+
+select * from  appointments where doctor_id = 3 AND appointment_date_time >= '2026-07-05T07:52:25-07:00' AND appointment_date_time < '2026-07-05T023:52:25-07:00'
+
+select * from patients where id = 42
+
+UPDATE appointments set status = 'COMPLETED' WHERE ID = 20
 
 select * from  doctor_patients limit 10;
 

@@ -20,8 +20,18 @@ export const DashboardLayout = () => {
   ];
 
   const handleLogout = () => {
-    logout();
-    navigate('/login');
+    // 1. Preguntamos primero si realmente desea cerrar la sesión general
+    const confirmLogout = window.confirm("¿Estás seguro de que deseas cerrar sesión? Cualquier consulta activa o cambio sin guardar se perderá.");
+    
+    if (confirmLogout) {
+      // 2. Si acepta, limpiamos los bloqueos manuales del historial para que no choquen
+      window.onbeforeunload = null;
+      
+      // 3. Ejecutamos el cierre de sesión y redirección originales
+      logout();
+      navigate('/login');
+    }
+    // Si da cancelar, no hace absolutamente nada y se queda en la pantalla actual
   };
 
   return (
