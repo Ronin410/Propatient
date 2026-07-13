@@ -37,7 +37,7 @@ func main() {
 	}
 
 	// 3. Automigración y Seed
-	db.AutoMigrate(&models.Doctor{}, &models.Patient{}, &models.MedicalHistory{}, &models.Appointment{}, &models.MedicalDocument{})
+	db.AutoMigrate(&models.Doctor{}, &models.Patient{}, &models.MedicalHistory{}, &models.Appointment{}, &models.MedicalDocument{}, &models.DoctorTemplate{})
 	database.SeedDatabase(db)
 
 	workers.StartNightClosureWorker(db)
@@ -120,6 +120,7 @@ func main() {
 				appointments.PUT("/:id", handlers.UpdateAppointment(db))
 				appointments.POST("/:id/upload-document", handlers.UploadDocuments(db))
 				appointments.PUT("/:id/documents/:docId", handlers.UpdateAppointmentDocument(db))
+				appointments.POST("/:id/save-recipe-pdf", handlers.SaveRecipePDF(db))
 			}
 
 			// Doctor
@@ -127,6 +128,9 @@ func main() {
 			{
 				doctorRoutes.GET("/me", handlers.GetCurrentDoctor(db))
 				doctorRoutes.PUT("/me", handlers.UpdateCurrentDoctor(db))
+
+				doctorRoutes.GET("/template", handlers.GetDoctorTemplate(db))
+				doctorRoutes.POST("/template", handlers.SaveDoctorTemplate(db))
 			}
 
 			// Utils

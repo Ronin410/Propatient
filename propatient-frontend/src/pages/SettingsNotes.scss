@@ -1,0 +1,183 @@
+/* ==========================================================================
+   ESTILOS PARA PANTALLA COMPLETA DE AJUSTES (SettingsNotes.scss)
+   ========================================================================== */
+
+.settings-notes-container {
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 10px;
+
+  .settings-card {
+    background-color: #ffffff;
+    border-radius: 12px;
+    padding: 2.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+
+    h2 {
+      color: #002d42; // Azul profundo idéntico al Login/Sidebar[cite: 17]
+      font-size: 1.8rem;
+      margin-top: 0;
+      margin-bottom: 0.5rem;
+    }
+
+    .description {
+      color: #555555;
+      font-size: 0.95rem;
+      line-height: 1.5;
+      margin-bottom: 2rem;
+    }
+  }
+}
+
+/* LISTADO DE FILAS DINÁMICAS */
+.fields-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 2rem;
+
+  .field-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 16px;
+    background-color: #fcfbfa; // Tono claro armónico con el fondo arena[cite: 17]
+    border: 1px solid #e2e0db;
+    padding: 1.2rem;
+    border-radius: 8px;
+    transition: border-color 0.2s;
+
+    &:hover {
+      border-color: #005073; // Brillo azul corporativo[cite: 17]
+    }
+
+    .row-number {
+      font-weight: 700;
+      color: #005073;
+      padding-bottom: 10px;
+      font-size: 1.1rem;
+    }
+
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+
+      label {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #002d42;
+      }
+
+      input[type="text"] {
+        padding: 10px 14px;
+        border: 1px solid #cbd5e0;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        outline: none;
+        background-color: #ffffff;
+
+        &:focus {
+          border-color: #005073;
+          box-shadow: 0 0 0 3px rgba(0, 80, 115, 0.15);
+        }
+      }
+    }
+
+    .checkbox-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: #002d42;
+      cursor: pointer;
+      padding-bottom: 12px;
+      white-space: nowrap;
+
+      input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        accent-color: #005073;
+        cursor: pointer;
+      }
+    }
+
+    .btn-delete {
+      background: transparent;
+      border: none;
+      color: #a0aec0;
+      cursor: pointer;
+      padding: 10px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      margin-bottom: 2px;
+
+      &:hover {
+        color: #ff6b6b; // Rojo del sidebar footer[cite: 17]
+        background-color: rgba(255, 107, 107, 0.1);
+      }
+    }
+  }
+}
+
+/* BOTONES DE ACCIONES */
+.settings-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid #e2e0db;
+  padding-top: 1.5rem;
+
+  .btn-add {
+    background-color: transparent;
+    color: #005073;
+    border: 1px dashed #005073;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.2s;
+
+    &:hover {
+      background-color: rgba(0, 80, 115, 0.05);
+    }
+  }
+
+  .btn-save-main {
+    background-color: #005073;
+    color: #ffffff;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 80, 115, 0.2);
+    transition: background 0.2s;
+
+    &:hover:not(:disabled) {
+      background-color: #002d42;
+    }
+
+    &:disabled {
+      background-color: #a0aec0;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+  }
+}
+
+.settings-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 50vh;
+  font-size: 1.1rem;
+  color: #002d42;
+  font-weight: 500;
+}

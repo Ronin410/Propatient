@@ -1,7 +1,10 @@
 package handlers
 
 import (
+	"bytes"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -230,6 +233,16 @@ func UpdateAppointment(db *gorm.DB) gin.HandlerFunc {
 		id := c.Param("id")
 		doctorID := c.MustGet("doctorID").(uint)
 
+		// --- BLOQUE DE DEBBUGGING: LEER JSON CRUDO ---
+		// Leemos los bytes directos que vienen de la petición HTTP
+		bodyBytes, _ := io.ReadAll(c.Request.Body)
+		// Volvemos a restaurar el Body para que ShouldBindJSON pueda leerlo después
+		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+		// Imprimimos en la consola de la terminal lo que el frontend mandó
+		log.Printf("📥 JSON recibido desde el Frontend: %s", string(bodyBytes))
+		// ----------------------------------------------
+
 		var appointment models.Appointment
 		if err := db.Where("id = ? AND doctor_id = ?", id, doctorID).First(&appointment).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Cita no encontrada"})
@@ -242,7 +255,13 @@ func UpdateAppointment(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		db.Save(&appointment)
+		// Revisar si GORM arroja algún error al guardar en Postgres
+		if err := db.Save(&appointment).Error; err != nil {
+			log.Printf("❌ Error de GORM al guardar: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo actualizar"})
+			return
+		}
+
 		c.JSON(http.StatusOK, appointment)
 	}
 }
@@ -370,6 +389,51 @@ func UpdateAppointmentDocument(db *gorm.DB) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{
 			"message":  "Nombre del documento actualizado con éxito",
 			"filename": input.Filename,
+		})
+	}
+}
+
+func SaveRecipePDF(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.Param("id")
+
+		// 1. Extraer el archivo binario enviado desde el FormData
+		file, err := c.FormFile("recipe_pdf")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "No se recibió ningún archivo PDF"})
+			return
+		}
+
+		// 2. Definir una ruta física para guardar las recetas dentro del servidor
+		uploadDir := "./uploads/recipes"
+		if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo crear el directorio de almacenamiento"})
+			return
+		}
+
+		// Definir el path completo usando el nombre del archivo generado por el frontend
+		filePath := filepath.Join(uploadDir, file.Filename)
+
+		// 3. Guardar el archivo en el sistema de archivos del servidor/contenedor
+		if err := c.SaveUploadedFile(file, filePath); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al escribir el archivo en disco"})
+			return
+		}
+
+		// 4. Actualizar la columna RecipePDFPath en tu modelo Appointment usando GORM
+		// (Asegúrate de tener el campo RecipePDFPath string `json:"recipePdfPath"` en tu struct)
+		err = db.Model(&models.Appointment{}).
+			Where("id = ?", id).
+			Update("recipe_pdf_path", filePath).Error
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al actualizar la cita en la base de datos"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Receta en PDF almacenada y asociada correctamente",
+			"path":    filePath,
 		})
 	}
 }

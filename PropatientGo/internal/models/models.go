@@ -3,6 +3,7 @@ package models
 import (
 	"time"
 
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -82,8 +83,10 @@ type Appointment struct {
 	Status              string            `gorm:"default:'PENDING'" json:"status"`
 	Diagnosis           string            `gorm:"type:text" json:"diagnosis"`
 	TreatmentPlan       string            `gorm:"type:text" json:"treatmentPlan"`
+	DynamicNotes        datatypes.JSON    `json:"dynamic_notes" gorm:"type:jsonb"`
 	Notes               string            `gorm:"type:text" json:"notes"`
 	RegistrationStatus  string            `gorm:"default:'REGISTERED'" json:"registrationStatus"`
+	RecipePDFPath       string            `json:"recipePdfPath"`
 	MedicalDocuments    []MedicalDocument `gorm:"foreignKey:AppointmentID" json:"documents"`
 }
 
@@ -105,4 +108,10 @@ type GoogleTokenClaims struct {
 
 type UpdateDocumentInput struct {
 	Filename string `json:"filename" binding:"required"`
+}
+
+type DoctorTemplate struct {
+	gorm.Model
+	DoctorID uint           `json:"doctorId" gorm:"uniqueIndex;not null"`
+	Fields   datatypes.JSON `json:"fields" gorm:"type:jsonb;not null"` // Guarda el array de apartados configurados
 }

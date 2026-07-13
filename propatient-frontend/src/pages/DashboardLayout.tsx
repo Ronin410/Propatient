@@ -17,6 +17,7 @@ export const DashboardLayout = () => {
     { label: 'Pacientes', icon: 'people', route: '/pacientes' },
     { label: 'Citas', icon: 'calendar_month', route: '/calendar' },
     { label: 'Perfil', icon: 'settings', route: '/profile' },
+    { label: 'Ajustes Notas', icon: 'tune', route: '/ajustes-notas' }
   ];
 
   const handleLogout = () => {

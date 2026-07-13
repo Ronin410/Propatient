@@ -5,6 +5,21 @@ import { useParams, useNavigate } from 'react-router-dom';
 import type { Patient, Appointment, MedicalHistory, ConsultationNotes } from '../types';
 import './ConsultationManager.scss';
 import api from '../api/axios';
+import pdfMake from 'pdfmake/build/pdfmake';
+import * as pdfFonts from 'pdfmake/build/vfs_fonts';
+
+// Sincronización robusta para el bundle de Vite
+if (pdfFonts && pdfFonts.pdfMake) {
+  (pdfMake as any).vfs = pdfFonts.pdfMake.vfs;
+} else if ((pdfFonts as any).vfs) {
+  (pdfMake as any).vfs = (pdfFonts as any).vfs;
+}
+
+// Forzar inyección en el objeto global de la ventana por si la librería lo busca ahí internamente
+if (window) {
+  (window as any).pdfMake = pdfMake;
+  (window as any).pdfMake.vfs = (pdfMake as any).vfs;
+}
 
 interface AppointmentFile {
   id?: number;
@@ -14,6 +29,13 @@ interface AppointmentFile {
   url: string;
   originalFile?: File;
   isServerFile?: boolean;
+}
+
+interface NoteSectionConfig {
+  id: string;
+  label: string;
+  placeholder: string;
+  required: boolean;
 }
 
 const baseurl = "http://localhost:8095"
@@ -39,7 +61,16 @@ export const ConsultationManager: React.FC = () => {
 
   // --- ESTADOS DEL FORMULARIO ---
   const [activeTab, setActiveTab] = useState<FormSection>('generalData');
+
+  const [sectionsConfig, setSectionsConfig] = useState<NoteSectionConfig[]>([]);
+  const [dynamicNotes, setDynamicNotes] = useState<Record<string, string>>({});
+
+  const [recipeSections, setRecipeSections] = useState<Record<string, boolean>>({});
   
+  const [recipeGenerated, setRecipeGenerated] = useState<boolean>(false);
+  const [generatingRecipe, setGeneratingRecipe] = useState<boolean>(false);
+  const [recipeDocDefinition, setRecipeDocDefinition] = useState<any>(null);
+
   // Datos del Paciente (Editables)
   const [patientForm, setPatientFormData] = useState({
     firstName: '',
@@ -87,6 +118,21 @@ export const ConsultationManager: React.FC = () => {
   const isRestoredRef = useRef(false); // Evita que se pregunte más de una vez
   const uploadedFilesRef = useRef(uploadedFiles);
   const isHistoryInterceptedRef = useRef(false);
+
+  useEffect(() => {
+  const savedConfig = localStorage.getItem('doctor_notes_template');
+  if (savedConfig) {
+    setSectionsConfig(JSON.parse(savedConfig));
+  } else {
+    // Si no ha ido a ajustes, cargamos un esquema base predeterminado
+    const defaultConfig = [
+      { id: 'subjetivo', label: 'Padecimiento Actual (Subjetivo)', placeholder: 'Lo que el paciente refiere...', required: false },
+      { id: 'diagnostico', label: 'Diagnóstico', placeholder: 'Impresión diagnóstica...', required: true },
+      { id: 'tratamiento', label: 'Plan y Tratamiento', placeholder: 'Receta e indicaciones...', required: true }
+    ];
+    setSectionsConfig(defaultConfig);
+  }
+}, []);
   
   useEffect(() => {
     uploadedFilesRef.current = uploadedFiles;
@@ -135,14 +181,26 @@ export const ConsultationManager: React.FC = () => {
 
       setPatientFormData(initialPatientData);
       
-      const initialNotes = {
-        reason: data.reason || '',
-        subjective: data.notes?.includes('SUBJETIVO:') ? data.notes.split('\n')[0].replace('SUBJETIVO: ', '') : '',
-        objective: data.notes?.includes('OBJECTIVO:') ? data.notes.split('\n')[1].replace('OBJECTIVO: ', '') : '',
-        diagnosis: data.diagnosis || '',
-        treatmentPlan: data.treatmentPlan || ''
-      };
-      setConsultationNotes(initialNotes);
+      //const initialNotes = {
+      //  reason: data.reason || '',
+      //  subjective: data.notes?.includes('SUBJETIVO:') ? data.notes.split('\n')[0].replace('SUBJETIVO: ', '') : '',
+      //  objective: data.notes?.includes('OBJECTIVO:') ? data.notes.split('\n')[1].replace('OBJECTIVO: ', '') : '',
+      //  diagnosis: data.diagnosis || '',
+      //  treatmentPlan: data.treatmentPlan || ''
+      //};
+      //setConsultationNotes(initialNotes);
+      
+      let initialNotes: Record<string, string> = {};
+      if (data.dynamic_notes) {
+        // Si tu API de Go ya te manda el objeto JSON estructurado directamente
+        initialNotes = typeof data.dynamic_notes === 'string' ? JSON.parse(data.dynamic_notes) : data.dynamic_notes;
+      } else if (data.notes) {
+        // Fallback para consultas viejas que usaban el texto plano estructurado viejo
+        initialNotes['subjetivo'] = data.notes;
+      }
+
+      setDynamicNotes(initialNotes);
+
 
       if (data.documents) {
         const mappedInitialFiles = data.documents.map((doc: any) => ({
@@ -428,6 +486,28 @@ useEffect(() => {
     }
   };
 
+const getBase64FromUrl = (url: string): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous'; // Enfoque nativo para evitar bloqueos XHR
+    img.src = url;
+    
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      } else {
+        reject(new Error('No se pudo procesar el canvas'));
+      }
+    };
+    img.onerror = (error) => reject(error);
+  });
+};
+
   const removeFile = async (file: AppointmentFile) => {
     if (file.isServerFile && file.id) {
       const confirmed = window.confirm(`¿Eliminar permanentemente ${file.name}?`);
@@ -508,10 +588,162 @@ useEffect(() => {
     return () => clearInterval(interval);
   }, [loading, appointmentId, patientForm, consultationNotes]);
 
+ // 1. Manejador para GENERAR y GUARDAR la receta (Paso 1)
+  const handleCreateRecipeClick = async () => {
+    setGeneratingRecipe(true);
+    try {
+      const doctorRes = await api.get('/doctor/me');
+      const doctorInfo = doctorRes.data;
+      const patientInfo = appointment?.patient;
+
+      // 🌟 SOLUCIÓN: Nos aseguramos de usar 'appointmentId' que viene de useParams
+      if (!appointmentId || appointmentId === "undefined") {
+        alert("Error: No se encontró un ID de cita válido para generar la receta.");
+        return;
+      }
+
+      let doctorLogoBase64 = "";
+      if (doctorInfo?.logoUrl) {
+        try {
+          // 🌟 Tu lógica exacta: Validamos si ya viene con http o si le pegamos el baseurl (BACKEND_URL)
+          const cleanFullUrl = doctorInfo.logoUrl.startsWith('http') 
+            ? doctorInfo.logoUrl 
+            : `${baseurl}${doctorInfo.logoUrl}`;
+          
+          console.log("📥 Convirtiendo logo a Base64 desde:", cleanFullUrl);
+          
+          // Convertimos la imagen de forma segura a Base64
+          doctorLogoBase64 = await getBase64FromUrl(cleanFullUrl);
+          
+        } catch (err) {
+          console.error("No se pudo mapear el logo del doctor, usando respaldo de texto:", err);
+          doctorLogoBase64 = ""; // Si falla, mantendrá el texto de respaldo para que no truene la receta
+        }
+      }
+
+      const currentRecipeSections = recipeSections || {};
+      const recipeContent = Object.keys(dynamicNotes)
+        .filter(label => currentRecipeSections[label] !== false && dynamicNotes[label]?.trim() !== '')
+        .map(label => [
+          { text: label.toUpperCase(), style: 'sectionHeader' },
+          { text: dynamicNotes[label], style: 'sectionBody' },
+          { text: '\n' }
+        ]).flat();
+
+      const hasValidBase64 = doctorLogoBase64 && doctorLogoBase64.startsWith('data:image');
+
+      // Creamos el docDefinition definitivo
+      const docDefinition: any = {
+        pageSize: 'LETTER',
+        pageMargins: [40, 40, 40, 80],
+        defaultStyle: { font: 'Roboto' },
+        content: [
+          {
+            columns: [
+              hasValidBase64 
+                ? { image: doctorLogoBase64, width: 90, alignment: 'left' } 
+                : { text: 'MÉDICO GENERAL', fontSize: 14, bold: true, color: '#1a365d', margin: [0, 15, 0, 0] },
+              [
+                { text: `DR. ${doctorInfo?.firstName || ''} ${doctorInfo?.lastName || ''}`.toUpperCase(), style: 'doctorName' },
+                { text: `${doctorInfo?.specialty || 'MÉDICO CIRUJANO Y PARTERO'}`, style: 'doctorSpecialty' },
+                { text: `CÉDULA PROFESIONAL: ${doctorInfo?.professionalId || 'N/A'}`, style: 'doctorSub' },
+                { text: `${doctorInfo?.institution || 'UNIVERSIDAD AUTÓNOMA DE SINALOA'}`, style: 'doctorSub' },
+              ]
+            ],
+            columnGap: 20
+          },
+          { canvas: [{ type: 'line', x1: 0, y1: 15, x2: 532, y2: 15, lineWidth: 2, lineColor: '#1a365d' }] },
+          { text: '\n' },
+          {
+            style: 'patientTable',
+            table: {
+              widths: ['*', 120, 80],
+              body: [
+                [
+                  { text: `PACIENTE: ${patientInfo?.firstName || ''} ${patientInfo?.lastName || ''}`.toUpperCase(), style: 'tableCellBold' },
+                  { text: `EDAD: ${patientInfo?.age || 'N/A'} AÑOS`, style: 'tableCell' },
+                  { text: `FECHA: ${new Date().toLocaleDateString()}`, style: 'tableCell', alignment: 'right' }
+                ],
+                [
+                  { text: `DIAGNÓSTICO: ${appointment?.diagnosis || 'Sintomatología general'}`, style: 'tableCell', colSpan: 3 },
+                  {}, {}
+                ]
+              ]
+            },
+            layout: {
+              hLineWidth: () => 0.5, vLineWidth: () => 0.5,
+              hLineColor: () => '#cbd5e0', vLineColor: () => '#cbd5e0',
+              paddingTop: () => 6, paddingBottom: () => 6,
+              paddingLeft: () => 8, paddingRight: () => 8,
+            }
+          },
+          { text: '\n\n' },
+          ...recipeContent,
+        ],
+        footer: () => {
+          return {
+            stack: [
+              { text: '_______________________________________', alignment: 'center', color: '#cbd5e0' },
+              { text: `DR. ${doctorInfo?.firstName || ''} ${doctorInfo?.lastName || ''}`.toUpperCase(), alignment: 'center', fontSize: 10, bold: true, color: '#2d3748', margin: [0, 2, 0, 2] },
+              { text: 'FIRMA DEL MÉDICO', alignment: 'center', fontSize: 8, color: '#718096' },
+              { text: `Dirección: ${doctorInfo?.address || 'Av. De la Clínica #123'} | Tel: ${doctorInfo?.phone || 'N/A'}`, alignment: 'center', fontSize: 8, color: '#718096', margin: [0, 4, 0, 0] }
+            ],
+            margin: [40, 0, 40, 0]
+          };
+        },
+        styles: {
+          doctorName: { fontSize: 16, bold: true, color: '#1a365d', alignment: 'right' },
+          doctorSpecialty: { fontSize: 10, bold: true, color: '#4a5568', alignment: 'right' },
+          doctorSub: { fontSize: 9, color: '#718096', alignment: 'right' },
+          patientTable: { margin: [0, 5, 0, 15] },
+          tableCell: { fontSize: 10, color: '#2d3748' },
+          tableCellBold: { fontSize: 10, bold: true, color: '#1a365d' },
+          sectionHeader: { fontSize: 11, bold: true, color: '#1a365d', margin: [0, 10, 0, 4], decoration: 'underline' },
+          sectionBody: { fontSize: 11, color: '#2d3748', marginLeft: 10 }
+        }
+      };
+
+      // Guardamos la definición en el estado para que el botón de imprimir la use
+      setRecipeDocDefinition(docDefinition);
+
+      // Enviamos el archivo al backend usando el ID correcto
+      const pdfInstance = pdfMake.createPdf(docDefinition);
+      const blob = await pdfInstance.getBlob();
+      const formData = new FormData();
+      const fileName = `receta_${appointmentId}_doc_${doctorInfo?.serialCode || '0'}.pdf`;
+      formData.append('recipe_pdf', blob, fileName);
+
+      await api.post(`/appointments/${appointmentId}/save-recipe-pdf`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      setRecipeGenerated(true);
+      alert("🎉 Receta generada y guardada con éxito.");
+    } catch (error) {
+      console.error("Error al generar receta:", error);
+      alert("Error al compilar la receta médica.");
+    } finally {
+      setGeneratingRecipe(false);
+    }
+  };
+
+  // 2. Manejador para IMPRIMIR (Paso 2)
+  const handlePrintRecipeClick = () => {
+    if (recipeDocDefinition) {
+      pdfMake.createPdf(recipeDocDefinition).print();
+    } else {
+      alert("Por favor, primero genera la receta en el Paso 1.");
+    }
+  };
+
+
   const handleFinalize = async () => {
-    if (!consultationNotes.diagnosis || !consultationNotes.treatmentPlan) {
-      alert("El diagnóstico y el plan de tratamiento son obligatorios para finalizar la consulta.");
-      return;
+    
+    for (const sec of sectionsConfig) {
+      if (sec.required && !dynamicNotes[sec.label]?.trim()) {
+        alert(`El campo "${sec.label}" es obligatorio para finalizar la consulta.`);
+        return;
+      }
     }
 
     if (patientForm.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(patientForm.email)) {
@@ -575,11 +807,16 @@ useEffect(() => {
       const appointmentUpdatePayload = {
         ...appointment,
         status: 'COMPLETED',
-        diagnosis: consultationNotes.diagnosis,
-        treatmentPlan: consultationNotes.treatmentPlan,
-        notes: `SUBJETIVO: ${consultationNotes.subjective}\nOBJECTIVO: ${consultationNotes.objective}`
+        dynamic_notes: dynamicNotes,
       };
       await api.put(`/appointments/${appointmentId}`, appointmentUpdatePayload);
+
+      // 2. Traemos la info del Doctor logueado (que incluye cédula, logo, serial, etc.)
+      const docRes = await api.get('/doctor/me');
+      const doctorInfo = docRes.data;
+
+      // 3. Corremos el proceso dinámico de PDF (Imprime y sube el archivo con nombre único)
+      await generateAndSaveRecipePDF(doctorInfo, appointment.patient, appointmentId);
 
       localStorage.removeItem(`consultation_draft_${appointmentId}`);
       window.onbeforeunload = null;
@@ -678,11 +915,11 @@ return (
           </button>
           <div className="info">
             <h1>
-              {(appointment.patient || appointment.Patient)?.firstName || (appointment.patient || appointment.Patient)?.FirstName}{' '}
-              {(appointment.patient || appointment.Patient)?.lastName || (appointment.patient || appointment.Patient)?.LastName}
+              {(appointment?.patient || appointment?.Patient)?.firstName || (appointment?.patient || appointment?.Patient)?.FirstName}{' '}
+              {(appointment?.patient || appointment?.Patient)?.lastName || (appointment?.patient || appointment?.Patient)?.LastName}
             </h1>
             <p>
-              <strong>Motivo de Consulta:</strong> {appointment.reason}
+              <strong>Motivo de Consulta:</strong> {appointment?.reason || appointment?.Reason}
               <span className="divider">|</span>
               <strong>Teléfono:</strong> {patientForm.phone || '—'}
             </p>
@@ -711,9 +948,11 @@ return (
         </button>
       </div>
 
-      {/* CONTENIDO EN ANCHO COMPLETO (Se removió la columna lateral sobrante) */}
-      <div className="consultation-content-fullwidth">
-        <main className="consultation-main-panel">
+      {/* WORKSPACE CONTENEDOR FLEX */}
+      <div className="consultation-workspace-layout">
+        
+        {/* PANEL IZQUIERDO: FORMULARIOS */}
+        <main className="consultation-form-panel">
           
           {/* TARJETA DINÁMICA SEGÚN PESTAÑA ACTIVA */}
           <section className="profile-card-section">
@@ -734,7 +973,7 @@ return (
                       type="text" 
                       value={patientForm.lastName} 
                       onChange={e => setPatientFormData({...patientForm, lastName: e.target.value})} 
-                  />
+                    />
                   </div>
                   <div className="form-group">
                     <label>Fecha de Nacimiento</label>
@@ -752,7 +991,6 @@ return (
                       onChange={e => setPatientFormData({...patientForm, phone: e.target.value})} 
                     />
                   </div>
-                  {/* CAMBIO CORRECTO: Campo de Correo Electrónico Editable */}
                   <div className="form-group">
                     <label>Correo Electrónico</label>
                     <input 
@@ -766,7 +1004,6 @@ return (
               ) : (
                 /* PANEL DE ANTECEDENTES REESTRUCTURADO */
                 <div className="medical-history-sections">
-    
                   {/* SUBSECCIÓN 1: ALERTAS Y ALERGIAS (CRÍTICO) */}
                   <div className="history-subsection critical-box">
                     <h4><span className="material-icons-outlined">gpp_maybe</span> Alertas Médicas Directas</h4>
@@ -798,7 +1035,7 @@ return (
                     </div>
                   </div>
 
-                  {/* SUBSECCIÓN 2: HISTORIAL CLÍNICO PRINCIPAL */}
+                  {/* SUBSECCIÓN 2: HISTORIAL CLÍNICO CLAVE */}
                   <div className="history-subsection">
                     <h4><span className="material-icons-outlined">medical_services</span> Antecedentes Patológicos e Intervenciones</h4>
                     <div className="form-grid">
@@ -869,7 +1106,7 @@ return (
                         <input 
                           type="text"
                           placeholder="Ej: Menarca: 12, FUM: 15/05/26, Ciclos: 28/5, G:1 P:1 C:0 A:0"
-                          value={patientForm.medicalHistory.gynecoObstetric || patientForm.medicalHistory.gynecoObstetric} 
+                          value={patientForm.medicalHistory.gynecoObstetric} 
                           onChange={e => setPatientFormData({
                             ...patientForm, 
                             medicalHistory: { ...patientForm.medicalHistory, gynecoObstetric: e.target.value }
@@ -878,7 +1115,6 @@ return (
                       </div>
                     </div>
                   </div>
-
                 </div>
               )}
             </div>
@@ -911,8 +1147,8 @@ return (
             )}
 
             {uploadedFiles.length > 0 && (
-              <div className="files-list">
-                {files.map((file, idx) => (
+              <div className="file-list">
+                {uploadedFiles.map((file, idx) => (
                   <div key={idx} className={`file-item ${selectedSidebarFile?.url === file.url ? 'active-file' : ''}`}>
                     <div 
                       className="file-info" 
@@ -921,26 +1157,24 @@ return (
                       title="Haz clic para ver de forma lateral"
                     >
                       <span className="material-icons-outlined">
-                        {file.type.startsWith('image/') ? 'image' : 'picture_as_pdf'}
+                        {file.type?.startsWith('image/') ? 'image' : 'picture_as_pdf'}
                       </span>
                       <span className="file-name">{file.name}</span>
-                      <span className="file-size">({(file.size / 1024).toFixed(1)} KB)</span>
                     </div>
-                    <div className="file-actions" style={{ display: 'flex', gap: '8px' }}>
-                      {/* Botón para abrir en otra pestaña independiente */}
+                    <div className="file-actions">
                       <a 
                         href={file.url} 
                         target="_blank" 
                         rel="noreferrer" 
-                        className="btn-icon-link"
+                        className="btn-icon"
                         title="Abrir en pestaña nueva"
                       >
                         <span className="material-icons-outlined">open_in_new</span>
                       </a>
                       <button 
                         type="button" 
-                        className="btn-delete" 
-                        onClick={() => handleRemoveFile(idx)}
+                        className="btn-icon btn-danger" 
+                        onClick={() => removeFile(file)}
                       >
                         <span className="material-icons-outlined">delete</span>
                       </button>
@@ -951,47 +1185,121 @@ return (
             )}
           </section>
 
-          {/* NOTAS DE LA CONSULTA (EVOLUCIÓN) */}
-          <section className="profile-card-section highlighted-section">
-            <h3 className="section-title">Notas de la Consulta</h3>
+          {/* NOTAS DE LA CONSULTA (EVOLUCIÓN DINÁMICA) */}
+          <section className="form-card highlighted-section">
+            <h3>
+              <span className="material-icons-outlined">analytics</span>
+              Notas de la Consulta (Evolución)
+            </h3>
             <div className="form-grid">
-              <div className="form-group full-width">
-                <label>Padecimiento Actual (Subjetivo)</label>
-                <textarea 
-                  rows={3}
-                  placeholder="Lo que el paciente refiere..."
-                  value={consultationNotes.subjective}
-                  onChange={e => setConsultationNotes({...consultationNotes, subjective: e.target.value})}
-                />
-              </div>
-              <div className="form-group full-width">
-                <label>Diagnóstico</label>
-                <input 
-                  type="text" 
-                  placeholder="Impresión diagnóstica..."
-                  value={consultationNotes.diagnosis}
-                  onChange={e => setConsultationNotes({...consultationNotes, diagnosis: e.target.value})}
-                />
-              </div>
-              <div className="form-group full-width">
-                <label>Plan y Tratamiento</label>
-                <textarea 
-                  rows={5}
-                  placeholder="Receta e indicaciones..."
-                  value={consultationNotes.treatmentPlan}
-                  onChange={e => setConsultationNotes({...consultationNotes, treatmentPlan: e.target.value})}
-                />
-              </div>
+              {sectionsConfig.map((section) => (
+                <div className="form-group full-width" key={section.id}>
+                  {/* Contenedor flexible para alinear título a la izquierda y checkbox a la derecha */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <label style={{ margin: 0 }}>
+                      {section.label} {section.required && <span className="req-asterisk">*</span>}
+                    </label>
+                    
+                    {/* NUEVO: Checkbox para incluir/excluir este apartado específico de la receta */}
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#005073', cursor: 'pointer', fontWeight: 500 }}>
+                      <input 
+                        type="checkbox" 
+                        style={{ width: '16px', height: '16px', accentColor: '#005073', cursor: 'pointer' }}
+                        checked={recipeSections[section.label] !== false} // Por defecto true si no está explícitamente en false
+                        onChange={(e) => setRecipeSections({
+                          ...recipeSections,
+                          [section.label]: e.target.checked
+                        })}
+                      />
+                      Incluir en Receta
+                    </label>
+                  </div>
+
+                  <textarea 
+                    rows={section.id === 'diagnostico' ? 2 : 4}
+                    placeholder={section.placeholder}
+                    value={dynamicNotes[section.label] || ''} 
+                    onChange={(e) => setDynamicNotes({
+                      ...dynamicNotes,
+                      [section.label]: e.target.value
+                    })}
+                  />
+                </div>
+              ))}
             </div>
           </section>
 
-          {/* ACCIÓN DE CIERRE */}
-          <div className="consultation-actions">
-            <button className="btn-primary-lg" onClick={handleFinalize}>
-              <span className="material-icons-outlined">assignment_turned_in</span> Finalizar Consulta y Generar Receta
-            </button>
-          </div>
+
+          <button 
+            type="button"
+            className="btn-secondary"
+            onClick={handleCreateRecipeClick}
+            disabled={generatingRecipe || loading}
+            style={{ backgroundColor: recipeGenerated ? '#e6fffa' : '', borderColor: recipeGenerated ? '#319795' : '' }}
+          >
+            <span className="material-icons-outlined">
+              {recipeGenerated ? 'badge' : 'description'}
+            </span>
+            {generatingRecipe ? 'Generando...' : recipeGenerated ? 'Receta Guardada ✓' : '1. Generar Receta'}
+          </button>
+
+          {/* PASO 2: BOTÓN PARA IMPRIMIR (Sólo se habilita si ya fue generada) */}
+          <button 
+            type="button"
+            className="btn-secondary"
+            onClick={handlePrintRecipeClick}
+            disabled={!recipeGenerated || loading}
+          >
+            <span className="material-icons-outlined">print</span>
+            2. Imprimir Receta
+          </button>
         </main>
+
+        {/* PANEL DERECHO: VISOR DE IMÁGENES / PDFS DE FORMA LATERAL */}
+        {selectedSidebarFile && selectedSidebarFile.url && (
+          <aside 
+            className="consultation-sidebar-preview" 
+            style={{ width: `${sidebarWidth}px` }}
+          >
+            {/* Barra divisoria para arrastrar */}
+            <div className="sidebar-resizer" onMouseDown={startResizing} />
+
+            <div className="sidebar-preview-content">
+              <div className="sidebar-preview-header">
+                <div className="title-area">
+                  <span className="material-icons-outlined">visibility</span>
+                  <span className="file-name-title" title={selectedSidebarFile.name}>
+                    {selectedSidebarFile.name}
+                  </span>
+                </div>
+                <div className="header-actions">
+                  <a href={selectedSidebarFile.url} target="_blank" rel="noreferrer" className="btn-icon" title="Abrir en pantalla completa">
+                    <span className="material-icons-outlined">open_in_new</span>
+                  </a>
+                  <button onClick={() => setSelectedSidebarFile(null)} className="btn-close">
+                    <span className="material-icons-outlined">close</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="sidebar-preview-body">
+                {selectedSidebarFile.type?.startsWith('image/') ? (
+                  <img 
+                    src={selectedSidebarFile.url} 
+                    alt="Vista previa" 
+                    className="img-fluid-preview" 
+                  />
+                ) : (
+                  <iframe 
+                    src={selectedSidebarFile.url} 
+                    title="Documento de Consulta" 
+                    className="iframe-pdf-preview"
+                  />
+                )}
+              </div>
+            </div>
+          </aside>
+        )}
       </div>
 
       {/* TOAST DE BORRADOR AUTOMÁTICO */}
@@ -1001,65 +1309,7 @@ return (
           <span>Borrador guardado automáticamente</span>
         </div>
       )}
-
-      {selectedSidebarFile && (
-        <div 
-          className="sidebar-preview-container" 
-          style={{ width: `${sidebarWidth}px`, display: 'flex', position: 'relative', borderLeft: '1px solid #e2e8f0', background: '#fff', zIndex: 99 }}
-        >
-          {/* Barra divisoria / Control para arrastrar (Resize Bar) */}
-          <div 
-            className="sidebar-resizer"
-            onMouseDown={startResizing}
-            style={{
-              width: '6px',
-              cursor: 'ew-resize',
-              position: 'absolute',
-              top: 0,
-              left: '-3px',
-              bottom: 0,
-              zIndex: 100,
-              transition: 'background 0.2s'
-            }}
-          />
-
-          {/* Contenido del Panel */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', borderBottom: '1px solid #edf2f7', background: '#f7fafc' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', maxWidth: '75%' }}>
-                <span className="material-icons-outlined" style={{ color: '#4a5568' }}>visibility</span>
-                <span style={{ fontWeight: 600, fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {selectedSidebarFile.name}
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <a href={selectedSidebarFile.url} target="_blank" rel="noreferrer" className="btn-icon-link" title="Abrir en pantalla completa">
-                  <span className="material-icons-outlined">open_in_new</span>
-                </a>
-                <button onClick={() => setSelectedSidebarFile(null)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#718096' }}>
-                  <span className="material-icons-outlined">close</span>
-                </button>
-              </div>
-            </div>
-
-            <div style={{ flex: 1, padding: '1rem', background: '#edf2f7', overflowY: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
-              {selectedSidebarFile.type.startsWith('image/') ? (
-                <img 
-                  src={selectedSidebarFile.url} 
-                  alt="Vista previa" 
-                  style={{ maxWidth: '100%', height: 'auto', borderRadius: '4px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} 
-                />
-              ) : (
-                <iframe 
-                  src={selectedSidebarFile.url} 
-                  title="Documento de Consulta" 
-                  style={{ width: '100%', height: 'calc(100vh - 160px)', border: 'none', borderRadius: '4px' }}
-                />
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
-} 
+};
+
