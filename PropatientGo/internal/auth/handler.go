@@ -57,6 +57,17 @@ func GoogleLoginHandler(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Validar que el token fue emitido para ESTA aplicación (aud). Sin esto,
+		// un ID Token de Google válido para cualquier otra app pasaría la verificación.
+		expectedAudience := os.Getenv("GOOGLE_CLIENT_ID")
+		if expectedAudience == "" {
+			expectedAudience = "744896665247-hrs7pmi72q2pog5dn9h1fh5n4nkpv18r.apps.googleusercontent.com"
+		}
+		if claims.Audience != expectedAudience {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "El token de Google no corresponde a esta aplicación"})
+			return
+		}
+
 		var doctor models.Doctor
 		// 2. Buscar si el médico ya existe por su Email institucional/personal
 		err = db.Where("email = ?", claims.Email).First(&doctor).Error
@@ -333,8 +344,9 @@ func RegisterDoctor(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req struct {
 			Username  string `json:"username" binding:"required"`
-			Password  string `json:"password" binding:"required"`
+			Password  string `json:"password" binding:"required,min=6"`
 			FullName  string `json:"full_name" binding:"required"`
+			Email     string `json:"email" binding:"required,email"`
 			Specialty string `json:"specialty"`
 		}
 
@@ -344,12 +356,17 @@ func RegisterDoctor(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		// Encriptar contraseña
-		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo procesar la contraseña"})
+			return
+		}
 
 		doctor := models.Doctor{
 			Username:         req.Username,
 			PasswordHash:     string(hashedPassword),
 			FullName:         req.FullName,
+			Email:            req.Email,
 			MedicalSpecialty: req.Specialty,
 		}
 

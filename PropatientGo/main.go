@@ -25,6 +25,10 @@ func main() {
 		log.Println("Aviso: No se encontró archivo .env, usando variables de entorno del sistema")
 	}
 
+	if os.Getenv("JWT_SECRET") == "" {
+		log.Fatal("Error crítico: la variable de entorno JWT_SECRET no está definida")
+	}
+
 	// 2. Conexión a DB
 	dsn := os.Getenv("DATABASE_URL")
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
@@ -44,6 +48,7 @@ func main() {
 
 	// 4. Configuración del Router
 	r := gin.Default()
+	r.MaxMultipartMemory = 8 << 20 // 8 MiB por request de carga de archivos
 	r.Static("/uploads", "./uploads")
 	// 5. CORS - DEBE ir antes de cualquier ruta
 	// Esta configuración permite que el navegador valide los permisos antes de enviar el Token

@@ -50,7 +50,12 @@ func CreateAppointment(db *gorm.DB) gin.HandlerFunc {
 
 		// 2. Lógica de Paciente (Existente o Nuevo)
 		if req.PatientID != 0 { // Si se proporciona PatientID, es un paciente existente
-			if err := db.First(&patient, req.PatientID).Error; err != nil {
+			// Verificamos que el paciente ya esté vinculado a ESTE doctor antes de usarlo.
+			// Sin este filtro, cualquier doctor autenticado podría adivinar un PatientID
+			// ajeno y quedar vinculado a un paciente que no es suyo (IDOR).
+			if err := db.Joins("JOIN doctor_patients ON doctor_patients.patient_id = patients.id").
+				Where("patients.id = ? AND doctor_patients.doctor_id = ?", req.PatientID, doctorID).
+				First(&patient).Error; err != nil {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Paciente existente no encontrado"})
 				return
 			}
@@ -147,9 +152,11 @@ func UploadDocuments(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		for _, fileHeader := range files {
-			// Generar un nombre único para evitar que archivos con el mismo nombre se sobrescriban
-			// Ejemplo: 123_timestamp_nombre.png
-			uniqueFileName := fmt.Sprintf("%s_%d_%s", appointmentID, time.Now().UnixNano(), fileHeader.Filename)
+			// Generamos un nombre de archivo propio a partir de la extensión únicamente.
+			// Nunca usamos el nombre que manda el cliente para construir la ruta en disco:
+			// eso permitiría path traversal (ej. "../../main.go") o sobrescribir archivos.
+			ext := filepath.Ext(filepath.Base(fileHeader.Filename))
+			uniqueFileName := fmt.Sprintf("%s_%d%s", appointmentID, time.Now().UnixNano(), ext)
 			dst := filepath.Join(uploadDir, uniqueFileName)
 
 			// 3. Guardar el archivo físicamente en la carpeta del Backend
@@ -158,9 +165,9 @@ func UploadDocuments(db *gorm.DB) gin.HandlerFunc {
 				continue
 			}
 
-			// 4. Definir la URL o ruta pública que se guardará en la BD
-			// Usamos una ruta relativa que luego expondremos de forma estática en Gin
-			fileURL := fmt.Sprintf("/public/uploads/%s", uniqueFileName)
+			// 4. Definir la URL pública que se guardará en la BD.
+			// Debe coincidir con r.Static("/uploads", "./uploads") en main.go.
+			fileURL := fmt.Sprintf("/uploads/%s", uniqueFileName)
 
 			doc := models.MedicalDocument{
 				FileName:      fileHeader.Filename,
@@ -359,6 +366,8 @@ func GetUpcomingAppointments(db *gorm.DB) gin.HandlerFunc {
 
 func UpdateAppointmentDocument(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		doctorID := c.MustGet("doctorID").(uint)
+
 		// 1. Obtener y validar el ID del documento desde los parámetros de la ruta
 		docIDStr := c.Param("docId")
 		docID, err := strconv.Atoi(docIDStr)
@@ -374,8 +383,18 @@ func UpdateAppointmentDocument(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		// 3. Ejecutar la actualización en la base de datos
-		// Reemplaza "MedicalDocument" o "documents" por el nombre real de tu modelo/tabla
+		// 3. Verificar que el documento pertenece a una cita del doctor autenticado
+		// antes de tocarlo (evita que un doctor edite documentos de otro).
+		var doc models.MedicalDocument
+		err = db.Joins("JOIN appointments ON appointments.id = medical_documents.appointment_id").
+			Where("medical_documents.id = ? AND appointments.doctor_id = ?", docID, doctorID).
+			First(&doc).Error
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Documento no encontrado"})
+			return
+		}
+
+		// 4. Ejecutar la actualización en la base de datos
 		err = db.Model(&models.MedicalDocument{}).
 			Where("id = ?", docID).
 			Update("file_name", input.Filename).Error
@@ -396,6 +415,14 @@ func UpdateAppointmentDocument(db *gorm.DB) gin.HandlerFunc {
 func SaveRecipePDF(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
+		doctorID := c.MustGet("doctorID").(uint)
+
+		// 0. Verificar que la cita pertenece al doctor autenticado
+		var appointment models.Appointment
+		if err := db.Where("id = ? AND doctor_id = ?", id, doctorID).First(&appointment).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Cita no encontrada"})
+			return
+		}
 
 		// 1. Extraer el archivo binario enviado desde el FormData
 		file, err := c.FormFile("recipe_pdf")
@@ -411,8 +438,14 @@ func SaveRecipePDF(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Definir el path completo usando el nombre del archivo generado por el frontend
-		filePath := filepath.Join(uploadDir, file.Filename)
+		// Generamos el nombre nosotros mismos (nunca confiar en el filename del cliente
+		// para construir una ruta en disco: riesgo de path traversal/sobrescritura).
+		ext := filepath.Ext(filepath.Base(file.Filename))
+		if ext == "" {
+			ext = ".pdf"
+		}
+		uniqueFileName := fmt.Sprintf("receta_%s_%d%s", id, time.Now().UnixNano(), ext)
+		filePath := filepath.Join(uploadDir, uniqueFileName)
 
 		// 3. Guardar el archivo en el sistema de archivos del servidor/contenedor
 		if err := c.SaveUploadedFile(file, filePath); err != nil {
@@ -423,7 +456,7 @@ func SaveRecipePDF(db *gorm.DB) gin.HandlerFunc {
 		// 4. Actualizar la columna RecipePDFPath en tu modelo Appointment usando GORM
 		// (Asegúrate de tener el campo RecipePDFPath string `json:"recipePdfPath"` en tu struct)
 		err = db.Model(&models.Appointment{}).
-			Where("id = ?", id).
+			Where("id = ? AND doctor_id = ?", id, doctorID).
 			Update("recipe_pdf_path", filePath).Error
 
 		if err != nil {

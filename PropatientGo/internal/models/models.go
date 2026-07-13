@@ -104,6 +104,7 @@ type GoogleTokenClaims struct {
 	EmailVerified string `json:"email_verified"`
 	Name          string `json:"name"`
 	Picture       string `json:"picture"`
+	Audience      string `json:"aud"`
 }
 
 type UpdateDocumentInput struct {
