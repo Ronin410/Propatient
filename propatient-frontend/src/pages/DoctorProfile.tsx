@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import api from '../api/axios';
+import api, { BACKEND_ORIGIN } from '../api/axios';
 import './DoctorProfile.scss';
 import { Popup } from '../components/Popup';
 
@@ -19,7 +19,7 @@ interface ProfileData {
   logoUrl?: string;
 }
 
-const BACKEND_URL = 'http://localhost:8095';
+const BACKEND_URL = BACKEND_ORIGIN;
 
 export const DoctorProfile = () => {
   const [profile, setProfile] = useState<ProfileData>({

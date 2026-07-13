@@ -1,8 +1,16 @@
 import axios from 'axios';
 
+// Base del API (incluye "/api"). Se define en build time vía VITE_API_URL
+// (ver .env.example); si no está presente, cae al backend local de desarrollo.
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8095/api';
+
+// Origen del backend sin el sufijo "/api", para armar URLs de archivos
+// estáticos (avatares, logos, documentos) que el backend expone en /uploads.
+export const BACKEND_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
+
 const api = axios.create({
   // IMPORTANTE: No pongas una barra "/" al final de la URL base
-  baseURL: 'http://localhost:8095/api', 
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },

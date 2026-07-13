@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 // import pdfFonts from 'pdfmake/build/vfs_fonts';
 import type { Patient, Appointment, MedicalHistory, ConsultationNotes } from '../types';
 import './ConsultationManager.scss';
-import api from '../api/axios';
+import api, { BACKEND_ORIGIN } from '../api/axios';
 import pdfMake from 'pdfmake/build/pdfmake';
 import * as pdfFonts from 'pdfmake/build/vfs_fonts';
 
@@ -38,7 +38,7 @@ interface NoteSectionConfig {
   required: boolean;
 }
 
-const baseurl = "http://localhost:8095"
+const baseurl = BACKEND_ORIGIN;
 
 type FormSection = 'generalData' | 'medicalHistory';
 

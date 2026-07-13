@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"propatient-api/internal/auth"
@@ -52,8 +53,17 @@ func main() {
 	r.Static("/uploads", "./uploads")
 	// 5. CORS - DEBE ir antes de cualquier ruta
 	// Esta configuración permite que el navegador valide los permisos antes de enviar el Token
+	// El origen del frontend se toma de FRONTEND_URL (soporta varios separados por coma,
+	// útil para tener local + producción a la vez). Si no está definida, usa el dev local.
+	allowedOrigins := []string{"http://localhost:5173"}
+	if frontendURL := os.Getenv("FRONTEND_URL"); frontendURL != "" {
+		allowedOrigins = strings.Split(frontendURL, ",")
+		for i, origin := range allowedOrigins {
+			allowedOrigins[i] = strings.TrimSpace(origin)
+		}
+	}
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173"}, // URL EXACTA, NO "*"
+		AllowOrigins:     allowedOrigins, // URL EXACTA, NO "*"
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},

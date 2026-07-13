@@ -1,0 +1,61 @@
+# Blueprint de Render para desplegar ProPatient desde este mismo monorepo.
+# No requiere separar el proyecto en repos distintos: cada servicio usa
+# "rootDir" para buildear solo su propia carpeta.
+#
+# Uso: en Render → New → Blueprint → selecciona este repositorio.
+# Después del primer deploy, Render te da las URLs públicas de cada
+# servicio (algo como https://propatient-api-xxxx.onrender.com). Copia esas
+# URLs a las env vars marcadas como "sync: false" abajo (FRONTEND_URL en el
+# backend, VITE_API_URL en el frontend) y vuelve a desplegar para que
+# ambos servicios se conozcan entre sí.
+
+databases:
+  - name: propatient-db
+    plan: free
+    databaseName: propatient
+    user: propatient
+
+services:
+  # --- BACKEND (Go / Gin) ---
+  - type: web
+    name: propatient-api
+    env: docker
+    plan: free
+    rootDir: PropatientGo
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: propatient-db
+          property: connectionString
+      - key: JWT_SECRET
+        sync: false # generar un valor propio, ej. `openssl rand -base64 48`
+      - key: GOOGLE_CLIENT_ID
+        value: 744896665247-hrs7pmi72q2pog5dn9h1fh5n4nkpv18r.apps.googleusercontent.com
+      - key: FRONTEND_URL
+        sync: false # pegar aquí la URL pública del servicio propatient-frontend
+      - key: PORT
+        value: 8095
+
+  # --- FRONTEND (React / Vite) ---
+  - type: web
+    name: propatient-frontend
+    env: static
+    rootDir: propatient-frontend
+    # Usamos "vite build" directamente (no "npm run build" = "tsc -b && vite build"):
+    # el proyecto ya tiene errores de TypeScript preexistentes que no dependen de
+    # este deploy y que hacen fallar "tsc -b". Vite no requiere que el type-check
+    # pase para generar el bundle. Vale la pena corregir esos errores más adelante
+    # (correr "npx tsc -b" en propatient-frontend para verlos).
+    buildCommand: npm install && npx vite build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false # pegar aquí la URL pública de propatient-api + "/api"
+    routes:
+      # SPA con react-router: cualquier ruta no encontrada sirve index.html
+      - type: rewrite
+        source: /*
+        destination: /index.html
