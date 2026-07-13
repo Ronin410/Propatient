@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { formatToLocalTime } from '../utils/dateFormatter';
 import type { Appointment } from '../types';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import './AppointmentTracking.scss';
 
 interface DashboardSummary {
@@ -32,11 +33,13 @@ export const AppointmentTracking: React.FC = () => {
       const res = await api.get(`/dashboard/summary?clientTime=${encodeURIComponent(clientTime)}`);
 
       const cleanTodayAppointments = (res.data.todayAppointments || []).filter(
-        (app: Appointment) => 
-          app.status !== 'COMPLETED' && 
+        (app: Appointment) =>
+          app.status !== 'COMPLETED' &&
           app.Status !== 'COMPLETED' &&
-          app.status !== 'NOSHOW' && 
-          app.Status !== 'NOSHOW'
+          app.status !== 'NOSHOW' &&
+          app.Status !== 'NOSHOW' &&
+          app.status !== 'CANCELLED' &&
+          app.Status !== 'CANCELLED'
       );
 
       setSummary({
@@ -63,6 +66,21 @@ export const AppointmentTracking: React.FC = () => {
     if (!selectedApp) return;
     setIsConfirmModalOpen(false);
     navigate(`/consulta/${selectedApp.id || selectedApp.ID}`);
+  };
+
+  const [appToCancel, setAppToCancel] = useState<Appointment | null>(null);
+
+  const handleCancelConfirmed = async () => {
+    if (!appToCancel) return;
+    const id = appToCancel.id || appToCancel.ID;
+    try {
+      await api.put(`/appointments/${id}/cancel`);
+      setAppToCancel(null);
+      fetchDashboardData();
+    } catch (err) {
+      console.error("Error al cancelar la cita:", err);
+      setAppToCancel(null);
+    }
   };
 
   if (loading) {
@@ -150,10 +168,15 @@ export const AppointmentTracking: React.FC = () => {
                             ✓ Atendido
                           </span>
                         ) : (
-                          <button className="btn-primary" onClick={() => handleStartConsultationClick(app)}>
-                            <span className="material-icons-outlined" style={{ fontSize: '16px' }}>play_arrow</span>
-                            Iniciar Atencion
-                          </button>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button className="btn-primary" onClick={() => handleStartConsultationClick(app)}>
+                              <span className="material-icons-outlined" style={{ fontSize: '16px' }}>play_arrow</span>
+                              Iniciar Atencion
+                            </button>
+                            <button className="btn-text" onClick={() => setAppToCancel(app)}>
+                              Cancelar
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -187,6 +210,17 @@ export const AppointmentTracking: React.FC = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={!!appToCancel}
+        variant="danger"
+        title="Cancelar cita"
+        message={`¿Seguro que quieres cancelar la cita de ${(appToCancel?.patient || appToCancel?.Patient)?.firstName || 'este paciente'}? Esta acción no se puede deshacer.`}
+        confirmText="Sí, cancelar"
+        cancelText="Regresar"
+        onConfirm={handleCancelConfirmed}
+        onCancel={() => setAppToCancel(null)}
+      />
     </div>
   );
 };

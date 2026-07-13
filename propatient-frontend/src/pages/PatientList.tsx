@@ -3,22 +3,33 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { formatToLocalDate } from '../utils/dateFormatter';
 import type { Patient } from '../types';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import './PatientList.scss';
+
+const PAGE_SIZE = 20;
 
 export const PatientList: React.FC = () => {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [patientToDelete, setPatientToDelete] = useState<Patient | null>(null);
   const navigate = useNavigate();
 
-  const fetchPatients = async (query: string = '') => {
+  const isSearching = searchTerm.length > 0;
+
+  const fetchPatients = async (query: string = '', targetPage: number = 1) => {
     setLoading(true);
     try {
-      const response = await api.get(query 
-        ? `/patients/search?query=${query}`
-        : `/patients`);
-      if (response.data) {
-        setPatients(response.data);
+      if (query) {
+        const response = await api.get(`/patients/search?query=${query}`);
+        setPatients(response.data || []);
+        setTotalPages(1);
+      } else {
+        const response = await api.get(`/patients?page=${targetPage}&pageSize=${PAGE_SIZE}`);
+        setPatients(response.data?.data || []);
+        setTotalPages(response.data?.totalPages || 1);
       }
     } catch (error) {
       console.error("Error cargando pacientes:", error);
@@ -28,18 +39,41 @@ export const PatientList: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchPatients();
-  }, []);
+    fetchPatients('', page);
+  }, [page]);
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       if (searchTerm.length > 2 || searchTerm.length === 0) {
-        fetchPatients(searchTerm);
+        if (searchTerm.length === 0) {
+          // Volver a la lista paginada normal en la página actual
+          fetchPatients('', page);
+        } else {
+          fetchPatients(searchTerm);
+        }
       }
     }, 500);
 
     return () => clearTimeout(delayDebounceFn);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm]);
+
+  const handleDeleteConfirmed = async () => {
+    if (!patientToDelete) return;
+    try {
+      await api.delete(`/patients/${patientToDelete.id}`);
+      setPatientToDelete(null);
+      // Si era el último de la página y no es la página 1, retrocede una página
+      if (patients.length === 1 && page > 1) {
+        setPage((p) => p - 1);
+      } else {
+        fetchPatients(isSearching ? searchTerm : '', page);
+      }
+    } catch (error) {
+      console.error("Error al eliminar paciente:", error);
+      setPatientToDelete(null);
+    }
+  };
 
   // Obtener la inicial para el contenedor circular (Avatar)
   const getAvatarLetter = (firstName: string, lastName: string) => {
@@ -122,12 +156,18 @@ export const PatientList: React.FC = () => {
                             {patient.updated_at ? formatToLocalDate(patient.updated_at) : 'Sin registro'}
                           </span>
                         </td>
-                        <td>
-                          <button 
+                        <td className="actions-cell">
+                          <button
                             className="btn-outline-sm"
                             onClick={() => navigate(`/pacientes/${patient.id}`)}
                           >
                             Ver Historial
+                          </button>
+                          <button
+                            className="btn-outline-sm danger"
+                            onClick={() => setPatientToDelete(patient)}
+                          >
+                            Eliminar
                           </button>
                         </td>
                       </tr>
@@ -146,8 +186,38 @@ export const PatientList: React.FC = () => {
               </tbody>
             </table>
           </div>
+
+          {!isSearching && totalPages > 1 && (
+            <div className="pagination-bar">
+              <button
+                className="btn-outline-sm"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                Anterior
+              </button>
+              <span className="pagination-info">Página {page} de {totalPages}</span>
+              <button
+                className="btn-outline-sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Siguiente
+              </button>
+            </div>
+          )}
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={!!patientToDelete}
+        variant="danger"
+        title="Eliminar paciente"
+        message={`¿Seguro que quieres eliminar a ${patientToDelete?.firstName || ''} ${patientToDelete?.lastName || ''} de tu lista de pacientes? Su historial clínico no se borra, solo deja de aparecer en tu consulta.`}
+        confirmText="Eliminar"
+        onConfirm={handleDeleteConfirmed}
+        onCancel={() => setPatientToDelete(null)}
+      />
     </div>
   );
 };

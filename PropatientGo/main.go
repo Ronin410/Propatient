@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -90,10 +91,16 @@ func main() {
 	api := r.Group("/api")
 	{
 		api.GET("/health", func(c *gin.Context) {
-			c.JSON(200, gin.H{
+			dbStatus := "conectada"
+			httpStatus := http.StatusOK
+			if sqlDB, err := db.DB(); err != nil || sqlDB.Ping() != nil {
+				dbStatus = "desconectada"
+				httpStatus = http.StatusServiceUnavailable
+			}
+			c.JSON(httpStatus, gin.H{
 				"status":  "ok",
 				"message": "¡Hola! El backend en Docker está vivo 🚀",
-				"db":      "conectada",
+				"db":      dbStatus,
 			})
 		})
 
@@ -136,6 +143,7 @@ func main() {
 				patients.GET("/:id/stats", handlers.GetPatientStats(db))
 				patients.PUT("/:id", handlers.UpdatePatient(db))
 				patients.PUT("/:id/medical-history", handlers.UpdateMedicalHistory(db))
+				patients.DELETE("/:id", handlers.RemovePatientFromDoctor(db))
 			}
 
 			// Appointments
@@ -147,6 +155,7 @@ func main() {
 				appointments.POST("", handlers.CreateAppointment(db))
 				appointments.GET("/:id", handlers.GetAppointmentDetail(db))
 				appointments.PUT("/:id", handlers.UpdateAppointment(db))
+				appointments.PUT("/:id/cancel", handlers.CancelAppointment(db))
 				appointments.POST("/:id/upload-document", handlers.UploadDocuments(db))
 				appointments.PUT("/:id/documents/:docId", handlers.UpdateAppointmentDocument(db))
 				appointments.POST("/:id/save-recipe-pdf", handlers.SaveRecipePDF(db))

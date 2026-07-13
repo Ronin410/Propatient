@@ -235,6 +235,30 @@ func GetAppointmentDetail(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
+// CancelAppointment marca la cita como CANCELLED en vez de borrarla, para
+// conservar el historial clínico (misma cita, distinto estado).
+func CancelAppointment(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.Param("id")
+		doctorID := c.MustGet("doctorID").(uint)
+
+		result := db.Model(&models.Appointment{}).
+			Where("id = ? AND doctor_id = ?", id, doctorID).
+			Update("status", "CANCELLED")
+
+		if result.Error != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo cancelar la cita"})
+			return
+		}
+		if result.RowsAffected == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Cita no encontrada"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Cita cancelada", "status": "CANCELLED"})
+	}
+}
+
 func UpdateAppointment(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")

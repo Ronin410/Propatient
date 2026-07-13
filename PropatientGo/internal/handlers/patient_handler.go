@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"math"
 	"net/http"
 	"propatient-api/internal/models"
 	"strconv"
@@ -93,15 +94,40 @@ func UpdatePatient(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-// GetPatients devuelve todos los pacientes que tienen relación con el doctor logueado
+// GetPatients devuelve, paginados, los pacientes vinculados al doctor logueado
 func GetPatients(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		doctorID := c.MustGet("doctorID").(uint)
-		var patients []models.Patient
 
-		err := db.Joins("JOIN doctor_patients ON doctor_patients.patient_id = patients.id").
+		page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
+		if err != nil || page < 1 {
+			page = 1
+		}
+		pageSize, err := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
+		if err != nil || pageSize < 1 {
+			pageSize = 20
+		}
+		if pageSize > 100 {
+			pageSize = 100
+		}
+
+		// GORM consume el builder al ejecutar un finisher (Count/Find), así que
+		// armamos el Joins/Where dos veces en vez de reutilizar la misma variable.
+		var total int64
+		if err := db.Table("patients").
+			Joins("JOIN doctor_patients ON doctor_patients.patient_id = patients.id").
+			Where("doctor_patients.doctor_id = ?", doctorID).
+			Count(&total).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al contar pacientes"})
+			return
+		}
+
+		var patients []models.Patient
+		err = db.Joins("JOIN doctor_patients ON doctor_patients.patient_id = patients.id").
 			Where("doctor_patients.doctor_id = ?", doctorID).
 			Order("patients.created_at DESC").
+			Limit(pageSize).
+			Offset((page - 1) * pageSize).
 			Find(&patients).Error
 
 		if err != nil {
@@ -109,7 +135,39 @@ func GetPatients(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, patients)
+		totalPages := int(math.Ceil(float64(total) / float64(pageSize)))
+		c.JSON(http.StatusOK, gin.H{
+			"data":       patients,
+			"total":      total,
+			"page":       page,
+			"pageSize":   pageSize,
+			"totalPages": totalPages,
+		})
+	}
+}
+
+// RemovePatientFromDoctor desvincula al paciente de ESTE doctor (no borra al
+// paciente: es una relación many2many y otros doctores pueden seguir
+// teniéndolo vinculado con su propio historial de citas).
+func RemovePatientFromDoctor(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.Param("id")
+		doctorID := c.MustGet("doctorID").(uint)
+
+		result := db.Exec(
+			"DELETE FROM doctor_patients WHERE doctor_id = ? AND patient_id = ?",
+			doctorID, id,
+		)
+		if result.Error != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al eliminar al paciente de tu lista"})
+			return
+		}
+		if result.RowsAffected == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Paciente no encontrado o no tienes permiso para eliminarlo"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Paciente eliminado de tu lista"})
 	}
 }
 

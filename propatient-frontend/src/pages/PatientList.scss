@@ -174,7 +174,12 @@
       color: #495057;
     }
 
-    /* Botón Ver Historial dentro de la tabla */
+    .actions-cell {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    /* Botones de acción (Ver Historial / Eliminar) dentro de la tabla */
     .btn-outline-sm {
       display: inline-flex;
       align-items: center;
@@ -197,6 +202,23 @@
 
       &:active {
         transform: scale(0.98);
+      }
+
+      &:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        pointer-events: none;
+      }
+
+      &.danger {
+        color: #d32f2f;
+        border-color: #d32f2f;
+
+        &:hover {
+          background-color: #d32f2f;
+          color: #ffffff;
+          box-shadow: 0 2px 8px rgba(211, 47, 47, 0.15);
+        }
       }
     }
 
@@ -223,5 +245,19 @@
     padding: 4rem;
     color: var(--color-secondary);
     font-size: 1.1rem;
+  }
+
+  .pagination-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+    padding: 1.25rem;
+    border-top: 1px solid #f1f3f5;
+
+    .pagination-info {
+      font-size: 0.9rem;
+      color: var(--color-secondary);
+    }
   }
 }
