@@ -1,8 +1,24 @@
 import axios from 'axios';
 
+const LOCAL_API_URL = 'http://localhost:8095/api';
+
 // Base del API (incluye "/api"). Se define en build time vía VITE_API_URL
 // (ver .env.example); si no está presente, cae al backend local de desarrollo.
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8095/api';
+// Si está definida pero no es una URL absoluta (falta "http(s)://", ej. por
+// pegar solo el nombre del servicio de Render por error), axios la trataría
+// como ruta relativa y terminaría pegándole al propio frontend en vez del
+// backend. Mejor fallar de forma ruidosa en consola que fallar en silencio.
+const rawApiUrl = import.meta.env.VITE_API_URL as string | undefined;
+const API_BASE_URL = (() => {
+  if (!rawApiUrl) return LOCAL_API_URL;
+  if (/^https?:\/\//.test(rawApiUrl)) return rawApiUrl;
+  console.error(
+    `VITE_API_URL="${rawApiUrl}" no es una URL absoluta (debe empezar con ` +
+    `http:// o https://). Usando "${LOCAL_API_URL}" como fallback; revisa ` +
+    `la variable de entorno en el build del frontend.`
+  );
+  return LOCAL_API_URL;
+})();
 
 // Origen del backend sin el sufijo "/api", para armar URLs de archivos
 // estáticos (avatares, logos, documentos) que el backend expone en /uploads.
