@@ -16,7 +16,8 @@ import { AppointmentForm } from './pages/AppointmentForm';
 import { ConsultationManager } from './pages/ConsultationManager';
 import { CompleteProfile } from './pages/CompleteProfile';
 import { ValidateLicense } from './pages/ValidateLicense';
-
+import { DoctorProfile } from './pages/DoctorProfile';
+import { SettingsNotes } from './pages/SettingsNotes';
 // Componente para proteger rutas privadas básicas
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated } = useAuth();
@@ -73,7 +74,8 @@ function App() {
               <Route path="calendar" element={<AppointmentCalendar />} />
               <Route path="appointments/new" element={<AppointmentForm />} />
               <Route path="consulta/:appointmentId" element={<ConsultationManager />} />
-              <Route path="profile" element={<div>Perfil del Doctor</div>} />
+              <Route path="profile" element={<DoctorProfile />} />
+              <Route path="ajustes-notas" element={<SettingsNotes />} />
             </Route>
           </Route>
 

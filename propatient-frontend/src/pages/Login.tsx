@@ -12,7 +12,7 @@ export const Login = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  // Separamos la función de renderizado para poder llamarla en cualquier momento
+  // Función encargada de inyectar y dar ancho exacto al botón oficial de Google
   const renderGoogleButton = () => {
     /* global google */
     if (typeof google !== 'undefined') {
@@ -24,16 +24,15 @@ export const Login = () => {
 
         const container = document.getElementById("googleBtn");
         if (container) {
-          // 🚀 CLAVE: Limpiamos por completo cualquier residuo HTML previo antes de inyectar
-          container.innerHTML = ""; 
+          container.innerHTML = ""; // Limpia residuos HTML previos para evitar duplicados
           
           google.accounts.id.renderButton(
             container,
             { 
               theme: "outline", 
               size: "large", 
-              text: "signin_with",
-              width: "100%" 
+              text: "continue_with", // "Continuar con Google" alineado a la nueva referencia visual
+              width: "340"           // Ancho perfecto balanceado para el padding de la tarjeta
             }
           );
         }
@@ -46,12 +45,11 @@ export const Login = () => {
   };
 
   useEffect(() => {
-    // Primera carga síncrona/asíncrona segura
     renderGoogleButton();
+    // Re-renderizado de seguridad por si el script tarda milisegundos extra en cargar
     const timer = setTimeout(renderGoogleButton, 150);
-
     return () => clearTimeout(timer);
-  }, [isLoading]); // Re-renderiza y prepara el botón cada vez que termina un estado de carga
+  }, [isLoading]);
 
   const handleGoogleResponse = async (response: any) => {
     setIsLoading(true);
@@ -68,7 +66,6 @@ export const Login = () => {
         localStorage.setItem('suggested_fullname', res.data.fullName);
       }
 
-      // Evaluamos el estado antes de mutar la sesión global del contexto
       if (!perfilCompletado) {
         login(res.data.token, { profileCompleted: perfilCompletado, cedulaValidated: cedulaValidada });
         navigate('/registro/perfil');
@@ -76,12 +73,7 @@ export const Login = () => {
         login(res.data.token, { profileCompleted: perfilCompletado, cedulaValidated: cedulaValidada });
         navigate('/registro/validar-cedula');
       } else if (cedulaValidada === 'CAPTURADA') {
-        // 🎯 AQUÍ ESTÁ EL CAMBIO:
-        // Mostramos la alerta informativa al médico.
         alert("Tu cuenta y cédula profesional están siendo validadas por nuestro equipo técnico. Te notificaremos por correo una vez concluido el proceso.");
-        
-        // Apagamos el loader del login. Al pasar a false, el useEffect se dispara solo, 
-        // limpia el div#googleBtn y vuelve a pintar el botón nativo listo para usarse de nuevo.
         setIsLoading(false); 
       } else if (cedulaValidada === 'VALIDADA') {
         login(res.data.token, { profileCompleted: perfilCompletado, cedulaValidated: cedulaValidada });
@@ -96,46 +88,90 @@ export const Login = () => {
 
   return (
     <AuthLayout>
-      <div className="card" style={{ padding: '35px', backgroundColor: '#ffffff', borderRadius: '12px', boxShadow: 'var(--shadow)' }}>
-        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-          <div style={{
-            width: '48px',
-            height: '48px',
-            background: 'var(--accent, #aa3bff)',
-            borderRadius: '50%',
-            margin: '0 auto 12px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#fff',
-            fontWeight: 'bold',
-            fontSize: '20px'
-          }}>
-            +
-          </div>
-          <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-h)', margin: 0 }}>Acceso al Sistema</h1>
-          <p style={{ fontSize: '14px', color: 'var(--text)', marginTop: '4px' }}>ProPatient Medical System</p>
+      {/* 🛡️ ESCUDO / LOGO FLOTANTE SUPERIOR */}
+      <div style={{
+        width: '110px',
+        height: '110px',
+        backgroundColor: '#007370', // Color verde azulado / Teal corporativo exacto
+        borderRadius: '50%',
+        position: 'absolute',
+        top: '-15px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 10,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        boxShadow: '0 8px 20px rgba(0, 115, 112, 0.15)'
+      }}>
+        {/* Isotipo médico minimalista en SVG integrado */}
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <path d="M12 8v8M9 12h6"/>
+        </svg>
+      </div>
+
+      {/* 📄 TARJETA CONTENEDORA BLANCA */}
+      <div className="card" style={{ 
+        padding: '80px 35px 40px 35px', // Margen superior amplio para dar espacio al escudo flotante
+        backgroundColor: '#f5f4f0',    // Color hueso/crema suave para aislar el contenedor del fondo de la pantalla
+        borderRadius: '24px',          // Bordes redondeados modernos y orgánicos
+        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02)',
+        boxSizing: 'border-box',
+        width: '100%',
+        position: 'relative'
+      }}>
+        
+        {/* Encabezado */}
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <h1 style={{ fontSize: '26px', fontWeight: 700, color: '#0c1017', margin: 0, letterSpacing: '-0.5px' }}>
+            Acceso al Sistema
+          </h1>
+          <p style={{ fontSize: '14px', color: '#535865', marginTop: '6px', fontWeight: 500 }}>
+            ProPatient Medical System
+          </p>
         </div>
 
         <div className="login-form">
           {error && (
-            <div className="alert alert-danger" style={{ marginBottom: '1.5rem', padding: '12px', borderRadius: '6px', backgroundColor: '#fee2e2', color: '#b91c1c', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
+            <div className="alert alert-danger" style={{ 
+              marginBottom: '1.5rem', 
+              padding: '12px 14px', 
+              borderRadius: '8px', 
+              backgroundColor: '#fee2e2', 
+              color: '#b91c1c', 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '10px', 
+              fontSize: '13px',
+              border: '1px solid #fca5a5'
+            }}>
               <span>⚠️</span>
-              {error}
+              <span style={{ fontWeight: 500 }}>{error}</span>
             </div>
           )}
 
           {isLoading ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '30px 0', gap: '12px' }}>
-              <div className="spinner-border text-primary" role="status"></div>
-              <p style={{ fontSize: '14px', color: 'var(--text)' }}>Validando identidad médica...</p>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 0', gap: '14px' }}>
+              <div className="spinner-border" role="status" style={{ color: '#007370' }}></div>
+              <p style={{ fontSize: '14px', color: '#535865', fontWeight: 500 }}>Validando identidad médica...</p>
             </div>
           ) : (
             <>
-              {/* Contenedor reseteable por el renderGoogleButton */}
-              <div id="googleBtn" style={{ width: '100%', minHeight: '44px', marginBottom: '1.5rem' }}></div>
+              {/* Contenedor donde la API de Google inyectará el botón nativo */}
+              <div style={{ display: 'flex', justifyContent: 'center', width: '100%', marginBottom: '28px' }}>
+                <div id="googleBtn" style={{ minHeight: '44px' }}></div>
+              </div>
 
-              <p style={{ fontSize: '12px', color: 'var(--text)', textAlign: 'center', lineHeight: '1.5', margin: 0 }}>
+              {/* Leyenda de Seguridad */}
+              <p style={{ 
+                fontSize: '12px', 
+                color: '#6e7582', 
+                textAlign: 'center', 
+                lineHeight: '1.6', 
+                margin: 0,
+                padding: '0 5px'
+              }}>
                 Para garantizar la seguridad de los expedientes clínicos, el acceso está restringido a correos institucionales o de Gmail verificados.
               </p>
             </>

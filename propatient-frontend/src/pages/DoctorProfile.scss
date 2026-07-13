@@ -1,0 +1,309 @@
+.doctor-profile-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  /* Encabezado compatible con DashboardLayout */
+  .profile-header {
+    margin-bottom: 32px;
+
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: #002d42;
+      margin: 0 0 4px 0;
+    }
+
+    p {
+      font-size: 14px;
+      color: #6e7582;
+      margin: 0;
+    }
+  }
+
+  /* 📊 DASHBOARD DE PERFIL (Mismo diseño de tus KPI Cards de Citas) */
+  .profile-dashboard-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin-bottom: 32px;
+
+    .summary-card {
+      background-color: #ffffff;
+      border: 1px solid #eef0eb;
+      border-radius: 12px;
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+
+      &.brand-card {
+        background: linear-gradient(145deg, #005073 0%, #002d42 100%);
+        color: #ffffff;
+        border: none;
+
+        .meta-title { color: rgba(255, 255, 255, 0.7) !important; }
+        .meta-subtitle { color: #ffffff !important; }
+        .badge-verified {
+          background-color: rgba(255, 255, 255, 0.15) !important;
+          color: #ffffff !important;
+        }
+      }
+
+      .card-icon-wrapper {
+        width: 48px;
+        height: 48px;
+        border-radius: 10px;
+        background-color: #e6f0f5;
+        color: #005073;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        .material-icons-outlined {
+          font-size: 24px;
+        }
+
+        img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          border-radius: 10px;
+        }
+      }
+
+      .card-meta {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+
+        .meta-title {
+          font-size: 12px;
+          font-weight: 600;
+          color: #6e7582;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          margin-bottom: 4px;
+        }
+
+        .meta-subtitle {
+          font-size: 16px;
+          font-weight: 700;
+          color: #002d42;
+        }
+
+        .badge-verified {
+          font-size: 11px;
+          background-color: #e6f4ea;
+          color: #137333;
+          padding: 2px 8px;
+          border-radius: 12px;
+          font-weight: 600;
+          margin-top: 4px;
+          align-self: flex-start;
+        }
+      }
+
+      /* Bloque de Progreso */
+      .progress-container {
+        width: 100%;
+
+        .progress-info {
+          display: flex;
+          justify-content: space-between;
+          font-size: 12px;
+          font-weight: 600;
+          color: #6e7582;
+          margin-bottom: 8px;
+          
+          .pct { color: #005073; font-weight: 700; }
+        }
+
+        .progress-track {
+          width: 100%;
+          height: 6px;
+          background-color: #eef0eb;
+          border-radius: 3px;
+          overflow: hidden;
+
+          .progress-bar {
+            height: 100%;
+            background-color: #005073;
+            border-radius: 3px;
+            transition: width 0.4s ease;
+          }
+        }
+      }
+    }
+  }
+
+  /* 🗂️ Secciones de Formulario Tipo Tarjeta Limpia */
+  .profile-form-section {
+    background-color: #ffffff;
+    border: 1px solid #eef0eb;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.01);
+
+    &.section-readonly {
+      background-color: #f8f9fa;
+      border-left: 4px solid #6e7582;
+    }
+
+    .section-title {
+      margin-bottom: 20px;
+      h3 {
+        font-size: 16px;
+        font-weight: 700;
+        color: #002d42;
+        margin: 0 0 4px 0;
+      }
+      p {
+        font-size: 13px;
+        color: #6e7582;
+        margin: 0;
+      }
+    }
+
+    .grid-layout {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+
+      @media (max-width: 768px) {
+        grid-template-columns: 1fr;
+        .full-width { grid-column: span 1 !important; }
+      }
+
+      .full-width {
+        grid-column: span 2;
+      }
+    }
+  }
+
+  /* Control de Formularios */
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #002d42;
+    }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="tel"],
+    textarea {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 6px;
+      border: 1px solid #dcdad6;
+      font-size: 14px;
+      color: #0c1017;
+      background-color: #ffffff;
+      outline: none;
+      box-sizing: border-box;
+
+      &:focus {
+        border-color: #005073;
+        box-shadow: 0 0 0 3px rgba(0, 80, 115, 0.08);
+      }
+    }
+
+    input[readonly] {
+      background-color: #eef0eb;
+      color: #6e7582;
+      border-color: #dcdad6;
+      cursor: not-allowed;
+    }
+  }
+
+  /* Botones de acción principal */
+  .actions-container {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 12px;
+
+    .btn-save-profile {
+      background-color: #005073;
+      color: #ffffff;
+      border: none;
+      padding: 10px 24px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.2s;
+
+      &:hover:not(:disabled) {
+        background-color: #002d42;
+      }
+      &:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+    }
+  }
+
+  /* 📸 Componentes de carga de imágenes */
+  .media-upload-wrapper {
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+
+    .upload-box {
+      flex: 1 1 240px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+
+      .box-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #002d42;
+        margin-bottom: 12px;
+      }
+
+      .avatar-circle, .logo-rectangle {
+        background-color: #f8f9fa;
+        border: 2px dashed #b8b6b2;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        overflow: hidden;
+        transition: border-color 0.2s;
+
+        &:hover { border-color: #005073; }
+        img { width: 100%; height: 100%; object-fit: cover; }
+      }
+
+      .avatar-circle {
+        width: 110px;
+        height: 110px;
+        border-radius: 50%;
+      }
+
+      .logo-rectangle {
+        width: 200px;
+        height: 110px;
+        border-radius: 8px;
+        img { object-fit: contain; }
+      }
+
+      .upload-hint {
+        font-size: 11px;
+        color: #6e7582;
+        margin-top: 8px;
+        max-width: 220px;
+      }
+    }
+  }
+}

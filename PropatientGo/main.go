@@ -9,6 +9,7 @@ import (
 	"propatient-api/internal/database"
 	"propatient-api/internal/handlers"
 	"propatient-api/internal/models"
+	"propatient-api/internal/workers"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -19,6 +20,7 @@ import (
 
 func main() {
 	// 1. Cargar variables de entorno
+	//Otro comentairio
 	if err := godotenv.Load(); err != nil {
 		log.Println("Aviso: No se encontró archivo .env, usando variables de entorno del sistema")
 	}
@@ -35,12 +37,14 @@ func main() {
 	}
 
 	// 3. Automigración y Seed
-	db.AutoMigrate(&models.Doctor{}, &models.Patient{}, &models.MedicalHistory{}, &models.Appointment{}, &models.MedicalDocument{})
+	db.AutoMigrate(&models.Doctor{}, &models.Patient{}, &models.MedicalHistory{}, &models.Appointment{}, &models.MedicalDocument{}, &models.DoctorTemplate{})
 	database.SeedDatabase(db)
+
+	workers.StartNightClosureWorker(db)
 
 	// 4. Configuración del Router
 	r := gin.Default()
-
+	r.Static("/uploads", "./uploads")
 	// 5. CORS - DEBE ir antes de cualquier ruta
 	// Esta configuración permite que el navegador valide los permisos antes de enviar el Token
 	r.Use(cors.New(cors.Config{
@@ -114,6 +118,9 @@ func main() {
 				appointments.POST("", handlers.CreateAppointment(db))
 				appointments.GET("/:id", handlers.GetAppointmentDetail(db))
 				appointments.PUT("/:id", handlers.UpdateAppointment(db))
+				appointments.POST("/:id/upload-document", handlers.UploadDocuments(db))
+				appointments.PUT("/:id/documents/:docId", handlers.UpdateAppointmentDocument(db))
+				appointments.POST("/:id/save-recipe-pdf", handlers.SaveRecipePDF(db))
 			}
 
 			// Doctor
@@ -121,6 +128,9 @@ func main() {
 			{
 				doctorRoutes.GET("/me", handlers.GetCurrentDoctor(db))
 				doctorRoutes.PUT("/me", handlers.UpdateCurrentDoctor(db))
+
+				doctorRoutes.GET("/template", handlers.GetDoctorTemplate(db))
+				doctorRoutes.POST("/template", handlers.SaveDoctorTemplate(db))
 			}
 
 			// Utils

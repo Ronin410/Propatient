@@ -32,6 +32,14 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  --accent: #1a73e8; 
+  --accent-bg: rgba(26, 115, 232, 0.1);
+  --accent-border: rgba(26, 115, 232, 0.5);
+  
+  /* ... */
+  
+  /* 2. Añade explícitamente la variable dark para los hovers si la necesitas */
+  --color-primary-dark: #1557b0;
 }
 
 /* ================================================= */

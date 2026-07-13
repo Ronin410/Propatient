@@ -1,0 +1,70 @@
+.custom-popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  animation: popupFadeIn 0.2s ease-out;
+
+  .custom-popup-content {
+    background-color: #ffffff;
+    padding: 32px;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    text-align: center;
+    max-width: 400px;
+    width: 90%;
+    animation: popupScaleUp 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+
+    .popup-icon {
+      font-size: 56px;
+      margin-bottom: 16px;
+      
+      &.icon-success { color: #2e7d32; }
+      &.icon-error { color: #d32f2f; }
+      &.icon-warning { color: #f57c00; }
+      &.icon-info { color: #0288d1; }
+    }
+
+    h3 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #002d42; // Tu azul oscuro de la app
+      margin: 0 0 8px 0;
+    }
+
+    p {
+      font-size: 14px;
+      color: #6e7582;
+      line-height: 1.5;
+      margin: 0 0 24px 0;
+    }
+
+    .btn-close-popup {
+      color: #ffffff;
+      border: none;
+      padding: 10px 24px;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      width: 100%;
+
+      &:hover { opacity: 0.9; }
+      
+      &.btn-success { background-color: #2e7d32; }
+      &.btn-error { background-color: #d32f2f; }
+      &.btn-warning { background-color: #f57c00; }
+      &.btn-info { background-color: #002d42; }
+    }
+  }
+}
+
+@keyframes popupFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes popupScaleUp { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }

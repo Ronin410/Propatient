@@ -1,9 +1,15 @@
 package handlers
 
 import (
+	"bytes"
+	"fmt"
+	"io"
+	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"propatient-api/internal/models"
-	"strings"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -23,8 +29,10 @@ type CreateAppointmentRequest struct {
 	PatientID uint `json:"patientId,omitempty"`
 
 	// Campos para paciente nuevo (si PatientID es 0)
-	PatientName  string `json:"patientName,omitempty"`  // Ej: "John Doe"
-	PatientPhone string `json:"patientPhone,omitempty"` // Ej: "1234567890"
+	PatientFirstName string `json:"patientFirstName,omitempty"`
+	PatientLastName  string `json:"patientLastName,omitempty"`
+	PatientPhone     string `json:"patientPhone,omitempty"` // Ej: "1234567890"
+	PatientEmail     string `json:"patientEmail"`
 }
 
 func CreateAppointment(db *gorm.DB) gin.HandlerFunc {
@@ -47,26 +55,16 @@ func CreateAppointment(db *gorm.DB) gin.HandlerFunc {
 				return
 			}
 		} else { // Si no se proporciona PatientID, es un paciente nuevo (registro rápido)
-			if req.PatientName == "" {
+			if req.PatientFirstName == "" {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Nombre del paciente es requerido para nuevo registro"})
 				return
 			}
 
-			// Parsear PatientName en FirstName y LastName
-			names := strings.Fields(req.PatientName)
-			firstName := ""
-			lastName := ""
-			if len(names) > 0 {
-				firstName = names[0]
-				if len(names) > 1 {
-					lastName = strings.Join(names[1:], " ")
-				}
-			}
-
 			patient = models.Patient{
-				FirstName: firstName,
-				LastName:  lastName,
+				FirstName: req.PatientFirstName,
+				LastName:  req.PatientLastName,
 				Phone:     req.PatientPhone,
+				Email:     req.PatientEmail,
 				// Email, BirthDate, Gender no se envían en el flujo de registro rápido del frontend
 			}
 			if err := db.Create(&patient).Error; err != nil {
@@ -138,38 +136,48 @@ func UploadDocuments(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		files := form.File["files"] // El frontend envía el campo 'files'
+		files := form.File["files"]
 		isPrescription := c.PostForm("isPrescription") == "true"
 
-		for _, fileHeader := range files {
-			file, err := fileHeader.Open()
-			if err != nil {
-				continue
-			}
-			defer file.Close()
+		// Definir y crear la carpeta de destino local si no existe
+		uploadDir := "./uploads"
+		if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo crear el directorio de subidas"})
+			return
+		}
 
-			// Leer el contenido del archivo a bytes
-			data := make([]byte, fileHeader.Size)
-			_, err = file.Read(data)
-			if err != nil {
+		for _, fileHeader := range files {
+			// Generar un nombre único para evitar que archivos con el mismo nombre se sobrescriban
+			// Ejemplo: 123_timestamp_nombre.png
+			uniqueFileName := fmt.Sprintf("%s_%d_%s", appointmentID, time.Now().UnixNano(), fileHeader.Filename)
+			dst := filepath.Join(uploadDir, uniqueFileName)
+
+			// 3. Guardar el archivo físicamente en la carpeta del Backend
+			if err := c.SaveUploadedFile(fileHeader, dst); err != nil {
+				// Si falla el guardado físico en disco, pasamos al siguiente
 				continue
 			}
+
+			// 4. Definir la URL o ruta pública que se guardará en la BD
+			// Usamos una ruta relativa que luego expondremos de forma estática en Gin
+			fileURL := fmt.Sprintf("/public/uploads/%s", uniqueFileName)
 
 			doc := models.MedicalDocument{
 				FileName:      fileHeader.Filename,
 				FileType:      fileHeader.Header.Get("Content-Type"),
-				Data:          data,
+				FilePath:      fileURL, // <--- Guardamos la URL pública en lugar de los bytes
 				AppointmentID: appointment.ID,
 				Prescription:  isPrescription,
 			}
 
 			if err := db.Create(&doc).Error; err != nil {
-				// Si falla un archivo, continuamos con el siguiente
+				// Si falla el registro en la BD, podrías opcionalmente borrar el archivo físico del disco
+				os.Remove(dst)
 				continue
 			}
 		}
 
-		c.JSON(http.StatusOK, gin.H{"message": "Documentos guardados exitosamente"})
+		c.JSON(http.StatusOK, gin.H{"message": "Documentos guardados en servidor exitosamente"})
 	}
 }
 
@@ -203,8 +211,15 @@ func GetAppointmentDetail(db *gorm.DB) gin.HandlerFunc {
 		doctorID := c.MustGet("doctorID").(uint)
 
 		var appointment models.Appointment
-		// Preload("Patient") trae los datos del dueño de la cita
-		if err := db.Preload("Patient").Where("id = ? AND doctor_id = ?", id, doctorID).First(&appointment).Error; err != nil {
+
+		// Preload utiliza el nombre del campo en el Struct de Go, no el nombre de la tabla SQL
+		err := db.Preload("Patient").
+			Preload("Patient.MedicalHistory").
+			Preload("MedicalDocuments"). // <--- Carga los documentos asociados por appointment_id
+			Where("id = ? AND doctor_id = ?", id, doctorID).
+			First(&appointment).Error
+
+		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Cita no encontrada"})
 			return
 		}
@@ -218,6 +233,16 @@ func UpdateAppointment(db *gorm.DB) gin.HandlerFunc {
 		id := c.Param("id")
 		doctorID := c.MustGet("doctorID").(uint)
 
+		// --- BLOQUE DE DEBBUGGING: LEER JSON CRUDO ---
+		// Leemos los bytes directos que vienen de la petición HTTP
+		bodyBytes, _ := io.ReadAll(c.Request.Body)
+		// Volvemos a restaurar el Body para que ShouldBindJSON pueda leerlo después
+		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+		// Imprimimos en la consola de la terminal lo que el frontend mandó
+		log.Printf("📥 JSON recibido desde el Frontend: %s", string(bodyBytes))
+		// ----------------------------------------------
+
 		var appointment models.Appointment
 		if err := db.Where("id = ? AND doctor_id = ?", id, doctorID).First(&appointment).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Cita no encontrada"})
@@ -230,7 +255,13 @@ func UpdateAppointment(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		db.Save(&appointment)
+		// Revisar si GORM arroja algún error al guardar en Postgres
+		if err := db.Save(&appointment).Error; err != nil {
+			log.Printf("❌ Error de GORM al guardar: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo actualizar"})
+			return
+		}
+
 		c.JSON(http.StatusOK, appointment)
 	}
 }
@@ -251,9 +282,9 @@ func GetTodaySummary(db *gorm.DB) gin.HandlerFunc {
 
 		// 2. Definir el "Día" según el calendario del cliente
 		// Creamos el inicio y fin del día respetando la zona horaria donde está el doctor
-		y, m, d := now.Date()
-		startOfDay := time.Date(y, m, d, 0, 0, 0, 0, now.Location())
-		endOfDay := startOfDay.Add(24 * time.Hour)
+		//y, m, d := now.Date()
+		//startOfDay := time.Date(y, m, d, 0, 0, 0, 0, now.Location())
+		//endOfDay := startOfDay.Add(24 * time.Hour)
 
 		var stats struct {
 			TodayCount        int64                `json:"todayCount"`
@@ -261,11 +292,10 @@ func GetTodaySummary(db *gorm.DB) gin.HandlerFunc {
 			TodayAppointments []models.Appointment `json:"todayAppointments"`
 			NextPatient       *models.Appointment  `json:"nextPatient"`
 		}
-
+		clientDateStr := now.Format("2006-01-02")
 		// 1. Total de citas agendadas para hoy (independientemente del estado)
 		db.Model(&models.Appointment{}).
-			Where("doctor_id = ? AND appointment_date_time >= ? AND appointment_date_time < ?",
-				doctorID, startOfDay.UTC(), endOfDay.UTC()).
+			Where("doctor_id = ? AND DATE(appointment_date_time) = ?", doctorID, clientDateStr).
 			Count(&stats.TodayCount)
 
 		// 2. Total de citas pendientes generales del doctor (su carga de trabajo total)
@@ -275,8 +305,7 @@ func GetTodaySummary(db *gorm.DB) gin.HandlerFunc {
 
 		// 3. Lista de citas de hoy para la tabla
 		db.Preload("Patient").
-			Where("doctor_id = ? AND appointment_date_time >= ? AND appointment_date_time < ?",
-				doctorID, startOfDay.UTC(), endOfDay.UTC()).
+			Where("doctor_id = ? AND DATE(appointment_date_time) = ?", doctorID, clientDateStr).
 			Order("appointment_date_time ASC").
 			Find(&stats.TodayAppointments)
 
@@ -325,5 +354,86 @@ func GetUpcomingAppointments(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, appointments)
+	}
+}
+
+func UpdateAppointmentDocument(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 1. Obtener y validar el ID del documento desde los parámetros de la ruta
+		docIDStr := c.Param("docId")
+		docID, err := strconv.Atoi(docIDStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "ID de documento inválido"})
+			return
+		}
+
+		// 2. Parsear el cuerpo de la petición (JSON)
+		var input models.UpdateDocumentInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "El campo filename es obligatorio"})
+			return
+		}
+
+		// 3. Ejecutar la actualización en la base de datos
+		// Reemplaza "MedicalDocument" o "documents" por el nombre real de tu modelo/tabla
+		err = db.Model(&models.MedicalDocument{}).
+			Where("id = ?", docID).
+			Update("file_name", input.Filename).Error
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo actualizar el nombre del archivo"})
+			return
+		}
+
+		// 4. Responder con éxito
+		c.JSON(http.StatusOK, gin.H{
+			"message":  "Nombre del documento actualizado con éxito",
+			"filename": input.Filename,
+		})
+	}
+}
+
+func SaveRecipePDF(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.Param("id")
+
+		// 1. Extraer el archivo binario enviado desde el FormData
+		file, err := c.FormFile("recipe_pdf")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "No se recibió ningún archivo PDF"})
+			return
+		}
+
+		// 2. Definir una ruta física para guardar las recetas dentro del servidor
+		uploadDir := "./uploads/recipes"
+		if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo crear el directorio de almacenamiento"})
+			return
+		}
+
+		// Definir el path completo usando el nombre del archivo generado por el frontend
+		filePath := filepath.Join(uploadDir, file.Filename)
+
+		// 3. Guardar el archivo en el sistema de archivos del servidor/contenedor
+		if err := c.SaveUploadedFile(file, filePath); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al escribir el archivo en disco"})
+			return
+		}
+
+		// 4. Actualizar la columna RecipePDFPath en tu modelo Appointment usando GORM
+		// (Asegúrate de tener el campo RecipePDFPath string `json:"recipePdfPath"` en tu struct)
+		err = db.Model(&models.Appointment{}).
+			Where("id = ?", id).
+			Update("recipe_pdf_path", filePath).Error
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al actualizar la cita en la base de datos"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Receta en PDF almacenada y asociada correctamente",
+			"path":    filePath,
+		})
 	}
 }
