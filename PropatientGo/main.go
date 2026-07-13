@@ -57,9 +57,23 @@ func main() {
 	// útil para tener local + producción a la vez). Si no está definida, usa el dev local.
 	allowedOrigins := []string{"http://localhost:5173"}
 	if frontendURL := os.Getenv("FRONTEND_URL"); frontendURL != "" {
-		allowedOrigins = strings.Split(frontendURL, ",")
-		for i, origin := range allowedOrigins {
-			allowedOrigins[i] = strings.TrimSpace(origin)
+		var parsed []string
+		for _, origin := range strings.Split(frontendURL, ",") {
+			origin = strings.TrimSpace(origin)
+			if origin == "" {
+				continue // ignora comas sobrantes, ej. "https://foo.com,"
+			}
+			// gin-contrib/cors hace panic() si un origen no es "*" y no
+			// incluye esquema. Si alguien pega solo el dominio (sin
+			// "https://") en el dashboard de Render, lo normalizamos en
+			// vez de tumbar el servidor entero al arrancar.
+			if origin != "*" && !strings.HasPrefix(origin, "http://") && !strings.HasPrefix(origin, "https://") {
+				origin = "https://" + origin
+			}
+			parsed = append(parsed, origin)
+		}
+		if len(parsed) > 0 {
+			allowedOrigins = parsed
 		}
 	}
 	r.Use(cors.New(cors.Config{
