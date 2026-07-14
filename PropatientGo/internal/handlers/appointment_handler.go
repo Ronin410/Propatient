@@ -188,26 +188,59 @@ func UploadDocuments(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
+// validAppointmentStatuses son los únicos valores de status que el sistema
+// asigna hoy (ver CreateAppointment, CancelAppointment, ExecNightClosure y
+// ConsultationForm) — se usan para validar el filtro ?status= y así rechazar
+// typos con un 400 claro en vez de devolver una lista vacía sin explicación.
+var validAppointmentStatuses = map[string]bool{
+	"PENDING":   true,
+	"COMPLETED": true,
+	"CANCELLED": true,
+	"NOSHOW":    true,
+}
+
+// Capturamos los parámetros de la URL: /api/appointments?start=...&end=...&status=...
 func GetAppointments(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		doctorID := c.MustGet("doctorID").(uint)
 
-		// Capturamos los parámetros de la URL: /api/appointments?start=...&end=...
 		startDate := c.Query("start")
 		endDate := c.Query("end")
+		status := c.Query("status")
 
 		var appointments []models.Appointment
 		query := db.Where("doctor_id = ?", doctorID).Preload("Patient")
 
-		// Si el usuario envió fechas, filtramos
+		// Si el usuario envió fechas, filtramos. Antes, una fecha mal formada
+		// se ignoraba en silencio (el filtro simplemente no se aplicaba); ahora
+		// se rechaza con 400 para que el error no pase desapercibido.
 		if startDate != "" && endDate != "" {
-			start, _ := time.Parse("2006-01-02", startDate)
-			end, _ := time.Parse("2006-01-02", endDate)
+			start, err := time.Parse("2006-01-02", startDate)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Parámetro 'start' inválido, formato esperado YYYY-MM-DD"})
+				return
+			}
+			end, err := time.Parse("2006-01-02", endDate)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Parámetro 'end' inválido, formato esperado YYYY-MM-DD"})
+				return
+			}
 			end = end.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
 			query = query.Where("appointment_date_time BETWEEN ? AND ?", start, end)
+		} else if startDate != "" || endDate != "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Debes enviar tanto 'start' como 'end', o ninguno de los dos"})
+			return
 		}
 
-		query.Find(&appointments)
+		if status != "" {
+			if !validAppointmentStatuses[status] {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Parámetro 'status' inválido. Valores permitidos: PENDING, COMPLETED, CANCELLED, NOSHOW"})
+				return
+			}
+			query = query.Where("status = ?", status)
+		}
+
+		query.Order("appointment_date_time ASC").Find(&appointments)
 		c.JSON(http.StatusOK, appointments)
 	}
 }

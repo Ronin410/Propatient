@@ -42,3 +42,9 @@ func decodeJSON(t *testing.T, w *httptest.ResponseRecorder) map[string]any {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &out))
 	return out
 }
+
+// decodeJSONList parsea el body de la respuesta (un array JSON) al puntero dado.
+func decodeJSONList(t *testing.T, w *httptest.ResponseRecorder, out any) {
+	t.Helper()
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), out))
+}

@@ -80,6 +80,41 @@ export const AppointmentTracking: React.FC = () => {
     }
   };
 
+  // --- Reprogramar cita ---
+  const [appToReschedule, setAppToReschedule] = useState<Appointment | null>(null);
+  const [newDateTime, setNewDateTime] = useState('');
+  const [rescheduling, setRescheduling] = useState(false);
+
+  // Convierte un ISO string a formato "YYYY-MM-DDTHH:mm" en hora local,
+  // como lo espera un <input type="datetime-local">.
+  const toDatetimeLocalValue = (iso: string) => {
+    const d = new Date(iso);
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const handleRescheduleClick = (app: Appointment) => {
+    setAppToReschedule(app);
+    setNewDateTime(toDatetimeLocalValue(app.appointmentDateTime));
+  };
+
+  const handleConfirmReschedule = async () => {
+    if (!appToReschedule || !newDateTime) return;
+    setRescheduling(true);
+    try {
+      await api.put(`/appointments/${appToReschedule.id}`, {
+        appointmentDateTime: new Date(newDateTime).toISOString(),
+      });
+      setAppToReschedule(null);
+      fetchDashboardData();
+    } catch (err) {
+      console.error("Error al reprogramar la cita:", err);
+      alert("No se pudo reprogramar la cita. Intenta de nuevo.");
+    } finally {
+      setRescheduling(false);
+    }
+  };
+
   if (loading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh', color: '#005073' }}>
@@ -170,6 +205,9 @@ export const AppointmentTracking: React.FC = () => {
                               <span className="material-icons-outlined" style={{ fontSize: '16px' }}>play_arrow</span>
                               Iniciar Atencion
                             </button>
+                            <button className="btn-text" onClick={() => handleRescheduleClick(app)}>
+                              Reprogramar
+                            </button>
                             <button className="btn-text" onClick={() => setAppToCancel(app)}>
                               Cancelar
                             </button>
@@ -203,6 +241,35 @@ export const AppointmentTracking: React.FC = () => {
             <div className="modal-footer">
               <button className="btn-text" onClick={() => setIsConfirmModalOpen(false)}>Regresar</button>
               <button className="btn-primary" onClick={handleConfirmConsultation}>Confirmar e Iniciar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {appToReschedule && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <div className="modal-header">
+              <span className="material-icons-outlined alert-icon">event_repeat</span>
+              <h3>Reprogramar cita</h3>
+            </div>
+            <p>
+              Nueva fecha y hora para la cita de: <br />
+              <strong>
+                {appToReschedule.patient?.firstName || ''} {appToReschedule.patient?.lastName || ''}
+              </strong>
+            </p>
+            <input
+              type="datetime-local"
+              value={newDateTime}
+              onChange={(e) => setNewDateTime(e.target.value)}
+              style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #dee2e6', marginTop: '8px' }}
+            />
+            <div className="modal-footer">
+              <button className="btn-text" onClick={() => setAppToReschedule(null)} disabled={rescheduling}>Cancelar</button>
+              <button className="btn-primary" onClick={handleConfirmReschedule} disabled={rescheduling || !newDateTime}>
+                {rescheduling ? 'Guardando...' : 'Confirmar Nueva Fecha'}
+              </button>
             </div>
           </div>
         </div>

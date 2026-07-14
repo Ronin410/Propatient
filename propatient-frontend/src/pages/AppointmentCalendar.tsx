@@ -10,6 +10,7 @@ export const AppointmentCalendar: React.FC = () => {
   const navigate = useNavigate();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [viewMode, setViewMode] = useState<'month' | 'week'>('month');
+  const [statusFilter, setStatusFilter] = useState<string>('');
   const [loading, setLoading] = useState(false);
 
   const toISODate = (date: Date) => {
@@ -46,7 +47,8 @@ export const AppointmentCalendar: React.FC = () => {
     setLoading(true);
     try {
       const range = viewMode === 'month' ? getMonthRange(currentDate) : getWeekRange(currentDate);
-      const response = await api.get(`/appointments?start=${range.start}&end=${range.end}`);
+      const statusParam = statusFilter ? `&status=${statusFilter}` : '';
+      const response = await api.get(`/appointments?start=${range.start}&end=${range.end}${statusParam}`);
       if (response.data) {
         setAppointments(response.data);
       }
@@ -59,7 +61,7 @@ export const AppointmentCalendar: React.FC = () => {
 
   useEffect(() => {
     fetchAppointments();
-  }, [currentDate, viewMode]);
+  }, [currentDate, viewMode, statusFilter]);
 
   const handlePrev = () => {
     const next = new Date(currentDate);
@@ -222,15 +224,28 @@ export const AppointmentCalendar: React.FC = () => {
         {/* ACCIONES Y FILTROS */}
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
           <div className="view-mode-toggle">
-            <button 
+            <button
               className={`toggle-btn ${viewMode === 'month' ? 'active' : ''}`}
               onClick={() => setViewMode('month')}
             >Mes</button>
-            <button 
+            <button
               className={`toggle-btn ${viewMode === 'week' ? 'active' : ''}`}
               onClick={() => setViewMode('week')}
             >Semana</button>
           </div>
+
+          <select
+            className="status-filter-select"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            aria-label="Filtrar citas por estado"
+          >
+            <option value="">Todos los estados</option>
+            <option value="PENDING">Pendientes</option>
+            <option value="COMPLETED">Completadas</option>
+            <option value="CANCELLED">Canceladas</option>
+            <option value="NOSHOW">No asistió</option>
+          </select>
 
           <button className="btn-submit" onClick={() => navigate('/appointments/new')}>
             <span className="material-icons-outlined">add_task</span>
