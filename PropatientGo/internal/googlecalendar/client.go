@@ -44,8 +44,13 @@ type Config struct {
 }
 
 func LoadConfigFromEnv() Config {
+	// GOOGLE_CALENDAR_CLIENT_ID es un OAuth Client ID propio, separado del
+	// GOOGLE_CLIENT_ID que usa el login (ese es de tipo "público", sin
+	// secret, y no tiene el scope de Calendar). Si algún día se decide
+	// reutilizar el mismo client para ambas cosas, basta con apuntar esta
+	// variable al mismo valor que GOOGLE_CLIENT_ID.
 	return Config{
-		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+		ClientID:     os.Getenv("GOOGLE_CALENDAR_CLIENT_ID"),
 		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 		RedirectURL:  os.Getenv("GOOGLE_CALENDAR_REDIRECT_URI"),
 	}

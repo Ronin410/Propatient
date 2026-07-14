@@ -39,8 +39,11 @@ services:
       - key: PORT
         value: 8095
       # Integración opcional con Google Calendar (ver .env.example para la
-      # guía de configuración en Google Cloud Console). Sin estas dos, la
-      # app funciona igual y el botón de conectar Calendar queda deshabilitado.
+      # guía de configuración en Google Cloud Console). Client ID SEPARADO
+      # del GOOGLE_CLIENT_ID de arriba. Sin estas tres, la app funciona
+      # igual y el botón de conectar Calendar queda deshabilitado.
+      - key: GOOGLE_CALENDAR_CLIENT_ID
+        sync: false
       - key: GOOGLE_CLIENT_SECRET
         sync: false
       - key: GOOGLE_CALENDAR_REDIRECT_URI
