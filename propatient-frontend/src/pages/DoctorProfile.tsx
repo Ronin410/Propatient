@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import api, { BACKEND_ORIGIN } from '../api/axios';
 import './DoctorProfile.scss';
 import { Popup } from '../components/Popup';
+import { getErrorMessage } from '../utils/errorMessage';
 
 interface ProfileData {
   rfc: string;
@@ -193,14 +194,15 @@ export const DoctorProfile = () => {
         setLogoFile(null);
       }
       setMessage({ type: 'success', text: 'Perfil actualizado correctamente.' });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      console.error(err);
       setPopupConfig({
         isOpen: true,
         type: 'error',
         title: 'Error de Servidor',
         message: 'No se pudieron guardar los cambios. Inténtalo de nuevo.'
       });
-      setMessage({ type: 'error', text: err.response?.data?.error || 'Error al guardar los cambios.' });
+      setMessage({ type: 'error', text: getErrorMessage(err, 'Error al guardar los cambios.') });
     } finally {
       setIsSaving(false);
     }

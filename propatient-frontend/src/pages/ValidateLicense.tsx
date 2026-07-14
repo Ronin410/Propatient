@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { AuthLayout } from './AuthLayout'; // 🚀 Layout de pantalla dividida garantizado
+import { getErrorMessage } from '../utils/errorMessage';
 
 export const ValidateLicense = () => {
   const [licenseNumber, setLicenseNumber] = useState('');
@@ -74,8 +75,8 @@ export const ValidateLicense = () => {
       logout();
       navigate('/login');
 
-    } catch (err: any) {
-      setError(err.response?.data?.error || "Hubo un error al subir tus datos. Inténtalo de nuevo.");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Hubo un error al subir tus datos. Inténtalo de nuevo."));
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setIsLoading(false);

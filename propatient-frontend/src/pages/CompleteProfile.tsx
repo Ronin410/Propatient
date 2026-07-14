@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { AuthLayout } from './AuthLayout';
+import { getErrorMessage } from '../utils/errorMessage';
 
 export const CompleteProfile = () => {
   const [formData, setFormData] = useState({
@@ -60,8 +61,8 @@ export const CompleteProfile = () => {
     try {
       await api.post('/user/update-profile', formData);
       navigate('/registro/validar-cedula'); 
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Ocurrió un error al guardar tu perfil.');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Ocurrió un error al guardar tu perfil.'));
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setIsLoading(false);

@@ -6,6 +6,15 @@ export interface MedicalHistory {
   current_medication?: string;
 }
 
+export interface MedicalDocument {
+  id: number;
+  filename: string;
+  fileType: string;
+  file_path: string;
+  appointmentId: number;
+  prescription: boolean;
+}
+
 export interface Appointment {
   id: number;
   appointmentDateTime: string;
@@ -17,7 +26,7 @@ export interface Appointment {
   treatmentPlan?: string;
   patient?: Patient;
   Patient?: Patient; // GORM preload default
-  documents?: any[];
+  documents?: MedicalDocument[];
   registrationStatus?: string;
 }
 
@@ -33,6 +42,11 @@ export interface Patient {
   gender: string;
   address?: string;
   updated_at?: string;
+  medicalHistory?: MedicalHistory;
+  appointments?: Appointment[];
+  // El backend nunca envía estas variantes en mayúscula (json tags ya son
+  // camelCase); se mantienen solo porque ConsultationManager.tsx aún las
+  // referencia como fallback defensivo.
   MedicalHistory?: MedicalHistory;
   Appointments?: Appointment[];
 }

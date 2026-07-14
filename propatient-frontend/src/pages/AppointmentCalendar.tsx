@@ -120,7 +120,7 @@ export const AppointmentCalendar: React.FC = () => {
         
         const dayEvents = appointments.filter(app => {
           // Extraemos la fecha resolviendo de manera segura las diferentes nomenclaturas posibles
-          const appDateRaw = app.appointmentDateTime || app.appointment_date || app.appointmentDate || app.AppointmentDate;
+          const appDateRaw = app.appointmentDateTime;
           const appDate = appDateRaw ? appDateRaw.split('T')[0] : '';
           return appDate === thisDateStr;
         });
@@ -132,15 +132,15 @@ export const AppointmentCalendar: React.FC = () => {
             <span className="day-number">{day}</span>
             <div className="day-events">
               {dayEvents.map(ev => {
-                const evDateRaw = ev.appointmentDateTime || ev.appointment_date || ev.appointmentDate || ev.AppointmentDate;
-                const patientObj = ev.patient || ev.Patient;
-                const statusStr = (ev.status || ev.Status || '').toLowerCase();
+                const evDateRaw = ev.appointmentDateTime;
+                const patientObj = ev.patient;
+                const statusStr = (ev.status || '').toLowerCase();
 
                 return (
                   <div 
-                    key={ev.id || ev.ID} 
+                    key={ev.id}
                     className={`event-tag ${statusStr === 'pending' ? 'pending' : statusStr === 'completed' ? 'completed' : ''}`}
-                    onClick={() => navigate(`/pacientes/${ev.patient_id || ev.patientId || ev.PatientId}`)}
+                    onClick={() => navigate(`/pacientes/${ev.patientId}`)}
                     title={`${formatToLocalTime(evDateRaw)} - ${patientObj?.firstName || 'Paciente'}`}
                   >
                     {formatToLocalTime(evDateRaw)} {patientObj?.firstName || 'Paciente'}
@@ -163,7 +163,7 @@ export const AppointmentCalendar: React.FC = () => {
         const thisDateStr = toISODate(dayIter);
 
         const dayEvents = appointments.filter(app => {
-          const appDateRaw = app.appointmentDateTime || app.appointment_date || app.appointmentDate || app.AppointmentDate;
+          const appDateRaw = app.appointmentDateTime;
           const appDate = appDateRaw ? appDateRaw.split('T')[0] : '';
           return appDate === thisDateStr;
         });
@@ -175,15 +175,15 @@ export const AppointmentCalendar: React.FC = () => {
             <span className="day-number">{dayIter.getDate()} {dayIter.toLocaleDateString('es-MX', { month: 'short' })}</span>
             <div className="day-events">
               {dayEvents.map(ev => {
-                const evDateRaw = ev.appointmentDateTime || ev.appointment_date || ev.appointmentDate || ev.AppointmentDate;
-                const patientObj = ev.patient || ev.Patient;
-                const statusStr = (ev.status || ev.Status || '').toLowerCase();
+                const evDateRaw = ev.appointmentDateTime;
+                const patientObj = ev.patient;
+                const statusStr = (ev.status || '').toLowerCase();
 
                 return (
                   <div 
-                    key={ev.id || ev.ID} 
+                    key={ev.id}
                     className={`event-tag ${statusStr === 'pending' ? 'pending' : statusStr === 'completed' ? 'completed' : ''}`}
-                    onClick={() => navigate(`/pacientes/${ev.patient_id || ev.patientId || ev.PatientId}`)}
+                    onClick={() => navigate(`/pacientes/${ev.patientId}`)}
                     title={`${formatToLocalTime(evDateRaw)} - ${patientObj?.firstName || 'Paciente'}`}
                   >
                     {formatToLocalTime(evDateRaw)} - {patientObj?.firstName || 'Paciente'}

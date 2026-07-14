@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 import { useNavigate } from 'react-router-dom';
-import { AuthLayout } from './AuthLayout'; 
-import './Login.scss'; 
+import { AuthLayout } from './AuthLayout';
+import { getErrorMessage } from '../utils/errorMessage';
+import './Login.scss';
 
 export const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -51,7 +52,7 @@ export const Login = () => {
     return () => clearTimeout(timer);
   }, [isLoading]);
 
-  const handleGoogleResponse = async (response: any) => {
+  const handleGoogleResponse = async (response: { credential: string }) => {
     setIsLoading(true);
     setError(null);
 
@@ -80,8 +81,8 @@ export const Login = () => {
         navigate('/inicio');
       }
 
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Error al autenticar con Google. Intente de nuevo.');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Error al autenticar con Google. Intente de nuevo.'));
       setIsLoading(false);
     }
   };

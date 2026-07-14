@@ -9,7 +9,7 @@ import (
 
 // Doctor representa la entidad DOCTOR_USER (Tu Doctor.java)
 type Doctor struct {
-	gorm.Model
+	ID               uint           `gorm:"primaryKey" json:"id"`
 	CreatedAt        time.Time      `json:"created_at"`
 	UpdatedAt        time.Time      `json:"updated_at"`
 	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
@@ -50,7 +50,7 @@ type Patient struct {
 	Email          string          `gorm:"unique" json:"email"`
 	Phone          string          `json:"phone"`
 	MedicalHistory *MedicalHistory `json:"medicalHistory,omitempty"`
-	Appointments   []Appointment   `json:"-" gorm:"foreignKey:PatientID"`       // Ocultar para evitar ciclos infinitos en JSON
+	Appointments   []Appointment   `json:"appointments,omitempty" gorm:"foreignKey:PatientID"`
 	Doctors        []Doctor        `gorm:"many2many:doctor_patients;" json:"-"` // Ocultamos la relación en JSON para evitar ciclos
 }
 
@@ -112,7 +112,10 @@ type UpdateDocumentInput struct {
 }
 
 type DoctorTemplate struct {
-	gorm.Model
-	DoctorID uint           `json:"doctorId" gorm:"uniqueIndex;not null"`
-	Fields   datatypes.JSON `json:"fields" gorm:"type:jsonb;not null"` // Guarda el array de apartados configurados
+	ID        uint           `gorm:"primaryKey" json:"id"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+	DoctorID  uint           `json:"doctorId" gorm:"uniqueIndex;not null"`
+	Fields    datatypes.JSON `json:"fields" gorm:"type:jsonb;not null"` // Guarda el array de apartados configurados
 }

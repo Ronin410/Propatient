@@ -1,48 +1,37 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { formatToLocalDate, formatToLocalTime } from '../utils/dateFormatter';
 import type { Patient, MedicalHistory } from '../types';
+import { useFetchData } from '../hooks/useFetchData';
 import './PatientDetail.scss';
 
 export const PatientDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const [patient, setPatient] = useState<Patient | null>(null);
+  const navigate = useNavigate();
   const [isEditingHistory, setIsEditingHistory] = useState(false);
   const [editedHistory, setEditedHistory] = useState<MedicalHistory | null>(null);
-  const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
+
+  // Endpoint: /api/patients/:id/history (definido en Go con Preloads)
+  const { data: patient, loading, refetch } = useFetchData<Patient>(
+    () => api.get(`/patients/${id}/history`).then((res) => res.data),
+    [id]
+  );
+
+  useEffect(() => {
+    if (patient) setEditedHistory(patient.medicalHistory || null);
+  }, [patient]);
 
   const handleSaveHistory = async () => {
     try {
       // Endpoint: PUT /api/patients/:id/medical-history
       await api.put(`/patients/${id}/medical-history`, editedHistory);
       setIsEditingHistory(false);
-      fetchPatientData(); // Recargar datos
+      refetch();
     } catch (error) {
       alert("Error al guardar el historial");
     }
   };
-
-  const fetchPatientData = async () => {
-    setLoading(true);
-    try {
-      // Endpoint: /api/patients/:id/history (definido en Go con Preloads)
-      const response = await api.get(`/patients/${id}/history`);
-      if (response.data) {
-        setPatient(response.data);
-        setEditedHistory(response.data.MedicalHistory || {});
-      }
-    } catch (error) {
-      console.error("Error al cargar detalle del paciente:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (id) fetchPatientData();
-  }, [id]);
 
   if (loading) return <div className="loading-state">Cargando información del paciente...</div>;
   if (!patient) return <div className="error-state">Paciente no encontrado.</div>;
@@ -104,15 +93,15 @@ export const PatientDetail: React.FC = () => {
               <>
                 <div className="history-item">
                   <label>Alergias:</label>
-                  <p>{patient.MedicalHistory?.allergies || 'Ninguna registrada'}</p>
+                  <p>{patient.medicalHistory?.allergies || 'Ninguna registrada'}</p>
                 </div>
                 <div className="history-item">
                   <label>Patológicos:</label>
-                  <p>{patient.MedicalHistory?.pathological_history || 'Sin registros'}</p>
+                  <p>{patient.medicalHistory?.pathological_history || 'Sin registros'}</p>
                 </div>
                 <div className="history-item">
                   <label>No Patológicos:</label>
-                  <p>{patient.MedicalHistory?.non_pathological_history || 'Sin registros'}</p>
+                  <p>{patient.medicalHistory?.non_pathological_history || 'Sin registros'}</p>
                 </div>
               </>
             )}
@@ -124,8 +113,8 @@ export const PatientDetail: React.FC = () => {
           <section className="card timeline-card">
             <h3>Historial de Consultas</h3>
             <div className="timeline">
-              {patient.Appointments && patient.Appointments.length > 0 ? (
-                patient.Appointments.map((app) => (
+              {patient.appointments && patient.appointments.length > 0 ? (
+                patient.appointments.map((app) => (
                   <div key={app.id} className="timeline-item">
                     <div className="item-date">
                       <span>{app.appointmentDateTime ? formatToLocalDate(app.appointmentDateTime) : 'N/A'}</span>

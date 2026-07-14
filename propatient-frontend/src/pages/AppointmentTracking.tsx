@@ -35,11 +35,8 @@ export const AppointmentTracking: React.FC = () => {
       const cleanTodayAppointments = (res.data.todayAppointments || []).filter(
         (app: Appointment) =>
           app.status !== 'COMPLETED' &&
-          app.Status !== 'COMPLETED' &&
           app.status !== 'NOSHOW' &&
-          app.Status !== 'NOSHOW' &&
-          app.status !== 'CANCELLED' &&
-          app.Status !== 'CANCELLED'
+          app.status !== 'CANCELLED'
       );
 
       setSummary({
@@ -65,14 +62,14 @@ export const AppointmentTracking: React.FC = () => {
   const handleConfirmConsultation = () => {
     if (!selectedApp) return;
     setIsConfirmModalOpen(false);
-    navigate(`/consulta/${selectedApp.id || selectedApp.ID}`);
+    navigate(`/consulta/${selectedApp.id}`);
   };
 
   const [appToCancel, setAppToCancel] = useState<Appointment | null>(null);
 
   const handleCancelConfirmed = async () => {
     if (!appToCancel) return;
-    const id = appToCancel.id || appToCancel.ID;
+    const id = appToCancel.id;
     try {
       await api.put(`/appointments/${id}/cancel`);
       setAppToCancel(null);
@@ -91,8 +88,8 @@ export const AppointmentTracking: React.FC = () => {
     );
   }
 
-  const nextPatientName = summary?.nextPatient 
-    ? `${(summary.nextPatient.patient || summary.nextPatient.Patient)?.firstName || ''} ${(summary.nextPatient.patient || summary.nextPatient.Patient)?.lastName || ''}`
+  const nextPatientName = summary?.nextPatient
+    ? `${summary.nextPatient.patient?.firstName || ''} ${summary.nextPatient.patient?.lastName || ''}`
     : 'Sin pacientes en espera';
 
   return (
@@ -126,7 +123,7 @@ export const AppointmentTracking: React.FC = () => {
           <span className="label">Siguiente Paciente</span>
           <span className="value">{nextPatientName}</span>
           <span className="desc">
-            {summary?.nextPatient ? `Horario: ${formatToLocalTime(summary.nextPatient.appointmentDateTime || summary.nextPatient.appointmentDateTime)}` : 'Línea de espera vacía'}
+            {summary?.nextPatient ? `Horario: ${formatToLocalTime(summary.nextPatient.appointmentDateTime)}` : 'Línea de espera vacía'}
           </span>
         </div>
       </div>
@@ -147,20 +144,20 @@ export const AppointmentTracking: React.FC = () => {
               </thead>
               <tbody>
                 {summary.todayAppointments.map((app) => {
-                  const patient = app.patient || app.Patient;
-                  const pName = `${patient?.firstName || patient?.FirstName || 'Paciente'} ${patient?.lastName || patient?.LastName || ''}`;
-                  const appTime = formatToLocalTime(app.appointmentDateTime || app.appointmentDateTime);
-                  const isCompleted = app.status === 'completed' || app.Status === 'completed';
+                  const patient = app.patient;
+                  const pName = `${patient?.firstName || 'Paciente'} ${patient?.lastName || ''}`;
+                  const appTime = formatToLocalTime(app.appointmentDateTime);
+                  const isCompleted = app.status === 'COMPLETED';
 
                   return (
-                    <tr key={app.id || app.ID}>
+                    <tr key={app.id}>
                       <td className="time-cell">
                         <span className="material-icons-outlined" style={{ fontSize: '18px' }}>schedule</span>
                         {appTime}
                       </td>
                       <td className="patient-name">{pName}</td>
-                      <td className="reason-cell" title={app.reason || app.Reason}>
-                        {app.reason || app.Reason || 'Consulta General'}
+                      <td className="reason-cell" title={app.reason}>
+                        {app.reason || 'Consulta General'}
                       </td>
                       <td className="action-cell">
                         {isCompleted ? (
@@ -200,7 +197,7 @@ export const AppointmentTracking: React.FC = () => {
             <p>
               Estás por iniciar la consulta médica y registrar la evolución para: <br />
               <strong>
-                {(selectedApp.patient || selectedApp.Patient)?.firstName || ''} {(selectedApp.patient || selectedApp.Patient)?.lastName || ''}
+                {selectedApp.patient?.firstName || ''} {selectedApp.patient?.lastName || ''}
               </strong>
             </p>
             <div className="modal-footer">
@@ -215,7 +212,7 @@ export const AppointmentTracking: React.FC = () => {
         isOpen={!!appToCancel}
         variant="danger"
         title="Cancelar cita"
-        message={`¿Seguro que quieres cancelar la cita de ${(appToCancel?.patient || appToCancel?.Patient)?.firstName || 'este paciente'}? Esta acción no se puede deshacer.`}
+        message={`¿Seguro que quieres cancelar la cita de ${appToCancel?.patient?.firstName || 'este paciente'}? Esta acción no se puede deshacer.`}
         confirmText="Sí, cancelar"
         cancelText="Regresar"
         onConfirm={handleCancelConfirmed}

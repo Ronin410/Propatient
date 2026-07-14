@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api/axios';
 import type { Patient } from '../types';
 import { Popup } from '../components/Popup'; // Asegura la ruta correcta de tu componente genérico
+import { getErrorMessage } from '../utils/errorMessage';
 import './AppointmentForm.scss';
 
 export const AppointmentForm: React.FC = () => {
@@ -117,13 +118,13 @@ export const AppointmentForm: React.FC = () => {
         message: 'La cita médica se ha registrado exitosamente en la agenda del consultorio.'
       });
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       setPopupConfig({
         isOpen: true,
         type: 'error',
         title: 'Error de Registro',
-        message: err.response?.data?.error || 'No se pudo agendar la cita médica. Verifica los datos.'
+        message: getErrorMessage(err, 'No se pudo agendar la cita médica. Verifica los datos.')
       });
     } finally {
       setLoading(false);
@@ -205,7 +206,7 @@ export const AppointmentForm: React.FC = () => {
                   {searchResults.length > 0 && (
                     <ul className="search-results">
                       {searchResults.map((p) => (
-                        <li key={p.ID} onClick={() => { setSelectedPatient(p); setSearchResults([]); setSearchTerm(''); }}>
+                        <li key={p.id} onClick={() => { setSelectedPatient(p); setSearchResults([]); setSearchTerm(''); }}>
                           <span className="material-icons-outlined">assignment_ind</span>
                           <div className="result-info">
                             <span className="name">{p.firstName} {p.lastName}</span>
