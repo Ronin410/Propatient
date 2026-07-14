@@ -279,10 +279,14 @@
       }
 
       .file-actions {
-        display: flex; gap: 4px;
+        display: flex; gap: 4px; flex-shrink: 0;
         .btn-icon {
           background: none; border: none; color: #002d42; cursor: pointer; display: flex; align-items: center; padding: 6px; border-radius: 4px;
           &:hover { background-color: rgba(0, 45, 66, 0.05); }
+          &.btn-icon-active {
+            background-color: #002d42; color: #ffffff;
+            &:hover { background-color: #001f30; }
+          }
           &.btn-danger {
             color: #d32f2f;
             &:hover { background-color: #fde8e8; }
@@ -469,62 +473,57 @@
   }
 }
 
-.consultation-content-fullwidth {
+/* Estas reglas eran hijas de ".consultation-content-fullwidth", una clase
+   que nunca existe en el HTML real de ConsultationManager.tsx: nunca se
+   aplicaron. Se promueven a reglas de nivel superior para que coincidan
+   con el DOM real (".consultation-workspace-layout" cuelga directo de
+   ".consultation-manager-container"). */
+
+.consultation-main-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
   width: 100%;
-  display: block; // Rompe el layout dividido y permite flujo vertical completo
+}
 
-  .consultation-main-panel {
+/* Ajustes en los bloques internos para maximizar legibilidad */
+.form-card {
+  background: #ffffff;
+  border: 1px solid #eef0eb;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+
+  h3 {
     display: flex;
-    flex-direction: column;
-    gap: 24px;
-    width: 100%;
-  }
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 700;
+    color: #002d42;
+    margin: 0 0 20px 0;
+    border-bottom: 1px dashed #eef0eb;
+    padding-bottom: 10px;
 
-  /* Ajustes en los bloques internos para maximizar legibilidad */
-  .form-card {
-    background: #ffffff;
-    border: 1px solid #eef0eb;
-    border-radius: 12px;
-    padding: 24px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
-
-    h3 {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 16px;
-      font-weight: 700;
+    .material-icons-outlined {
       color: #002d42;
-      margin: 0 0 20px 0;
-      border-bottom: 1px dashed #eef0eb;
-      padding-bottom: 10px;
-
-      .material-icons-outlined {
-        color: #002d42;
-        font-size: 20px;
-      }
+      font-size: 20px;
     }
   }
+}
 
-  /* Malla de inputs de datos generales en ancho completo */
-  .form-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 20px;
-  }
+/* Malla de inputs de datos generales en ancho completo */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
 
-  /* Malla vertical limpia para notas de evolución */
-  .form-grid-vertical {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
-
-  .sidebar-resizer {
-  &:hover, &:active {
-    background: var(--color-primary, #005073);
-    box-shadow: 0 0 8px rgba(0, 80, 115, 0.5);
-  }
+/* Malla vertical limpia para notas de evolución */
+.form-grid-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .file-item.active-file {
@@ -541,6 +540,11 @@
   min-height: calc(100vh - 160px);
   position: relative;
   overflow: hidden;
+
+  @media (max-width: 992px) {
+    flex-direction: column;
+    min-height: auto;
+  }
 }
 
 .consultation-form-panel {
@@ -549,6 +553,10 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
+
+  @media (max-width: 992px) {
+    min-width: 0;
+  }
 }
 
 .consultation-sidebar-preview {
@@ -560,6 +568,10 @@
   flex-direction: column;
   box-shadow: -4px 0 15px rgba(0, 0, 0, 0.05);
   overflow: hidden;
+
+  @media (max-width: 992px) {
+    width: 100% !important;
+  }
 
   /* Barra interactiva para cambiar tamaño */
   .sidebar-resizer {
@@ -638,17 +650,16 @@
       border: none;
       border-radius: 6px;
     }
-    
+
     .unsupported-file-fallback {
       text-align: center;
       padding: 32px;
       color: #718096;
-      
+
       .material-icons-outlined {
         font-size: 48px;
         margin-bottom: 12px;
       }
     }
   }
-}
 }

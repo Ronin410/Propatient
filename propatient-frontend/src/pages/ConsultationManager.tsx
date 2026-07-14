@@ -352,7 +352,14 @@ export const ConsultationManager: React.FC = () => {
 
             <div className="upload-options">
               <div className="upload-card" onClick={() => fileInputRef.current?.click()}>
-                <input type="file" ref={fileInputRef} onChange={handleFileUpload} multiple style={{display:'none'}} />
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileUpload}
+                  multiple
+                  accept="image/*,application/pdf,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  style={{display:'none'}}
+                />
                 <span className="material-icons-outlined">computer</span>
                 <p>Carga Local</p>
               </div>
@@ -373,18 +380,21 @@ export const ConsultationManager: React.FC = () => {
               <div className="file-list">
                 {uploadedFiles.map((file, idx) => (
                   <div key={idx} className={`file-item ${selectedSidebarFile?.url === file.url ? 'active-file' : ''}`}>
-                    <div
-                      className="file-info"
-                      onClick={() => setSelectedSidebarFile(file)}
-                      style={{ cursor: 'pointer', flex: 1 }}
-                      title="Haz clic para ver de forma lateral"
-                    >
+                    <div className="file-info" style={{ flex: 1 }}>
                       <span className="material-icons-outlined">
                         {file.type?.startsWith('image/') ? 'image' : 'picture_as_pdf'}
                       </span>
                       <span className="file-name">{file.name}</span>
                     </div>
                     <div className="file-actions">
+                      <button
+                        type="button"
+                        className={`btn-icon ${selectedSidebarFile?.url === file.url ? 'btn-icon-active' : ''}`}
+                        onClick={() => setSelectedSidebarFile(file)}
+                        title="Ver al lado, sin salir de la cita"
+                      >
+                        <span className="material-icons-outlined">visibility</span>
+                      </button>
                       <a
                         href={file.url}
                         target="_blank"
@@ -398,6 +408,7 @@ export const ConsultationManager: React.FC = () => {
                         type="button"
                         className="btn-icon btn-danger"
                         onClick={() => removeFile(file)}
+                        title="Eliminar"
                       >
                         <span className="material-icons-outlined">delete</span>
                       </button>
