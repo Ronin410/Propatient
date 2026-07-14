@@ -98,7 +98,6 @@ export async function buildRecipeDocDefinition({
     .map((label) => [
       { text: label.toUpperCase(), style: 'sectionHeader' },
       { text: dynamicNotes[label], style: 'sectionBody' },
-      { text: '\n' },
     ])
     .flat();
 
@@ -106,27 +105,33 @@ export async function buildRecipeDocDefinition({
   const age = calculateAge(patientInfo?.birthDate);
   const doctorFullName = doctorInfo?.fullName?.trim();
 
+  const doctorSubLines = [
+    { text: `${doctorInfo?.medicalSpecialty || 'Médico Cirujano y Partero'}`, style: 'doctorSpecialty' },
+    { text: `CÉDULA PROFESIONAL: ${doctorInfo?.licenseNumber || 'N/A'}`, style: 'doctorSub' },
+    ...(doctorInfo?.university?.trim() ? [{ text: doctorInfo.university, style: 'doctorSub' }] : []),
+  ];
+
   return {
     pageSize: 'LETTER',
-    pageMargins: [40, 40, 40, 80],
+    pageMargins: [40, 32, 40, 70],
     defaultStyle: { font: 'Roboto' },
     content: [
       {
         columns: [
           hasValidBase64
-            ? { image: doctorLogoBase64, width: 90, alignment: 'left' }
-            : { text: 'MÉDICO GENERAL', fontSize: 14, bold: true, color: '#1a365d', margin: [0, 15, 0, 0] },
+            ? { image: doctorLogoBase64, fit: [60, 60], alignment: 'left' }
+            : { text: 'MÉDICO GENERAL', fontSize: 13, bold: true, color: '#1a365d' },
           [
             { text: doctorFullName ? `DR. ${doctorFullName}`.toUpperCase() : 'MÉDICO GENERAL', style: 'doctorName' },
-            { text: `${doctorInfo?.medicalSpecialty || 'Médico Cirujano y Partero'}`, style: 'doctorSpecialty' },
-            { text: `CÉDULA PROFESIONAL: ${doctorInfo?.licenseNumber || 'N/A'}`, style: 'doctorSub' },
-            { text: `${doctorInfo?.university || ''}`, style: 'doctorSub' },
+            ...doctorSubLines,
           ],
         ],
-        columnGap: 20,
+        columnGap: 16,
       },
-      { canvas: [{ type: 'line', x1: 0, y1: 15, x2: 532, y2: 15, lineWidth: 2, lineColor: '#1a365d' }] },
-      { text: '\n' },
+      {
+        canvas: [{ type: 'line', x1: 0, y1: 0, x2: 532, y2: 0, lineWidth: 1.5, lineColor: '#1a365d' }],
+        margin: [0, 10, 0, 12],
+      },
       {
         style: 'patientTable',
         table: {
@@ -149,16 +154,16 @@ export async function buildRecipeDocDefinition({
           vLineWidth: () => 0.5,
           hLineColor: () => '#cbd5e0',
           vLineColor: () => '#cbd5e0',
-          paddingTop: () => 6,
-          paddingBottom: () => 6,
-          paddingLeft: () => 8,
-          paddingRight: () => 8,
+          paddingTop: () => 7,
+          paddingBottom: () => 7,
+          paddingLeft: () => 10,
+          paddingRight: () => 10,
+          fillColor: (rowIndex: number) => (rowIndex === 0 ? '#f0f5fa' : null),
         },
       },
-      { text: '\n\n' },
       ...recipeContent,
       ...(doctorInfo?.recipeLegend?.trim()
-        ? [{ text: '\n' }, { text: doctorInfo.recipeLegend, style: 'legend' }]
+        ? [{ text: doctorInfo.recipeLegend, style: 'legend' }]
         : []),
     ],
     footer: () => {
@@ -173,15 +178,15 @@ export async function buildRecipeDocDefinition({
       };
     },
     styles: {
-      doctorName: { fontSize: 16, bold: true, color: '#1a365d', alignment: 'right' },
+      doctorName: { fontSize: 15, bold: true, color: '#1a365d', alignment: 'right', margin: [0, 0, 0, 3] },
       doctorSpecialty: { fontSize: 10, bold: true, color: '#4a5568', alignment: 'right' },
       doctorSub: { fontSize: 9, color: '#718096', alignment: 'right' },
-      patientTable: { margin: [0, 5, 0, 15] },
+      patientTable: { margin: [0, 0, 0, 10] },
       tableCell: { fontSize: 10, color: '#2d3748' },
       tableCellBold: { fontSize: 10, bold: true, color: '#1a365d' },
-      sectionHeader: { fontSize: 11, bold: true, color: '#1a365d', margin: [0, 10, 0, 4], decoration: 'underline' },
-      sectionBody: { fontSize: 11, color: '#2d3748', marginLeft: 10 },
-      legend: { fontSize: 8, italics: true, color: '#718096', margin: [0, 10, 0, 0] },
+      sectionHeader: { fontSize: 11, bold: true, color: '#1a365d', margin: [0, 8, 0, 3], decoration: 'underline' },
+      sectionBody: { fontSize: 11, color: '#2d3748', marginLeft: 10, marginBottom: 4 },
+      legend: { fontSize: 8, italics: true, color: '#718096', margin: [0, 8, 0, 0] },
     },
   };
 }
