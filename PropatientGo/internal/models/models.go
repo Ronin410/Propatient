@@ -34,6 +34,12 @@ type Doctor struct {
 	AvatarUrl        string         `json:"avatarUrl"`
 	LogoUrl          string         `json:"logoUrl"`
 
+	// Integración con Google Calendar (OAuth de servidor, no el login).
+	// El refresh token nunca se envía al frontend; solo se expone si está
+	// presente o no vía el campo calculado "googleCalendarConnected" en el
+	// handler de perfil.
+	GoogleCalendarRefreshToken string `json:"-"`
+
 	Patients []Patient `gorm:"many2many:doctor_patients;" json:"-"`
 }
 
@@ -98,6 +104,11 @@ type Appointment struct {
 	// la consulta. Puntero para poder distinguir "sin seguimiento" (nil) de
 	// una fecha real, y para poder limpiarla mandando JSON null.
 	FollowUpDate *time.Time `gorm:"index" json:"followUpDate"`
+
+	// ID del evento espejo en Google Calendar (si el doctor tiene la
+	// integración conectada). Uso interno para poder actualizarlo/borrarlo
+	// al reprogramar o cancelar la cita; nunca se expone al frontend.
+	GoogleEventID string `json:"-"`
 }
 
 type MedicalDocument struct {

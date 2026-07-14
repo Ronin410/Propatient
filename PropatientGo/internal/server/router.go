@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"propatient-api/internal/auth"
+	"propatient-api/internal/googlecalendar"
 	"propatient-api/internal/handlers"
 
 	"github.com/gin-contrib/cors"
@@ -18,6 +19,19 @@ import (
 // para poder levantar la app real (con su middleware real) en los tests de
 // integración, sin duplicar el registro de rutas.
 func NewRouter(db *gorm.DB) *gin.Engine {
+	// Cliente de Google Calendar real, construido desde variables de
+	// entorno. Solo se usa de verdad si el doctor conectó su cuenta
+	// (refresh token guardado) y el servidor tiene GOOGLE_CLIENT_SECRET
+	// configurado; sin eso, todas las llamadas relacionadas quedan en
+	// no-op — no requiere credenciales para que el resto de la app funcione.
+	calendarConfig := googlecalendar.LoadConfigFromEnv()
+	return NewRouterWithCalendar(db, calendarConfig, googlecalendar.NewClient(calendarConfig))
+}
+
+// NewRouterWithCalendar es la variante inyectable de NewRouter: permite a
+// los tests de integración pasar un googlecalendar.Client simulado, sin
+// hacer llamadas reales a la API de Google.
+func NewRouterWithCalendar(db *gorm.DB, calendarConfig googlecalendar.Config, calendarClient googlecalendar.Client) *gin.Engine {
 	r := gin.Default()
 	r.MaxMultipartMemory = 8 << 20 // 8 MiB por request de carga de archivos
 
@@ -87,6 +101,11 @@ func NewRouter(db *gorm.DB) *gin.Engine {
 			authRoutes.POST("/login", auth.LoginHandler(db))
 			authRoutes.POST("/register", auth.RegisterDoctor(db))
 			authRoutes.POST("/google-login", auth.GoogleLoginHandler(db))
+			// Callback de Google Calendar: lo llama el navegador tras el
+			// consentimiento (redirect de Google), sin header Authorization,
+			// así que va fuera del grupo protegido. La identidad del doctor
+			// viaja firmada en el parámetro "state".
+			authRoutes.GET("/google-calendar/callback", handlers.GoogleCalendarCallback(db, calendarConfig))
 		}
 
 		// --- RUTAS PROTEGIDAS ---
@@ -128,10 +147,10 @@ func NewRouter(db *gorm.DB) *gin.Engine {
 				// Importante: Usar "" en lugar de "/" para evitar redirecciones 301/307
 				// que el navegador a veces bloquea en CORS.
 				appointments.GET("", handlers.GetAppointments(db))
-				appointments.POST("", handlers.CreateAppointment(db))
+				appointments.POST("", handlers.CreateAppointment(db, calendarClient))
 				appointments.GET("/:id", handlers.GetAppointmentDetail(db))
-				appointments.PUT("/:id", handlers.UpdateAppointment(db))
-				appointments.PUT("/:id/cancel", handlers.CancelAppointment(db))
+				appointments.PUT("/:id", handlers.UpdateAppointment(db, calendarClient))
+				appointments.PUT("/:id/cancel", handlers.CancelAppointment(db, calendarClient))
 				appointments.POST("/:id/upload-document", handlers.UploadDocuments(db))
 				appointments.PUT("/:id/documents/:docId", handlers.UpdateAppointmentDocument(db))
 				appointments.POST("/:id/save-recipe-pdf", handlers.SaveRecipePDF(db))
@@ -143,6 +162,8 @@ func NewRouter(db *gorm.DB) *gin.Engine {
 				doctorRoutes.PUT("/me", handlers.UpdateCurrentDoctor(db))
 				doctorRoutes.GET("/template", handlers.GetDoctorTemplate(db))
 				doctorRoutes.POST("/template", handlers.SaveDoctorTemplate(db))
+				doctorRoutes.GET("/google-calendar/connect", handlers.ConnectGoogleCalendar(calendarConfig))
+				doctorRoutes.POST("/google-calendar/disconnect", handlers.DisconnectGoogleCalendar(db))
 			}
 
 			utils := protected.Group("/utils")

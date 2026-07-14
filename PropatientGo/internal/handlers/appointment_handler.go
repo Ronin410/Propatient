@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"propatient-api/internal/googlecalendar"
 	"propatient-api/internal/models"
 	"strconv"
 	"time"
@@ -15,6 +17,71 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
+// followUpEventDuration es la duración por defecto que se le asigna a una
+// cita al reflejarla en Google Calendar (el modelo de Appointment no guarda
+// una duración explícita, solo la hora de inicio).
+const googleCalendarEventDuration = 30 * time.Minute
+
+// syncAppointmentToGoogleCalendar crea o actualiza (según si ya existe
+// GoogleEventID) el evento espejo de una cita en el calendario del doctor.
+// Es "best effort": si el doctor no tiene Google Calendar conectado, o si la
+// llamada a Google falla, no se propaga el error — la cita en PROPatient ya
+// se guardó y no debe fallar por un problema ajeno a la app.
+func syncAppointmentToGoogleCalendar(ctx context.Context, db *gorm.DB, calClient googlecalendar.Client, appointment *models.Appointment, patient models.Patient) {
+	if calClient == nil {
+		return
+	}
+
+	var doctor models.Doctor
+	if err := db.Select("google_calendar_refresh_token").First(&doctor, appointment.DoctorID).Error; err != nil {
+		return
+	}
+	if doctor.GoogleCalendarRefreshToken == "" {
+		return
+	}
+
+	ev := googlecalendar.EventInput{
+		Summary:     fmt.Sprintf("Cita: %s %s", patient.FirstName, patient.LastName),
+		Description: appointment.Reason,
+		Start:       appointment.AppointmentDateTime,
+		End:         appointment.AppointmentDateTime.Add(googleCalendarEventDuration),
+	}
+
+	if appointment.GoogleEventID == "" {
+		eventID, err := calClient.CreateEvent(ctx, doctor.GoogleCalendarRefreshToken, ev)
+		if err != nil {
+			log.Printf("⚠️ No se pudo crear el evento de Google Calendar para la cita %d: %v", appointment.ID, err)
+			return
+		}
+		db.Model(&models.Appointment{}).Where("id = ?", appointment.ID).Update("google_event_id", eventID)
+		return
+	}
+
+	if err := calClient.UpdateEvent(ctx, doctor.GoogleCalendarRefreshToken, appointment.GoogleEventID, ev); err != nil {
+		log.Printf("⚠️ No se pudo actualizar el evento de Google Calendar de la cita %d: %v", appointment.ID, err)
+	}
+}
+
+// deleteAppointmentFromGoogleCalendar borra el evento espejo al cancelar una
+// cita. También "best effort", igual que la sincronización de arriba.
+func deleteAppointmentFromGoogleCalendar(ctx context.Context, db *gorm.DB, calClient googlecalendar.Client, appointment models.Appointment) {
+	if calClient == nil || appointment.GoogleEventID == "" {
+		return
+	}
+
+	var doctor models.Doctor
+	if err := db.Select("google_calendar_refresh_token").First(&doctor, appointment.DoctorID).Error; err != nil {
+		return
+	}
+	if doctor.GoogleCalendarRefreshToken == "" {
+		return
+	}
+
+	if err := calClient.DeleteEvent(ctx, doctor.GoogleCalendarRefreshToken, appointment.GoogleEventID); err != nil {
+		log.Printf("⚠️ No se pudo borrar el evento de Google Calendar de la cita %d: %v", appointment.ID, err)
+	}
+}
 
 // CreateAppointmentRequest define la estructura para las solicitudes de creación de citas.
 // Soporta la vinculación a un paciente existente (a través de PatientID) o la creación de uno nuevo.
@@ -35,7 +102,7 @@ type CreateAppointmentRequest struct {
 	PatientEmail     string `json:"patientEmail"`
 }
 
-func CreateAppointment(db *gorm.DB) gin.HandlerFunc {
+func CreateAppointment(db *gorm.DB, calClient googlecalendar.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req CreateAppointmentRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -115,6 +182,8 @@ func CreateAppointment(db *gorm.DB) gin.HandlerFunc {
 
 		// Cargamos los datos del paciente para que la respuesta JSON sea completa
 		db.Preload("Patient").First(&appointment, appointment.ID)
+
+		syncAppointmentToGoogleCalendar(c.Request.Context(), db, calClient, &appointment, patient)
 
 		c.JSON(http.StatusCreated, appointment)
 	}
@@ -270,10 +339,16 @@ func GetAppointmentDetail(db *gorm.DB) gin.HandlerFunc {
 
 // CancelAppointment marca la cita como CANCELLED en vez de borrarla, para
 // conservar el historial clínico (misma cita, distinto estado).
-func CancelAppointment(db *gorm.DB) gin.HandlerFunc {
+func CancelAppointment(db *gorm.DB, calClient googlecalendar.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		doctorID := c.MustGet("doctorID").(uint)
+
+		var appointment models.Appointment
+		if err := db.Where("id = ? AND doctor_id = ?", id, doctorID).First(&appointment).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Cita no encontrada"})
+			return
+		}
 
 		result := db.Model(&models.Appointment{}).
 			Where("id = ? AND doctor_id = ?", id, doctorID).
@@ -288,11 +363,13 @@ func CancelAppointment(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		deleteAppointmentFromGoogleCalendar(c.Request.Context(), db, calClient, appointment)
+
 		c.JSON(http.StatusOK, gin.H{"message": "Cita cancelada", "status": "CANCELLED"})
 	}
 }
 
-func UpdateAppointment(db *gorm.DB) gin.HandlerFunc {
+func UpdateAppointment(db *gorm.DB, calClient googlecalendar.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		doctorID := c.MustGet("doctorID").(uint)
@@ -312,6 +389,7 @@ func UpdateAppointment(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Cita no encontrada"})
 			return
 		}
+		previousDateTime := appointment.AppointmentDateTime
 
 		// Leemos los cambios del Body (JSON)
 		if err := c.ShouldBindJSON(&appointment); err != nil {
@@ -324,6 +402,16 @@ func UpdateAppointment(db *gorm.DB) gin.HandlerFunc {
 			log.Printf("❌ Error de GORM al guardar: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo actualizar"})
 			return
+		}
+
+		// Solo tocamos Google Calendar cuando de verdad se reprogramó la
+		// cita (cambió la fecha/hora) — no en cada PUT parcial (ej. marcar
+		// seguimiento, guardar notas de la consulta).
+		if !appointment.AppointmentDateTime.Equal(previousDateTime) {
+			var patient models.Patient
+			if err := db.First(&patient, appointment.PatientID).Error; err == nil {
+				syncAppointmentToGoogleCalendar(c.Request.Context(), db, calClient, &appointment, patient)
+			}
 		}
 
 		c.JSON(http.StatusOK, appointment)

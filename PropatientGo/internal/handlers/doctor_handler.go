@@ -13,6 +13,13 @@ import (
 )
 
 // GetCurrentDoctor devuelve el perfil del doctor autenticado
+// doctorWithCalendarStatus agrega un campo calculado (nunca el token en sí)
+// para que el frontend sepa si mostrar "Conectar" o "Desconectar".
+type doctorWithCalendarStatus struct {
+	models.Doctor
+	GoogleCalendarConnected bool `json:"googleCalendarConnected"`
+}
+
 func GetCurrentDoctor(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		doctorID := c.MustGet("doctorID").(uint)
@@ -23,9 +30,12 @@ func GetCurrentDoctor(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		// GORM ya tiene json:"-" en PasswordHash en tu modelo,
-		// por lo que no se enviará la contraseña.
-		c.JSON(http.StatusOK, doctor)
+		// GORM ya tiene json:"-" en PasswordHash y en el refresh token de
+		// Google Calendar en el modelo, por lo que nunca se envían.
+		c.JSON(http.StatusOK, doctorWithCalendarStatus{
+			Doctor:                  doctor,
+			GoogleCalendarConnected: doctor.GoogleCalendarRefreshToken != "",
+		})
 	}
 }
 

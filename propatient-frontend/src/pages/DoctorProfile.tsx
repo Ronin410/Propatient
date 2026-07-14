@@ -18,6 +18,7 @@ interface ProfileData {
   resume: string;
   avatarUrl?: string;
   logoUrl?: string;
+  googleCalendarConnected?: boolean;
 }
 
 const BACKEND_URL = BACKEND_ORIGIN;
@@ -58,6 +59,8 @@ export const DoctorProfile = () => {
 
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
+
+  const [connectingCalendar, setConnectingCalendar] = useState(false);
 
   const calculateCompletion = () => {
     const fieldsToValidate = [
@@ -111,6 +114,73 @@ export const DoctorProfile = () => {
 
     fetchProfileData();
   }, []);
+
+  // El callback de Google Calendar (backend) redirige aquí con
+  // ?calendar=connected o ?calendar=error tras el consentimiento.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const calendarResult = params.get('calendar');
+    if (!calendarResult) return;
+
+    if (calendarResult === 'connected') {
+      setPopupConfig({
+        isOpen: true,
+        type: 'success',
+        title: 'Google Calendar Conectado',
+        message: 'A partir de ahora, tus citas nuevas se agregarán automáticamente a tu Google Calendar.'
+      });
+      setProfile(prev => ({ ...prev, googleCalendarConnected: true }));
+    } else {
+      setPopupConfig({
+        isOpen: true,
+        type: 'error',
+        title: 'No se pudo conectar Google Calendar',
+        message: 'Intenta de nuevo desde el botón "Conectar con Google Calendar".'
+      });
+    }
+
+    // Limpia el parámetro de la URL para que no se repita el aviso al recargar.
+    window.history.replaceState({}, '', window.location.pathname);
+  }, []);
+
+  const handleConnectCalendar = async () => {
+    setConnectingCalendar(true);
+    try {
+      const res = await api.get('/doctor/google-calendar/connect');
+      window.location.href = res.data.url;
+    } catch (err: unknown) {
+      setPopupConfig({
+        isOpen: true,
+        type: 'error',
+        title: 'Google Calendar no disponible',
+        message: getErrorMessage(err, 'La integración con Google Calendar no está disponible en este momento.')
+      });
+      setConnectingCalendar(false);
+    }
+  };
+
+  const handleDisconnectCalendar = async () => {
+    setConnectingCalendar(true);
+    try {
+      await api.post('/doctor/google-calendar/disconnect');
+      setProfile(prev => ({ ...prev, googleCalendarConnected: false }));
+      setPopupConfig({
+        isOpen: true,
+        type: 'success',
+        title: 'Google Calendar Desconectado',
+        message: 'Tus citas ya no se sincronizarán con Google Calendar.'
+      });
+    } catch (err: unknown) {
+      setPopupConfig({
+        isOpen: true,
+        type: 'error',
+        title: 'Error',
+        message: getErrorMessage(err, 'No se pudo desconectar Google Calendar.')
+      });
+    } finally {
+      setConnectingCalendar(false);
+    }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -383,6 +453,35 @@ export const DoctorProfile = () => {
               <label>Leyenda Personalizada para Recetas (COFEPRIS)</label>
               <textarea name="recipeLegend" value={profile.recipeLegend} onChange={handleInputChange} rows={2} />
             </div>
+          </div>
+        </div>
+
+        {/* INTEGRACIÓN CON GOOGLE CALENDAR */}
+        <div className="profile-form-section">
+          <div className="section-title">
+            <h3>Integración con Google Calendar</h3>
+            <p>Cuando está conectado, cada cita nueva se agrega a tu Google Calendar; reprogramar o cancelar en PROPatient actualiza el mismo evento.</p>
+          </div>
+          <div className="calendar-integration-box">
+            <div className="calendar-status">
+              <span className={`material-icons-outlined ${profile.googleCalendarConnected ? 'connected' : ''}`}>
+                {profile.googleCalendarConnected ? 'event_available' : 'event_busy'}
+              </span>
+              <span>
+                {profile.googleCalendarConnected
+                  ? 'Tu Google Calendar está conectado.'
+                  : 'Aún no has conectado tu Google Calendar.'}
+              </span>
+            </div>
+            {profile.googleCalendarConnected ? (
+              <button type="button" className="btn-outline-danger" onClick={handleDisconnectCalendar} disabled={connectingCalendar}>
+                {connectingCalendar ? 'Desconectando...' : 'Desconectar'}
+              </button>
+            ) : (
+              <button type="button" className="btn-outline-sm" onClick={handleConnectCalendar} disabled={connectingCalendar}>
+                {connectingCalendar ? 'Redirigiendo...' : 'Conectar con Google Calendar'}
+              </button>
+            )}
           </div>
         </div>
 

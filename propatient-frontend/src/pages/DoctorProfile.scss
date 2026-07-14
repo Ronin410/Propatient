@@ -224,6 +224,61 @@
     }
   }
 
+  /* Integración con Google Calendar */
+  .calendar-integration-box {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    background-color: #f8f9fa;
+    border: 1px solid #eef0eb;
+    border-radius: 8px;
+    padding: 16px 20px;
+
+    .calendar-status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      color: #002d42;
+      font-weight: 500;
+
+      .material-icons-outlined {
+        font-size: 22px;
+        color: #6e7582;
+
+        &.connected { color: #137333; }
+      }
+    }
+
+    .btn-outline-sm, .btn-outline-danger {
+      padding: 9px 18px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+
+      &:disabled { opacity: 0.6; cursor: not-allowed; }
+    }
+
+    .btn-outline-sm {
+      background-color: #ffffff;
+      border: 1px solid #005073;
+      color: #005073;
+      &:hover:not(:disabled) { background-color: #e6f0f4; }
+    }
+
+    .btn-outline-danger {
+      background-color: #ffffff;
+      border: 1px solid #d32f2f;
+      color: #d32f2f;
+      &:hover:not(:disabled) { background-color: #fde8e8; }
+    }
+  }
+
   /* Botones de acción principal */
   .actions-container {
     display: flex;

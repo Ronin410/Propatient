@@ -38,6 +38,13 @@ services:
         sync: false # pegar aquí la URL pública del servicio propatient-frontend
       - key: PORT
         value: 8095
+      # Integración opcional con Google Calendar (ver .env.example para la
+      # guía de configuración en Google Cloud Console). Sin estas dos, la
+      # app funciona igual y el botón de conectar Calendar queda deshabilitado.
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_CALENDAR_REDIRECT_URI
+        sync: false # ej. https://propatient-api-xxxx.onrender.com/api/auth/google-calendar/callback
 
   # --- FRONTEND (React / Vite) ---
   - type: web
