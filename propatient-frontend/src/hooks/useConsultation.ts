@@ -92,6 +92,9 @@ export function useConsultation(appointmentId: string | undefined) {
   const [generatingRecipe, setGeneratingRecipe] = useState(false);
   const [recipeDocDefinition, setRecipeDocDefinition] = useState<any>(null);
 
+  // Días para la cita de control sugerida al finalizar (vacío = sin seguimiento).
+  const [followUpDays, setFollowUpDays] = useState('');
+
   const [patientForm, setPatientFormData] = useState<PatientFormState>(EMPTY_PATIENT_FORM);
 
   const [uploadedFiles, setUploadedFiles] = useState<AppointmentFile[]>([]);
@@ -489,10 +492,17 @@ export function useConsultation(appointmentId: string | undefined) {
         });
       }
 
+      const followUpDaysNumber = parseInt(followUpDays, 10);
+      const followUpDate =
+        Number.isFinite(followUpDaysNumber) && followUpDaysNumber > 0
+          ? new Date(Date.now() + followUpDaysNumber * 24 * 60 * 60 * 1000).toISOString()
+          : undefined;
+
       await api.put(`/appointments/${appointmentId}`, {
         ...appointment,
         status: 'COMPLETED',
         dynamic_notes: dynamicNotes,
+        ...(followUpDate ? { followUpDate } : {}),
       });
 
       const docRes = await api.get('/doctor/me');
@@ -528,6 +538,8 @@ export function useConsultation(appointmentId: string | undefined) {
     recipeGenerated,
     generatingRecipe,
     hasSectionsForRecipe: sectionsIncludedInRecipe.length > 0,
+    followUpDays,
+    setFollowUpDays,
     patientForm,
     setPatientFormData,
     uploadedFiles,

@@ -1,14 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import axios from 'axios';
 import api from '../api/axios';
 import { formatToLocalDate } from '../utils/dateFormatter';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import './PatientForm.scss';
+
+interface DuplicatePatient {
+  id: number;
+  firstName: string;
+  lastName: string;
+}
 
 export const PatientForm: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const isEdit = !!id;
   const [loading, setLoading] = useState(false);
+  const [duplicatePatient, setDuplicatePatient] = useState<DuplicatePatient | null>(null);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -58,9 +67,27 @@ export const PatientForm: React.FC = () => {
       }
       navigate('/pacientes');
     } catch (error) {
-      alert("Error al guardar la información del paciente.");
+      if (axios.isAxiosError(error) && error.response?.status === 409 && error.response.data?.error === 'patient_exists') {
+        setDuplicatePatient(error.response.data.patient);
+      } else {
+        alert("Error al guardar la información del paciente.");
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleConfirmLink = async () => {
+    if (!duplicatePatient) return;
+    setLoading(true);
+    try {
+      await api.post(`/patients/${duplicatePatient.id}/link`);
+      navigate(`/pacientes/${duplicatePatient.id}`);
+    } catch (error) {
+      alert("No se pudo vincular al paciente existente.");
+    } finally {
+      setLoading(false);
+      setDuplicatePatient(null);
     }
   };
 
@@ -139,6 +166,16 @@ export const PatientForm: React.FC = () => {
           {loading ? 'Guardando...' : 'Guardar Paciente'}
         </button>
       </form>
+
+      <ConfirmDialog
+        isOpen={!!duplicatePatient}
+        title="Paciente ya registrado"
+        message={`Ya existe un paciente registrado con este correo: ${duplicatePatient?.firstName || ''} ${duplicatePatient?.lastName || ''}. ¿Deseas vincularlo a tu lista (podrás ver sus antecedentes) en vez de crear uno nuevo?`}
+        confirmText="Sí, vincular"
+        cancelText="Cancelar"
+        onConfirm={handleConfirmLink}
+        onCancel={() => setDuplicatePatient(null)}
+      />
     </div>
   );
 };

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
-import { formatToLocalTime } from '../utils/dateFormatter';
+import { formatToLocalTime, formatToLocalDate } from '../utils/dateFormatter';
 import type { Appointment } from '../types';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useFetchData } from '../hooks/useFetchData';
@@ -35,6 +35,19 @@ export const AppointmentTracking: React.FC = () => {
   const { data: consultorioStats } = useFetchData<ConsultorioStats>(
     () => api.get('/dashboard/stats').then((res) => res.data)
   );
+
+  const { data: followUps, setData: setFollowUps } = useFetchData<Appointment[]>(
+    () => api.get('/dashboard/follow-ups').then((res) => res.data)
+  );
+
+  const handleDismissFollowUp = async (appointmentId: number) => {
+    try {
+      await api.put(`/appointments/${appointmentId}`, { followUpDate: null });
+      setFollowUps((prev) => (prev || []).filter((a) => a.id !== appointmentId));
+    } catch (err) {
+      console.error('Error al descartar el seguimiento:', err);
+    }
+  };
 
   const fetchDashboardData = async () => {
     setLoading(true);
@@ -211,6 +224,40 @@ export const AppointmentTracking: React.FC = () => {
           </div>
         </div>
       </section>
+
+      {/* SEGUIMIENTO PROGRAMADO */}
+      {followUps && followUps.length > 0 && (
+        <section className="table-section">
+          <h2 className="section-title">Seguimiento Pendiente</h2>
+          <div className="follow-up-list">
+            {followUps.map((app) => {
+              const isOverdue = new Date(app.followUpDate!) < new Date();
+              return (
+                <div key={app.id} className={`follow-up-item ${isOverdue ? 'overdue' : ''}`}>
+                  <div className="follow-up-info">
+                    <span className="material-icons-outlined">event_repeat</span>
+                    <div>
+                      <strong>{app.patient?.firstName || 'Paciente'} {app.patient?.lastName || ''}</strong>
+                      <span className="follow-up-date">
+                        {isOverdue ? 'Seguimiento vencido: ' : 'Seguimiento sugerido: '}
+                        {formatToLocalDate(app.followUpDate!)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="follow-up-actions">
+                    <button className="btn-primary" onClick={() => navigate(`/appointments/new?patientId=${app.patient?.id}`)}>
+                      Agendar Cita
+                    </button>
+                    <button className="btn-text" onClick={() => handleDismissFollowUp(app.id)}>
+                      Descartar
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       <section className="table-section">
         <h2 className="section-title">Lista de Atención del Día</h2>

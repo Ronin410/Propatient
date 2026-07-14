@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"errors"
 	"math"
 	"net/http"
 	"propatient-api/internal/models"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -182,6 +184,32 @@ func CreatePatient(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Un mismo paciente puede atenderse con varios doctores del sistema.
+		// Si ya existe un paciente con este correo (de cualquier doctor), no
+		// se crea un registro duplicado: se le avisa al frontend para que el
+		// doctor decida si quiere vincularlo a su lista en vez de darlo de
+		// alta de cero (POST /patients/:id/link).
+		if strings.TrimSpace(patient.Email) != "" {
+			var existing models.Patient
+			err := db.Where("LOWER(email) = LOWER(?)", strings.TrimSpace(patient.Email)).First(&existing).Error
+			if err == nil {
+				c.JSON(http.StatusConflict, gin.H{
+					"error":   "patient_exists",
+					"message": "Ya existe un paciente registrado con este correo.",
+					"patient": gin.H{
+						"id":        existing.ID,
+						"firstName": existing.FirstName,
+						"lastName":  existing.LastName,
+					},
+				})
+				return
+			}
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al validar el correo del paciente"})
+				return
+			}
+		}
+
 		// Iniciamos transacción para asegurar la integridad de la relación
 		err := db.Transaction(func(tx *gorm.DB) error {
 			if err := tx.Create(&patient).Error; err != nil {
@@ -200,6 +228,34 @@ func CreatePatient(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusCreated, patient)
+	}
+}
+
+// LinkExistingPatient vincula al doctor autenticado con un paciente que ya
+// existe en el sistema (dado de alta originalmente por otro doctor), sin
+// duplicar su registro ni su historial médico. El doctor que se vincula
+// nunca ve las citas que el paciente tuvo con otros doctores (esas quedan
+// filtradas por doctor_id en el resto de los endpoints), solo sus datos
+// generales y antecedentes.
+func LinkExistingPatient(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		patientID := c.Param("id")
+		doctorID := c.MustGet("doctorID").(uint)
+
+		var patient models.Patient
+		if err := db.Preload("MedicalHistory").First(&patient, patientID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Paciente no encontrado"})
+			return
+		}
+
+		var doctor models.Doctor
+		doctor.ID = doctorID
+		if err := db.Model(&doctor).Association("Patients").Append(&patient); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo vincular al paciente"})
+			return
+		}
+
+		c.JSON(http.StatusOK, patient)
 	}
 }
 

@@ -47,7 +47,13 @@ type Patient struct {
 	LastName       string          `json:"lastName"`
 	BirthDate      string          `json:"birthDate"`
 	Gender         string          `json:"gender"`
-	Email          string          `gorm:"unique" json:"email"`
+	// Sin "unique" a nivel de columna: un mismo paciente puede estar
+	// vinculado a varios doctores (many2many vía doctor_patients), así que
+	// la unicidad de correo se valida en el handler (CreatePatient), no en
+	// la base de datos. Con "unique" aquí, dos pacientes sin correo (campo
+	// opcional) de dos doctores distintos colisionaban en el mismo valor
+	// "" y la creación fallaba con un error de base de datos sin sentido.
+	Email          string          `json:"email"`
 	Phone          string          `json:"phone"`
 	MedicalHistory *MedicalHistory `json:"medicalHistory,omitempty"`
 	Appointments   []Appointment   `json:"appointments,omitempty" gorm:"foreignKey:PatientID"`
@@ -88,6 +94,10 @@ type Appointment struct {
 	RegistrationStatus  string            `gorm:"default:'REGISTERED'" json:"registrationStatus"`
 	RecipePDFPath       string            `json:"recipePdfPath"`
 	MedicalDocuments    []MedicalDocument `gorm:"foreignKey:AppointmentID" json:"documents"`
+	// Fecha sugerida de cita de control, marcada opcionalmente al finalizar
+	// la consulta. Puntero para poder distinguir "sin seguimiento" (nil) de
+	// una fecha real, y para poder limpiarla mandando JSON null.
+	FollowUpDate *time.Time `gorm:"index" json:"followUpDate"`
 }
 
 type MedicalDocument struct {

@@ -426,6 +426,51 @@
 
       .material-icons-outlined { font-size: 16px; }
     }
+
+    .follow-up-field {
+      background-color: #f8f9fa;
+      border: 1px solid #eef0eb;
+      border-radius: 8px;
+      padding: 12px 16px;
+
+      label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #002d42;
+        margin-bottom: 8px;
+
+        .material-icons-outlined { font-size: 16px; color: #6e7582; }
+      }
+
+      .follow-up-input-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+
+        input {
+          width: 80px;
+          padding: 8px 10px;
+          border: 1px solid #cccaa6;
+          border-radius: 6px;
+          font-size: 14px;
+
+          &:focus {
+            outline: none;
+            border-color: #002d42;
+            box-shadow: 0 0 0 3px rgba(0, 45, 66, 0.08);
+          }
+        }
+
+        span {
+          font-size: 12px;
+          color: #6e7582;
+        }
+      }
+    }
   }
 
   /* Notificación flotante superior/inferior de autoguardado */

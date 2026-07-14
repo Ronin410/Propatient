@@ -24,6 +24,8 @@ export const ConsultationManager: React.FC = () => {
     recipeGenerated,
     generatingRecipe,
     hasSectionsForRecipe,
+    followUpDays,
+    setFollowUpDays,
     patientForm,
     setPatientFormData,
     uploadedFiles,
@@ -488,6 +490,25 @@ export const ConsultationManager: React.FC = () => {
           ) : (
             /* BARRA DE ACCIONES: GENERAR RECETA Y FINALIZAR CONSULTA */
             <div className="recipe-actions-bar">
+              <div className="follow-up-field">
+                <label htmlFor="follow-up-days">
+                  <span className="material-icons-outlined">event_repeat</span>
+                  Programar seguimiento (opcional)
+                </label>
+                <div className="follow-up-input-row">
+                  <input
+                    id="follow-up-days"
+                    type="number"
+                    min={1}
+                    max={365}
+                    placeholder="Días"
+                    value={followUpDays}
+                    onChange={(e) => setFollowUpDays(e.target.value)}
+                  />
+                  <span>días después de hoy — aparecerá como recordatorio en el Panel de Control</span>
+                </div>
+              </div>
+
               <div className="recipe-actions-buttons">
                 {/* PASO 1: GENERA LA RECETA, LA GUARDA EN EL EXPEDIENTE Y ABRE LA IMPRESIÓN */}
                 <button

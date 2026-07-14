@@ -32,6 +32,7 @@ export interface Appointment {
   documents?: MedicalDocument[];
   registrationStatus?: string;
   recipePdfPath?: string;
+  followUpDate?: string;
 }
 
 export interface Patient {

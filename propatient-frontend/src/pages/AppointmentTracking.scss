@@ -115,6 +115,48 @@
         overflow-x: auto;
     }
 
+    .follow-up-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .follow-up-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+        background-color: #f8f9fa;
+        border: 1px solid #eef0eb;
+        border-radius: 8px;
+        padding: 14px 18px;
+
+        &.overdue {
+            background-color: #fff9f9;
+            border-color: #fcdbd9;
+        }
+
+        .follow-up-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+
+            .material-icons-outlined { color: #005073; font-size: 22px; }
+
+            strong { display: block; color: #002d42; font-size: 14px; }
+            .follow-up-date { display: block; font-size: 12px; color: #6e7582; margin-top: 2px; }
+        }
+
+        &.overdue .follow-up-date { color: #c92a2a; font-weight: 600; }
+
+        .follow-up-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+    }
+
     .appointments-table {
         width: 100%;
         border-collapse: collapse;

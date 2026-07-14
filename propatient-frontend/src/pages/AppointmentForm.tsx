@@ -1,10 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import axios from 'axios';
 import api from '../api/axios';
 import type { Patient } from '../types';
 import { Popup } from '../components/Popup'; // Asegura la ruta correcta de tu componente genérico
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { getErrorMessage } from '../utils/errorMessage';
 import './AppointmentForm.scss';
+
+interface DuplicatePatient {
+  id: number;
+  firstName: string;
+  lastName: string;
+}
 
 export const AppointmentForm: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -20,6 +28,7 @@ export const AppointmentForm: React.FC = () => {
   const [observations, setObservations] = useState('');
   const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(false);
+  const [duplicatePatient, setDuplicatePatient] = useState<DuplicatePatient | null>(null);
 
   // Estado para la búsqueda de pacientes
   const [searchTerm, setSearchTerm] = useState('');
@@ -79,6 +88,22 @@ export const AppointmentForm: React.FC = () => {
     return () => clearTimeout(delayDebounce);
   }, [searchTerm, mode]);
 
+  const bookAppointment = async (patientId: number) => {
+    await api.post('/appointments', {
+      patientId,
+      appointmentDateTime: new Date(dateTime).toISOString(), // ✨ Cambiado de dateTime a appointmentDateTime
+      service: reason,                                       // ✨ Cambiado de reason a service (asumiendo que guardas el motivo aquí)
+      observations: observations
+    });
+
+    setPopupConfig({
+      isOpen: true,
+      type: 'success',
+      title: 'Cita Agendada',
+      message: 'La cita médica se ha registrado exitosamente en la agenda del consultorio.'
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -88,8 +113,19 @@ export const AppointmentForm: React.FC = () => {
 
       // Si es modo manual, primero registramos al nuevo paciente
       if (mode === 'manual') {
-        const patientRes = await api.post('/patients', newPatient);
-        patientId = patientRes.data.id;
+        try {
+          const patientRes = await api.post('/patients', newPatient);
+          patientId = patientRes.data.id;
+        } catch (err) {
+          // El paciente ya existe en el sistema (de otro doctor): esperamos
+          // a que el doctor confirme si quiere vincularlo antes de continuar.
+          if (axios.isAxiosError(err) && err.response?.status === 409 && err.response.data?.error === 'patient_exists') {
+            setDuplicatePatient(err.response.data.patient);
+            setLoading(false);
+            return;
+          }
+          throw err;
+        }
       }
 
       if (!patientId) {
@@ -103,21 +139,7 @@ export const AppointmentForm: React.FC = () => {
         return;
       }
 
-      // Agendar la cita médica
-      await api.post('/appointments', {
-        patientId,
-        appointmentDateTime: new Date(dateTime).toISOString(), // ✨ Cambiado de dateTime a appointmentDateTime
-        service: reason,                                       // ✨ Cambiado de reason a service (asumiendo que guardas el motivo aquí)
-        observations: observations
-      });
-      
-      setPopupConfig({
-        isOpen: true,
-        type: 'success',
-        title: 'Cita Agendada',
-        message: 'La cita médica se ha registrado exitosamente en la agenda del consultorio.'
-      });
-
+      await bookAppointment(patientId);
     } catch (err: unknown) {
       console.error(err);
       setPopupConfig({
@@ -128,6 +150,26 @@ export const AppointmentForm: React.FC = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleConfirmLink = async () => {
+    if (!duplicatePatient) return;
+    setLoading(true);
+    try {
+      await api.post(`/patients/${duplicatePatient.id}/link`);
+      await bookAppointment(duplicatePatient.id);
+    } catch (err: unknown) {
+      console.error(err);
+      setPopupConfig({
+        isOpen: true,
+        type: 'error',
+        title: 'Error de Registro',
+        message: getErrorMessage(err, 'No se pudo completar el registro con el paciente vinculado.')
+      });
+    } finally {
+      setLoading(false);
+      setDuplicatePatient(null);
     }
   };
 
@@ -317,6 +359,16 @@ export const AppointmentForm: React.FC = () => {
         title={popupConfig.title}
         message={popupConfig.message}
         onClose={handlePopupClose}
+      />
+
+      <ConfirmDialog
+        isOpen={!!duplicatePatient}
+        title="Paciente ya registrado"
+        message={`Ya existe un paciente registrado con este correo: ${duplicatePatient?.firstName || ''} ${duplicatePatient?.lastName || ''}. ¿Deseas vincularlo a tu lista (podrás ver sus antecedentes) y agendar la cita con él?`}
+        confirmText="Sí, vincular y agendar"
+        cancelText="Cancelar"
+        onConfirm={handleConfirmLink}
+        onCancel={() => setDuplicatePatient(null)}
       />
     </div>
   );

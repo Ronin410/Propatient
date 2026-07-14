@@ -99,6 +99,7 @@ func NewRouter(db *gorm.DB) *gin.Engine {
 				dashboard.GET("/summary", handlers.GetTodaySummary(db))
 				dashboard.GET("/upcoming", handlers.GetUpcomingAppointments(db))
 				dashboard.GET("/stats", handlers.GetConsultorioStats(db))
+				dashboard.GET("/follow-ups", handlers.GetFollowUps(db))
 			}
 
 			users := protected.Group("/user")
@@ -119,6 +120,7 @@ func NewRouter(db *gorm.DB) *gin.Engine {
 				patients.PUT("/:id", handlers.UpdatePatient(db))
 				patients.PUT("/:id/medical-history", handlers.UpdateMedicalHistory(db))
 				patients.DELETE("/:id", handlers.RemovePatientFromDoctor(db))
+				patients.POST("/:id/link", handlers.LinkExistingPatient(db))
 			}
 
 			appointments := protected.Group("/appointments")

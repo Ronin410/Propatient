@@ -39,6 +39,19 @@ func main() {
 
 	// 3. Automigración y Seed
 	db.AutoMigrate(&models.Doctor{}, &models.Patient{}, &models.MedicalHistory{}, &models.Appointment{}, &models.MedicalDocument{}, &models.DoctorTemplate{})
+
+	// Limpieza de compatibilidad: patients.email ya no debe ser único a nivel
+	// de base de datos (un mismo paciente puede estar vinculado a varios
+	// doctores, y dos pacientes sin correo colisionaban en "" y no se podían
+	// crear). AutoMigrate no elimina índices existentes solo por quitar el
+	// tag "unique" del struct, así que se elimina explícitamente si quedó de
+	// un despliegue anterior. Silencioso si ya no existe.
+	if db.Migrator().HasIndex(&models.Patient{}, "Email") {
+		if err := db.Migrator().DropIndex(&models.Patient{}, "Email"); err != nil {
+			log.Println("Aviso: no se pudo eliminar el índice único viejo de patients.email:", err)
+		}
+	}
+
 	database.SeedDatabase(db)
 
 	workers.StartNightClosureWorker(db)

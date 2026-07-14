@@ -457,6 +457,29 @@ func GetConsultorioStats(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
+// GetFollowUps devuelve las consultas ya completadas que el doctor marcó con
+// una fecha de seguimiento próxima (dentro de los siguientes 7 días,
+// incluyendo las ya vencidas si nunca se agendó la cita de control).
+func GetFollowUps(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		doctorID := c.MustGet("doctorID").(uint)
+		cutoff := time.Now().UTC().AddDate(0, 0, 7)
+
+		var appointments []models.Appointment
+		err := db.Preload("Patient").
+			Where("doctor_id = ? AND follow_up_date IS NOT NULL AND follow_up_date <= ?", doctorID, cutoff).
+			Order("follow_up_date ASC").
+			Find(&appointments).Error
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al obtener los seguimientos pendientes"})
+			return
+		}
+
+		c.JSON(http.StatusOK, appointments)
+	}
+}
+
 // GetUpcomingAppointments devuelve las próximas 5 citas programadas
 func GetUpcomingAppointments(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
