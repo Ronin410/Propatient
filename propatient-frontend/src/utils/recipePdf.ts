@@ -37,15 +37,31 @@ export function getBase64FromUrl(url: string): Promise<string> {
 }
 
 interface DoctorInfo {
-  firstName?: string;
-  lastName?: string;
-  specialty?: string;
-  professionalId?: string;
-  institution?: string;
+  id?: number;
+  fullName?: string;
+  medicalSpecialty?: string;
+  licenseNumber?: string;
+  university?: string;
   address?: string;
   phone?: string;
   logoUrl?: string;
-  serialCode?: string;
+  recipeLegend?: string;
+}
+
+// Calcula la edad en años a partir de un birthDate "YYYY-MM-DD". Devuelve
+// null si no hay fecha o no es parseable, para poder mostrar "N/A" en ese caso.
+function calculateAge(birthDate?: string): number | null {
+  if (!birthDate) return null;
+  const parsed = new Date(birthDate);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  const today = new Date();
+  let age = today.getFullYear() - parsed.getFullYear();
+  const hasHadBirthdayThisYear =
+    today.getMonth() > parsed.getMonth() ||
+    (today.getMonth() === parsed.getMonth() && today.getDate() >= parsed.getDate());
+  if (!hasHadBirthdayThisYear) age -= 1;
+  return age;
 }
 
 interface BuildRecipeParams {
@@ -87,6 +103,8 @@ export async function buildRecipeDocDefinition({
     .flat();
 
   const hasValidBase64 = doctorLogoBase64 && doctorLogoBase64.startsWith('data:image');
+  const age = calculateAge(patientInfo?.birthDate);
+  const doctorFullName = doctorInfo?.fullName?.trim();
 
   return {
     pageSize: 'LETTER',
@@ -99,10 +117,10 @@ export async function buildRecipeDocDefinition({
             ? { image: doctorLogoBase64, width: 90, alignment: 'left' }
             : { text: 'MÉDICO GENERAL', fontSize: 14, bold: true, color: '#1a365d', margin: [0, 15, 0, 0] },
           [
-            { text: `DR. ${doctorInfo?.firstName || ''} ${doctorInfo?.lastName || ''}`.toUpperCase(), style: 'doctorName' },
-            { text: `${doctorInfo?.specialty || 'MÉDICO CIRUJANO Y PARTERO'}`, style: 'doctorSpecialty' },
-            { text: `CÉDULA PROFESIONAL: ${doctorInfo?.professionalId || 'N/A'}`, style: 'doctorSub' },
-            { text: `${doctorInfo?.institution || 'UNIVERSIDAD AUTÓNOMA DE SINALOA'}`, style: 'doctorSub' },
+            { text: doctorFullName ? `DR. ${doctorFullName}`.toUpperCase() : 'MÉDICO GENERAL', style: 'doctorName' },
+            { text: `${doctorInfo?.medicalSpecialty || 'Médico Cirujano y Partero'}`, style: 'doctorSpecialty' },
+            { text: `CÉDULA PROFESIONAL: ${doctorInfo?.licenseNumber || 'N/A'}`, style: 'doctorSub' },
+            { text: `${doctorInfo?.university || ''}`, style: 'doctorSub' },
           ],
         ],
         columnGap: 20,
@@ -116,7 +134,7 @@ export async function buildRecipeDocDefinition({
           body: [
             [
               { text: `PACIENTE: ${patientInfo?.firstName || ''} ${patientInfo?.lastName || ''}`.toUpperCase(), style: 'tableCellBold' },
-              { text: `EDAD: N/A AÑOS`, style: 'tableCell' },
+              { text: age !== null ? `EDAD: ${age} AÑOS` : 'EDAD: N/A', style: 'tableCell' },
               { text: `FECHA: ${new Date().toLocaleDateString()}`, style: 'tableCell', alignment: 'right' },
             ],
             [
@@ -139,14 +157,17 @@ export async function buildRecipeDocDefinition({
       },
       { text: '\n\n' },
       ...recipeContent,
+      ...(doctorInfo?.recipeLegend?.trim()
+        ? [{ text: '\n' }, { text: doctorInfo.recipeLegend, style: 'legend' }]
+        : []),
     ],
     footer: () => {
       return {
         stack: [
           { text: '_______________________________________', alignment: 'center', color: '#cbd5e0' },
-          { text: `DR. ${doctorInfo?.firstName || ''} ${doctorInfo?.lastName || ''}`.toUpperCase(), alignment: 'center', fontSize: 10, bold: true, color: '#2d3748', margin: [0, 2, 0, 2] },
+          { text: doctorFullName ? `DR. ${doctorFullName}`.toUpperCase() : 'MÉDICO GENERAL', alignment: 'center', fontSize: 10, bold: true, color: '#2d3748', margin: [0, 2, 0, 2] },
           { text: 'FIRMA DEL MÉDICO', alignment: 'center', fontSize: 8, color: '#718096' },
-          { text: `Dirección: ${doctorInfo?.address || 'Av. De la Clínica #123'} | Tel: ${doctorInfo?.phone || 'N/A'}`, alignment: 'center', fontSize: 8, color: '#718096', margin: [0, 4, 0, 0] },
+          { text: `Dirección: ${doctorInfo?.address || 'N/A'} | Tel: ${doctorInfo?.phone || 'N/A'}`, alignment: 'center', fontSize: 8, color: '#718096', margin: [0, 4, 0, 0] },
         ],
         margin: [40, 0, 40, 0],
       };
@@ -160,6 +181,7 @@ export async function buildRecipeDocDefinition({
       tableCellBold: { fontSize: 10, bold: true, color: '#1a365d' },
       sectionHeader: { fontSize: 11, bold: true, color: '#1a365d', margin: [0, 10, 0, 4], decoration: 'underline' },
       sectionBody: { fontSize: 11, color: '#2d3748', marginLeft: 10 },
+      legend: { fontSize: 8, italics: true, color: '#718096', margin: [0, 10, 0, 0] },
     },
   };
 }
@@ -184,7 +206,7 @@ export async function generateAndSaveRecipePDF(
   const pdfInstance = pdfMake.createPdf(docDefinition);
   const blob: Blob = await pdfInstance.getBlob();
   const formData = new FormData();
-  const fileName = `receta_${appointmentId}_doc_${doctorInfo?.serialCode || '0'}.pdf`;
+  const fileName = `receta_${appointmentId}_doc_${doctorInfo?.id || '0'}.pdf`;
   formData.append('recipe_pdf', blob, fileName);
 
   await api.post(`/appointments/${appointmentId}/save-recipe-pdf`, formData, {

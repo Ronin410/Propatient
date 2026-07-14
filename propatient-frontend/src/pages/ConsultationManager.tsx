@@ -29,8 +29,7 @@ export const ConsultationManager: React.FC = () => {
     showAutosaveToast,
     handleFileUpload,
     removeFile,
-    handleCreateRecipeClick,
-    handlePrintRecipeClick,
+    handleGenerateAndPrintRecipe,
     handleFinalize,
   } = useConsultation(appointmentId);
 
@@ -452,31 +451,21 @@ export const ConsultationManager: React.FC = () => {
             </div>
           </section>
 
+          {/* PASO 1: GENERA LA RECETA, LA GUARDA EN EL EXPEDIENTE Y ABRE LA IMPRESIÓN */}
           <button
             type="button"
             className="btn-secondary"
-            onClick={handleCreateRecipeClick}
+            onClick={handleGenerateAndPrintRecipe}
             disabled={generatingRecipe || loading}
             style={{ backgroundColor: recipeGenerated ? '#e6fffa' : '', borderColor: recipeGenerated ? '#319795' : '' }}
           >
             <span className="material-icons-outlined">
-              {recipeGenerated ? 'badge' : 'description'}
+              {recipeGenerated ? 'badge' : 'print'}
             </span>
-            {generatingRecipe ? 'Generando...' : recipeGenerated ? 'Receta Guardada ✓' : '1. Generar Receta'}
+            {generatingRecipe ? 'Generando...' : recipeGenerated ? 'Receta Guardada — Reimprimir' : '1. Generar e Imprimir Receta'}
           </button>
 
-          {/* PASO 2: BOTÓN PARA IMPRIMIR (Sólo se habilita si ya fue generada) */}
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={handlePrintRecipeClick}
-            disabled={!recipeGenerated || loading}
-          >
-            <span className="material-icons-outlined">print</span>
-            2. Imprimir Receta
-          </button>
-
-          {/* PASO 3: FINALIZAR Y CERRAR EL EXPEDIENTE DE LA CITA */}
+          {/* PASO 2: FINALIZAR Y CERRAR EL EXPEDIENTE DE LA CITA */}
           <button
             type="button"
             className="btn-primary"
@@ -484,7 +473,7 @@ export const ConsultationManager: React.FC = () => {
             disabled={loading}
           >
             <span className="material-icons-outlined">task_alt</span>
-            3. Finalizar Consulta
+            2. Finalizar Consulta
           </button>
         </main>
 

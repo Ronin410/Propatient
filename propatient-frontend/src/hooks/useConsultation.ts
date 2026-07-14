@@ -382,8 +382,8 @@ export function useConsultation(appointmentId: string | undefined) {
     }
   };
 
-  // --- Receta: generar (Paso 1) ---
-  const handleCreateRecipeClick = async () => {
+  // --- Receta: generar, guardar e imprimir en un solo paso ---
+  const handleGenerateAndPrintRecipe = async () => {
     if (!appointmentId || appointmentId === 'undefined') {
       alert('Error: No se encontró un ID de cita válido para generar la receta.');
       return;
@@ -402,21 +402,12 @@ export function useConsultation(appointmentId: string | undefined) {
 
       setRecipeDocDefinition(docDefinition);
       setRecipeGenerated(true);
-      alert('🎉 Receta generada y guardada con éxito.');
+      pdfMake.createPdf(docDefinition).print();
     } catch (err) {
       console.error('Error al generar receta:', err);
       alert('Error al compilar la receta médica.');
     } finally {
       setGeneratingRecipe(false);
-    }
-  };
-
-  // --- Receta: imprimir (Paso 2) ---
-  const handlePrintRecipeClick = () => {
-    if (recipeDocDefinition) {
-      pdfMake.createPdf(recipeDocDefinition).print();
-    } else {
-      alert('Por favor, primero genera la receta en el Paso 1.');
     }
   };
 
@@ -524,8 +515,7 @@ export function useConsultation(appointmentId: string | undefined) {
     showAutosaveToast,
     handleFileUpload,
     removeFile,
-    handleCreateRecipeClick,
-    handlePrintRecipeClick,
+    handleGenerateAndPrintRecipe,
     handleFinalize,
   };
 }
