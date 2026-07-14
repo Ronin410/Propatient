@@ -1,11 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import api from '../api/axios';
+import api, { BACKEND_ORIGIN } from '../api/axios';
 import { formatToLocalDate, formatToLocalTime } from '../utils/dateFormatter';
 import type { Patient, MedicalHistory } from '../types';
 import { useFetchData } from '../hooks/useFetchData';
 import { downloadPatientHistoryPDF } from '../utils/patientHistoryPdf';
 import './PatientDetail.scss';
+
+// Asegura exactamente un "/" inicial: registros viejos de recipePdfPath se
+// guardaron como ruta de disco ("uploads/recipes/x.pdf") en vez de URL
+// pública ("/uploads/recipes/x.pdf").
+const toPublicUrl = (path: string) => `${BACKEND_ORIGIN}${path.startsWith('/') ? path : `/${path}`}`;
 
 export const PatientDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -86,12 +91,27 @@ export const PatientDetail: React.FC = () => {
               <div className="history-edit-form">
                 <label>Alergias</label>
                 <textarea value={editedHistory?.allergies} onChange={e => setEditedHistory({...editedHistory!, allergies: e.target.value})} />
-                
-                <label>Patológicos</label>
+
+                <label>Medicamentos Actuales</label>
+                <textarea value={editedHistory?.current_medication} onChange={e => setEditedHistory({...editedHistory!, current_medication: e.target.value})} />
+
+                <label>Antecedentes Patológicos</label>
                 <textarea value={editedHistory?.pathological_history} onChange={e => setEditedHistory({...editedHistory!, pathological_history: e.target.value})} />
-                
+
+                <label>Antecedentes Quirúrgicos y Traumas</label>
+                <textarea value={editedHistory?.surgical_history} onChange={e => setEditedHistory({...editedHistory!, surgical_history: e.target.value})} />
+
                 <label>No Patológicos</label>
                 <textarea value={editedHistory?.non_pathological_history} onChange={e => setEditedHistory({...editedHistory!, non_pathological_history: e.target.value})} />
+
+                <label>Heredofamiliares</label>
+                <textarea value={editedHistory?.hereditaryHistory} onChange={e => setEditedHistory({...editedHistory!, hereditaryHistory: e.target.value})} />
+
+                <label>Hábitos y Estilo de Vida</label>
+                <textarea value={editedHistory?.habitsLifestyle} onChange={e => setEditedHistory({...editedHistory!, habitsLifestyle: e.target.value})} />
+
+                <label>Ginecoobstétricos</label>
+                <textarea value={editedHistory?.gynecoObstetric} onChange={e => setEditedHistory({...editedHistory!, gynecoObstetric: e.target.value})} />
               </div>
             ) : (
               <>
@@ -100,12 +120,32 @@ export const PatientDetail: React.FC = () => {
                   <p>{patient.medicalHistory?.allergies || 'Ninguna registrada'}</p>
                 </div>
                 <div className="history-item">
-                  <label>Patológicos:</label>
+                  <label>Medicamentos Actuales:</label>
+                  <p>{patient.medicalHistory?.current_medication || 'Sin registros'}</p>
+                </div>
+                <div className="history-item">
+                  <label>Antecedentes Patológicos:</label>
                   <p>{patient.medicalHistory?.pathological_history || 'Sin registros'}</p>
+                </div>
+                <div className="history-item">
+                  <label>Antecedentes Quirúrgicos y Traumas:</label>
+                  <p>{patient.medicalHistory?.surgical_history || 'Sin registros'}</p>
                 </div>
                 <div className="history-item">
                   <label>No Patológicos:</label>
                   <p>{patient.medicalHistory?.non_pathological_history || 'Sin registros'}</p>
+                </div>
+                <div className="history-item">
+                  <label>Heredofamiliares:</label>
+                  <p>{patient.medicalHistory?.hereditaryHistory || 'Sin registros'}</p>
+                </div>
+                <div className="history-item">
+                  <label>Hábitos y Estilo de Vida:</label>
+                  <p>{patient.medicalHistory?.habitsLifestyle || 'Sin registros'}</p>
+                </div>
+                <div className="history-item">
+                  <label>Ginecoobstétricos:</label>
+                  <p>{patient.medicalHistory?.gynecoObstetric || 'Sin registros'}</p>
                 </div>
               </>
             )}
@@ -128,6 +168,23 @@ export const PatientDetail: React.FC = () => {
                       <span className={`status-tag ${app.status.toLowerCase()}`}>{app.status}</span>
                       <h4>{app.reason}</h4>
                       <p>{app.observations || 'Sin notas'}</p>
+                      {app.status === 'COMPLETED' && (
+                        <div className="timeline-item-actions">
+                          <button className="btn-text" onClick={() => navigate(`/consulta/${app.id}`)}>
+                            Ver Consulta
+                          </button>
+                          {app.recipePdfPath && (
+                            <a
+                              className="btn-text"
+                              href={toPublicUrl(app.recipePdfPath)}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Imprimir Receta
+                            </a>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))

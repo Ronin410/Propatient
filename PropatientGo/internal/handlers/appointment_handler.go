@@ -576,11 +576,14 @@ func SaveRecipePDF(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		// 4. Actualizar la columna RecipePDFPath en tu modelo Appointment usando GORM
-		// (Asegúrate de tener el campo RecipePDFPath string `json:"recipePdfPath"` en tu struct)
+		// 4. Actualizar la columna RecipePDFPath con la URL pública (no la ruta
+		// física de disco): debe coincidir con r.Static("/uploads", "./uploads")
+		// para que el frontend pueda abrirla directamente, igual que
+		// MedicalDocument.FilePath.
+		publicPath := "/uploads/recipes/" + uniqueFileName
 		err = db.Model(&models.Appointment{}).
 			Where("id = ? AND doctor_id = ?", id, doctorID).
-			Update("recipe_pdf_path", filePath).Error
+			Update("recipe_pdf_path", publicPath).Error
 
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al actualizar la cita en la base de datos"})

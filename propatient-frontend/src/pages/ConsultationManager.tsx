@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import './ConsultationManager.scss';
 import { useConsultation, type AppointmentFile } from '../hooks/useConsultation';
+import { BACKEND_ORIGIN } from '../api/axios';
 
 type FormSection = 'generalData' | 'medicalHistory';
 
@@ -100,33 +101,7 @@ export const ConsultationManager: React.FC = () => {
     );
   }
 
-  if (isCompleted) {
-    const patientId = appointment?.patient?.id;
-    return (
-      <div className="consultation-completed-lock-overlay">
-        <div className="lock-card">
-          <span className="material-icons-outlined lock-icon">task_alt</span>
-          <h2>Esta cita ya fue completada</h2>
-          <p>
-            Los datos clínicos de esta consulta han sido guardados de manera definitiva en el expediente electrónico y no pueden ser modificados.
-          </p>
-          <p className="hint">
-            Por favor, vaya al historial del paciente para poder visualizar el resumen completo de su evolución.
-          </p>
-          <div className="lock-actions">
-            <button className="btn-secondary" onClick={() => navigate('/inicio')}>
-              Ir al Inicio
-            </button>
-            {patientId && (
-              <button className="btn-primary" onClick={() => navigate(`/patients/${patientId}/history`)}>
-                Ver Historial del Paciente
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const patientId = appointment?.patient?.id;
 
   return (
     <div className="consultation-manager-container">
@@ -150,10 +125,24 @@ export const ConsultationManager: React.FC = () => {
         </div>
         <div className="header-actions">
           <button className="btn-outline-danger" onClick={() => navigate('/inicio')}>
-            Pausar / Salir
+            {isCompleted ? 'Volver' : 'Pausar / Salir'}
           </button>
         </div>
       </header>
+
+      {isCompleted && (
+        <div className="readonly-banner">
+          <span className="material-icons-outlined">visibility</span>
+          <span>
+            Esta consulta ya fue finalizada. Estás viendo el expediente en modo solo lectura, sin poder modificarlo.
+          </span>
+          {patientId && (
+            <button className="btn-text" onClick={() => navigate(`/pacientes/${patientId}`)}>
+              Ver Historial del Paciente
+            </button>
+          )}
+        </div>
+      )}
 
       {/* SELECTORES DE MODO (PESTAÑAS UNIFICADAS) */}
       <div className="mode-selector">
@@ -181,7 +170,7 @@ export const ConsultationManager: React.FC = () => {
           <section className="profile-card-section">
             <div className="tab-content">
               {activeTab === 'generalData' ? (
-                <div className="form-grid">
+                <fieldset disabled={isCompleted} className="form-grid fieldset-plain">
                   <div className="form-group">
                     <label>Nombre(s)</label>
                     <input
@@ -223,10 +212,10 @@ export const ConsultationManager: React.FC = () => {
                       onChange={e => setPatientFormData({...patientForm, email: e.target.value})}
                     />
                   </div>
-                </div>
+                </fieldset>
               ) : (
                 /* PANEL DE ANTECEDENTES REESTRUCTURADO */
-                <div className="medical-history-sections">
+                <fieldset disabled={isCompleted} className="medical-history-sections fieldset-plain">
                   {/* SUBSECCIÓN 1: ALERTAS Y ALERGIAS (CRÍTICO) */}
                   <div className="history-subsection critical-box">
                     <h4><span className="material-icons-outlined">gpp_maybe</span> Alertas Médicas Directas</h4>
@@ -338,7 +327,7 @@ export const ConsultationManager: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                </div>
+                </fieldset>
               )}
             </div>
           </section>
@@ -350,24 +339,26 @@ export const ConsultationManager: React.FC = () => {
               {isSyncingFiles && <span className="sync-badge">Sincronizando...</span>}
             </div>
 
-            <div className="upload-options">
-              <div className="upload-card" onClick={() => fileInputRef.current?.click()}>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileUpload}
-                  multiple
-                  accept="image/*,application/pdf,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                  style={{display:'none'}}
-                />
-                <span className="material-icons-outlined">computer</span>
-                <p>Carga Local</p>
+            {!isCompleted && (
+              <div className="upload-options">
+                <div className="upload-card" onClick={() => fileInputRef.current?.click()}>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileUpload}
+                    multiple
+                    accept="image/*,application/pdf,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    style={{display:'none'}}
+                  />
+                  <span className="material-icons-outlined">computer</span>
+                  <p>Carga Local</p>
+                </div>
+                <div className="upload-card" onClick={toggleQR}>
+                  <span className="material-icons-outlined">qr_code_scanner</span>
+                  <p>{showQR ? 'Ocultar QR' : 'Solicitar al Paciente'}</p>
+                </div>
               </div>
-              <div className="upload-card" onClick={toggleQR}>
-                <span className="material-icons-outlined">qr_code_scanner</span>
-                <p>{showQR ? 'Ocultar QR' : 'Solicitar al Paciente'}</p>
-              </div>
-            </div>
+            )}
 
             {showQR && (
               <div className="qr-display">
@@ -404,18 +395,23 @@ export const ConsultationManager: React.FC = () => {
                       >
                         <span className="material-icons-outlined">open_in_new</span>
                       </a>
-                      <button
-                        type="button"
-                        className="btn-icon btn-danger"
-                        onClick={() => removeFile(file)}
-                        title="Eliminar"
-                      >
-                        <span className="material-icons-outlined">delete</span>
-                      </button>
+                      {!isCompleted && (
+                        <button
+                          type="button"
+                          className="btn-icon btn-danger"
+                          onClick={() => removeFile(file)}
+                          title="Eliminar"
+                        >
+                          <span className="material-icons-outlined">delete</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
+            )}
+            {isCompleted && uploadedFiles.length === 0 && (
+              <p className="empty-msg">No se adjuntaron archivos en esta consulta.</p>
             )}
           </section>
 
@@ -425,7 +421,7 @@ export const ConsultationManager: React.FC = () => {
               <span className="material-icons-outlined">analytics</span>
               Notas de la Consulta (Evolución)
             </h3>
-            <div className="form-grid">
+            <fieldset disabled={isCompleted} className="form-grid fieldset-plain">
               {sectionsConfig.map((section) => (
                 <div className="form-group full-width" key={section.id}>
                   {/* Contenedor flexible para alinear título a la izquierda y checkbox a la derecha */}
@@ -434,19 +430,21 @@ export const ConsultationManager: React.FC = () => {
                       {section.label} {section.required && <span className="req-asterisk">*</span>}
                     </label>
 
-                    {/* Checkbox para incluir/excluir este apartado específico de la receta */}
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#005073', cursor: 'pointer', fontWeight: 500 }}>
-                      <input
-                        type="checkbox"
-                        style={{ width: '16px', height: '16px', accentColor: '#005073', cursor: 'pointer' }}
-                        checked={recipeSections[section.label] !== false} // Por defecto true si no está explícitamente en false
-                        onChange={(e) => setRecipeSections({
-                          ...recipeSections,
-                          [section.label]: e.target.checked
-                        })}
-                      />
-                      Incluir en Receta
-                    </label>
+                    {/* Checkbox para incluir/excluir este apartado específico de la receta (no aplica en modo lectura) */}
+                    {!isCompleted && (
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#005073', cursor: 'pointer', fontWeight: 500 }}>
+                        <input
+                          type="checkbox"
+                          style={{ width: '16px', height: '16px', accentColor: '#005073', cursor: 'pointer' }}
+                          checked={recipeSections[section.label] !== false} // Por defecto true si no está explícitamente en false
+                          onChange={(e) => setRecipeSections({
+                            ...recipeSections,
+                            [section.label]: e.target.checked
+                          })}
+                        />
+                        Incluir en Receta
+                      </label>
+                    )}
                   </div>
 
                   <textarea
@@ -460,44 +458,67 @@ export const ConsultationManager: React.FC = () => {
                   />
                 </div>
               ))}
-            </div>
+            </fieldset>
           </section>
 
-          {/* BARRA DE ACCIONES: GENERAR RECETA Y FINALIZAR CONSULTA */}
-          <div className="recipe-actions-bar">
-            <div className="recipe-actions-buttons">
-              {/* PASO 1: GENERA LA RECETA, LA GUARDA EN EL EXPEDIENTE Y ABRE LA IMPRESIÓN */}
-              <button
-                type="button"
-                className={`btn-secondary${recipeGenerated ? ' recipe-generated' : ''}`}
-                onClick={handleGenerateAndPrintRecipe}
-                disabled={generatingRecipe || loading || !hasSectionsForRecipe}
-                title={!hasSectionsForRecipe ? 'Marca "Incluir en Receta" en al menos un apartado con contenido para poder generarla' : undefined}
-              >
-                <span className="material-icons-outlined">
-                  {recipeGenerated ? 'badge' : 'print'}
-                </span>
-                {generatingRecipe ? 'Generando...' : recipeGenerated ? 'Receta Guardada — Reimprimir' : '1. Generar e Imprimir Receta'}
-              </button>
-
-              {/* PASO 2: FINALIZAR Y CERRAR EL EXPEDIENTE DE LA CITA */}
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={handleFinalize}
-                disabled={loading}
-              >
-                <span className="material-icons-outlined">task_alt</span>
-                2. Finalizar Consulta
-              </button>
+          {isCompleted ? (
+            /* BARRA DE ACCIONES EN MODO LECTURA: solo reimprimir la receta ya guardada y volver */
+            <div className="recipe-actions-bar">
+              <div className="recipe-actions-buttons">
+                {appointment?.recipePdfPath && (
+                  <a
+                    className="btn-secondary"
+                    href={`${BACKEND_ORIGIN}${appointment.recipePdfPath.startsWith('/') ? appointment.recipePdfPath : `/${appointment.recipePdfPath}`}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <span className="material-icons-outlined">print</span>
+                    Ver / Imprimir Receta Guardada
+                  </a>
+                )}
+                <button type="button" className="btn-primary" onClick={() => navigate('/inicio')}>
+                  <span className="material-icons-outlined">arrow_back</span>
+                  Volver
+                </button>
+              </div>
             </div>
-            {!hasSectionsForRecipe && !recipeGenerated && (
-              <p className="recipe-hint">
-                <span className="material-icons-outlined">info</span>
-                Selecciona al menos un apartado con contenido (casilla "Incluir en Receta") para poder generarla.
-              </p>
-            )}
-          </div>
+          ) : (
+            /* BARRA DE ACCIONES: GENERAR RECETA Y FINALIZAR CONSULTA */
+            <div className="recipe-actions-bar">
+              <div className="recipe-actions-buttons">
+                {/* PASO 1: GENERA LA RECETA, LA GUARDA EN EL EXPEDIENTE Y ABRE LA IMPRESIÓN */}
+                <button
+                  type="button"
+                  className={`btn-secondary${recipeGenerated ? ' recipe-generated' : ''}`}
+                  onClick={handleGenerateAndPrintRecipe}
+                  disabled={generatingRecipe || loading || !hasSectionsForRecipe}
+                  title={!hasSectionsForRecipe ? 'Marca "Incluir en Receta" en al menos un apartado con contenido para poder generarla' : undefined}
+                >
+                  <span className="material-icons-outlined">
+                    {recipeGenerated ? 'badge' : 'print'}
+                  </span>
+                  {generatingRecipe ? 'Generando...' : recipeGenerated ? 'Receta Guardada — Reimprimir' : '1. Generar e Imprimir Receta'}
+                </button>
+
+                {/* PASO 2: FINALIZAR Y CERRAR EL EXPEDIENTE DE LA CITA */}
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={handleFinalize}
+                  disabled={loading}
+                >
+                  <span className="material-icons-outlined">task_alt</span>
+                  2. Finalizar Consulta
+                </button>
+              </div>
+              {!hasSectionsForRecipe && !recipeGenerated && (
+                <p className="recipe-hint">
+                  <span className="material-icons-outlined">info</span>
+                  Selecciona al menos un apartado con contenido (casilla "Incluir en Receta") para poder generarla.
+                </p>
+              )}
+            </div>
+          )}
         </main>
 
         {/* PANEL DERECHO: VISOR DE IMÁGENES / PDFS DE FORMA LATERAL */}

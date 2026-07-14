@@ -122,13 +122,14 @@ export function useConsultation(appointmentId: string | undefined) {
       const data = response.data;
       setAppointment(data);
 
-      // Regla de negocio: si la cita ya está completada, bloqueamos edición.
-      if (data.status === 'COMPLETED') {
+      // Regla de negocio: si la cita ya está completada, se carga en modo
+      // solo lectura (mismos datos, sin autoguardado ni restauración de
+      // borrador) en vez de bloquear la pantalla por completo.
+      const isNowCompleted = data.status === 'COMPLETED';
+      if (isNowCompleted) {
         localStorage.removeItem(`consultation_draft_${appointmentId}`);
         setIsCompleted(true);
         isRestoredRef.current = true; // Evita disparar la restauración de borrador
-        setLoading(false);
-        return;
       }
 
       const p = data.patient;
@@ -263,7 +264,7 @@ export function useConsultation(appointmentId: string | undefined) {
 
   // --- Autoguardado cada 15s (solo si hay cambios desde el último guardado) ---
   useEffect(() => {
-    if (loading || !appointmentId || !isRestoredRef.current) return;
+    if (loading || !appointmentId || !isRestoredRef.current || isCompleted) return;
 
     const saveDraft = () => {
       const currentDataStr = JSON.stringify({ patientForm, dynamicNotes });
@@ -284,7 +285,7 @@ export function useConsultation(appointmentId: string | undefined) {
 
     const interval = setInterval(saveDraft, 15000);
     return () => clearInterval(interval);
-  }, [loading, appointmentId, patientForm, dynamicNotes]);
+  }, [loading, appointmentId, patientForm, dynamicNotes, isCompleted]);
 
   // --- Bloqueo de salida (recarga y navegación) si hay cambios sin guardar ---
   useEffect(() => {

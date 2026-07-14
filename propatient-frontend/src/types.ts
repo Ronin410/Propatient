@@ -4,6 +4,9 @@ export interface MedicalHistory {
   non_pathological_history: string;
   surgical_history: string;
   current_medication?: string;
+  hereditaryHistory?: string;
+  gynecoObstetric?: string;
+  habitsLifestyle?: string;
 }
 
 export interface MedicalDocument {
@@ -28,6 +31,7 @@ export interface Appointment {
   Patient?: Patient; // GORM preload default
   documents?: MedicalDocument[];
   registrationStatus?: string;
+  recipePdfPath?: string;
 }
 
 export interface Patient {

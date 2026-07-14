@@ -34,7 +34,31 @@
     .history-item {
         margin-bottom: 1.2rem;
         label { font-weight: 600; display: block; margin-bottom: 0.2rem; color: #666; font-size: 0.85rem; }
-        p { margin: 0; color: var(--color-dark); font-size: 0.95rem; line-height: 1.4; }
+        p { margin: 0; color: var(--color-dark); font-size: 0.95rem; line-height: 1.4; white-space: pre-wrap; }
+    }
+
+    .history-edit-form {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+
+        label { font-weight: 600; color: #666; font-size: 0.85rem; margin-top: 0.6rem; }
+
+        textarea {
+            padding: 8px 10px;
+            border: 1px solid #dde1e6;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 54px;
+
+            &:focus {
+                outline: none;
+                border-color: var(--color-primary);
+                box-shadow: 0 0 0 3px rgba(0, 80, 115, 0.08);
+            }
+        }
     }
 
     .timeline {
@@ -57,6 +81,25 @@
                 flex: 1;
                 h4 { margin: 0.3rem 0; font-size: 1rem; color: var(--color-dark); }
                 p { margin: 0; color: #666; font-size: 0.9rem; }
+
+                .timeline-item-actions {
+                    display: flex;
+                    gap: 1rem;
+                    margin-top: 0.6rem;
+
+                    .btn-text {
+                        background: none;
+                        border: none;
+                        padding: 0;
+                        color: var(--color-primary);
+                        font-size: 0.85rem;
+                        font-weight: 600;
+                        cursor: pointer;
+                        text-decoration: none;
+
+                        &:hover { text-decoration: underline; }
+                    }
+                }
             }
 
             .status-tag {
