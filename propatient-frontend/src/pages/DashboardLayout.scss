@@ -33,17 +33,20 @@
 /* Cabecera del Sidebar */
 .sidebar-header {
     margin-bottom: 2.5rem;
-    
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
     .logo-container {
         display: flex;
         align-items: center;
         gap: 12px;
         padding-left: 8px;
-        
+
         .medical-logo {
             width: 28px;
             height: 28px;
-            
+
             path {
                 fill: #ffffff; /* Isotipo blanco sobre azul */
             }
@@ -55,6 +58,26 @@
             font-weight: 700;
             color: #ffffff;
             letter-spacing: 0.5px;
+        }
+    }
+
+    /* Solo visible en móvil/tablet, dentro del propio sidebar deslizante */
+    .close-sidebar-btn {
+        display: none;
+        background: none;
+        border: none;
+        color: rgba(255, 255, 255, 0.8);
+        cursor: pointer;
+        padding: 4px;
+        border-radius: 6px;
+
+        .material-icons-outlined {
+            font-size: 22px;
+        }
+
+        &:hover {
+            background-color: rgba(255, 255, 255, 0.08);
+            color: #ffffff;
         }
     }
 }
@@ -176,11 +199,93 @@
     box-sizing: border-box;
 }
 
+/* ================================================= */
+/* 4. BARRA SUPERIOR MÓVIL Y MENÚ HAMBURGUESA        */
+/* ================================================= */
+
+.mobile-topbar {
+    display: none; /* solo aparece en pantallas angostas, ver media query abajo */
+    align-items: center;
+    gap: 12px;
+    background: linear-gradient(145deg, #005073 0%, #002d42 100%);
+    color: #ffffff;
+    padding: 0.9rem 1.2rem;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+
+    .hamburger-btn {
+        background: none;
+        border: none;
+        color: #ffffff;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        padding: 4px;
+        border-radius: 6px;
+
+        .material-icons-outlined {
+            font-size: 26px;
+        }
+
+        &:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+    }
+
+    .office-name {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+    }
+}
+
+.sidebar-overlay {
+    display: none; /* solo aparece en pantallas angostas, ver media query abajo */
+}
+
 @media (max-width: 992px) {
     .dashboard-container {
         grid-template-columns: 1fr;
+        height: auto;
+        min-height: 100vh;
     }
+
+    .mobile-topbar {
+        display: flex;
+    }
+
+    .sidebar-overlay {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 90;
+    }
+
     .sidebar {
-        display: none; /* Ideal para complementar con un menú hamburguesa posteriormente */
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        width: 260px;
+        max-width: 80vw;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        z-index: 100;
+
+        &.open {
+            transform: translateX(0);
+        }
+
+        .sidebar-header .close-sidebar-btn {
+            display: inline-flex;
+        }
+    }
+
+    .main-content {
+        height: auto;
+        min-height: calc(100vh - 56px);
     }
 }

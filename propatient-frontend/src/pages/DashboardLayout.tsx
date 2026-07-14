@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import './DashboardLayout.scss';
@@ -7,11 +7,17 @@ export const DashboardLayout = () => {
   const { logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
   // Obtenemos el nombre dinámico si existe en la sesión
   const doctorName = localStorage.getItem('doctor_name') || 'Dr. Alejandro Bueno';
   const initialLetter = doctorName.replace('Dr. ', '').charAt(0).toUpperCase();
-  
+
+  // Cierra el menú al navegar a otra pantalla (relevante en móvil/tablet).
+  useEffect(() => {
+    setIsSidebarOpen(false);
+  }, [location.pathname]);
+
   const menuItems = [
     { label: 'Dashboard', icon: 'home', route: '/inicio' },
     { label: 'Pacientes', icon: 'people', route: '/pacientes' },
@@ -37,8 +43,25 @@ export const DashboardLayout = () => {
 
   return (
     <div className="dashboard-container">
+      {/* BARRA SUPERIOR MÓVIL (solo visible en pantallas angostas) */}
+      <header className="mobile-topbar">
+        <button
+          className="hamburger-btn"
+          onClick={() => setIsSidebarOpen(true)}
+          aria-label="Abrir menú"
+        >
+          <span className="material-icons-outlined">menu</span>
+        </button>
+        <p className="office-name">PROPatient</p>
+      </header>
+
+      {/* FONDO OSCURO AL ABRIR EL MENÚ EN MÓVIL/TABLET */}
+      {isSidebarOpen && (
+        <div className="sidebar-overlay" onClick={() => setIsSidebarOpen(false)} />
+      )}
+
       {/* BARRA LATERAL (SIDEBAR) */}
-      <aside className="sidebar">
+      <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
         <div>
           <div className="sidebar-header">
             <div className="logo-container">
@@ -48,11 +71,18 @@ export const DashboardLayout = () => {
               </svg>
               <p className="office-name">PROPatient</p>
             </div>
+            <button
+              className="close-sidebar-btn"
+              onClick={() => setIsSidebarOpen(false)}
+              aria-label="Cerrar menú"
+            >
+              <span className="material-icons-outlined">close</span>
+            </button>
           </div>
 
           <nav className="sidebar-nav">
             {menuItems.map((item) => (
-              <Link 
+              <Link
                 key={item.label}
                 to={item.route}
                 className={`nav-item ${location.pathname === item.route ? 'active' : ''}`}
@@ -63,7 +93,7 @@ export const DashboardLayout = () => {
             ))}
           </nav>
         </div>
-        
+
         {/* FOOTER DEL MENU CON IDENTIDAD */}
         <div className="sidebar-footer">
           <div className="doctor-profile-summary">
