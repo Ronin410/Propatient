@@ -4,6 +4,7 @@ import api from '../api/axios';
 import { formatToLocalDate, formatToLocalTime } from '../utils/dateFormatter';
 import type { Patient, MedicalHistory } from '../types';
 import { useFetchData } from '../hooks/useFetchData';
+import { downloadPatientHistoryPDF } from '../utils/patientHistoryPdf';
 import './PatientDetail.scss';
 
 export const PatientDetail: React.FC = () => {
@@ -46,6 +47,9 @@ export const PatientDetail: React.FC = () => {
           <h1>{patient.firstName} {patient.lastName}</h1>
         </div>
         <div className="header-actions">
+          <button className="btn-outline-sm" onClick={() => downloadPatientHistoryPDF(patient)}>
+            Exportar Historial (PDF)
+          </button>
           <button className="btn-outline-sm" onClick={() => navigate(`/pacientes/editar/${id}`)}>
             Editar Perfil
           </button>
