@@ -179,7 +179,7 @@ export function useConsultation(appointmentId: string | undefined) {
         setUploadedFiles(mappedInitialFiles);
       }
 
-      lastSavedDataRef.current = JSON.stringify({ patientForm: initialPatientData, consultationNotes: initialNotes });
+      lastSavedDataRef.current = JSON.stringify({ patientForm: initialPatientData, dynamicNotes: initialNotes });
     } catch (err: unknown) {
       console.error(err);
       setError(getErrorMessage(err, 'Error al obtener detalles de la consulta'));
@@ -288,7 +288,11 @@ export function useConsultation(appointmentId: string | undefined) {
   }, [loading, appointmentId, patientForm, dynamicNotes, isCompleted]);
 
   // --- Bloqueo de salida (recarga y navegación) si hay cambios sin guardar ---
+  // No aplica en modo solo lectura (cita completada): no hay nada que perder,
+  // así que ni siquiera se interceptan beforeunload/popstate.
   useEffect(() => {
+    if (isCompleted) return;
+
     let isHandlingPopState = false;
 
     const isDirty = () => JSON.stringify({ patientForm, dynamicNotes }) !== lastSavedDataRef.current;
@@ -325,8 +329,12 @@ export function useConsultation(appointmentId: string | undefined) {
       isHandlingPopState = true;
 
       if (handleInternalNavigation()) {
-        window.removeEventListener('popstate', handlePopState);
-        navigate(-1);
+        // El navegador ya movió el historial hacia atrás (eso fue lo que
+        // disparó este evento popstate) — no hay que navegar de nuevo, o
+        // se retrocede dos entradas en vez de una.
+        setTimeout(() => {
+          isHandlingPopState = false;
+        }, 100);
       } else {
         originalPushState.apply(window.history, [null, '', window.location.href]);
         setTimeout(() => {
@@ -345,7 +353,7 @@ export function useConsultation(appointmentId: string | undefined) {
       window.history.replaceState = originalReplaceState;
       isHistoryInterceptedRef.current = false;
     };
-  }, [navigate, patientForm, dynamicNotes]);
+  }, [navigate, patientForm, dynamicNotes, isCompleted]);
 
   // --- Archivos ---
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {

@@ -102,13 +102,16 @@ export const ConsultationManager: React.FC = () => {
   }
 
   const patientId = appointment?.patient?.id;
+  // En modo lectura, "volver" debe regresar al historial del paciente (de
+  // donde se llegó vía "Ver Consulta"), no al dashboard.
+  const goBackTarget = isCompleted && patientId ? `/pacientes/${patientId}` : '/inicio';
 
   return (
     <div className="consultation-manager-container">
       {/* CABECERA PRINCIPAL */}
       <header className="consultation-header">
         <div className="patient-summary">
-          <button className="btn-back" onClick={() => navigate('/inicio')}>
+          <button className="btn-back" onClick={() => navigate(goBackTarget)}>
             <span className="material-icons-outlined">arrow_back</span>
           </button>
           <div className="info">
@@ -124,7 +127,7 @@ export const ConsultationManager: React.FC = () => {
           </div>
         </div>
         <div className="header-actions">
-          <button className="btn-outline-danger" onClick={() => navigate('/inicio')}>
+          <button className="btn-outline-danger" onClick={() => navigate(goBackTarget)}>
             {isCompleted ? 'Volver' : 'Pausar / Salir'}
           </button>
         </div>
@@ -476,7 +479,7 @@ export const ConsultationManager: React.FC = () => {
                     Ver / Imprimir Receta Guardada
                   </a>
                 )}
-                <button type="button" className="btn-primary" onClick={() => navigate('/inicio')}>
+                <button type="button" className="btn-primary" onClick={() => navigate(goBackTarget)}>
                   <span className="material-icons-outlined">arrow_back</span>
                   Volver
                 </button>
