@@ -90,6 +90,7 @@ func NewRouter(db *gorm.DB) *gin.Engine {
 			{
 				dashboard.GET("/summary", handlers.GetTodaySummary(db))
 				dashboard.GET("/upcoming", handlers.GetUpcomingAppointments(db))
+				dashboard.GET("/stats", handlers.GetConsultorioStats(db))
 			}
 
 			users := protected.Group("/user")

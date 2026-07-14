@@ -4,6 +4,7 @@ import api from '../api/axios';
 import { formatToLocalTime } from '../utils/dateFormatter';
 import type { Appointment } from '../types';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { useFetchData } from '../hooks/useFetchData';
 import './AppointmentTracking.scss';
 
 interface DashboardSummary {
@@ -13,6 +14,16 @@ interface DashboardSummary {
   nextPatient: Appointment | null;
 }
 
+interface ConsultorioStats {
+  totalPatients: number;
+  appointmentsThisMonth: number;
+  completedThisMonth: number;
+  cancelledThisMonth: number;
+  noShowThisMonth: number;
+  noShowRate: number;
+  upcomingAppointments: number;
+}
+
 export const AppointmentTracking: React.FC = () => {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -20,6 +31,10 @@ export const AppointmentTracking: React.FC = () => {
 
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [selectedApp, setSelectedApp] = useState<Appointment | null>(null);
+
+  const { data: consultorioStats } = useFetchData<ConsultorioStats>(
+    () => api.get('/dashboard/stats').then((res) => res.data)
+  );
 
   const fetchDashboardData = async () => {
     setLoading(true);
@@ -162,6 +177,40 @@ export const AppointmentTracking: React.FC = () => {
           </span>
         </div>
       </div>
+
+      {/* PANEL DE MÉTRICAS DEL CONSULTORIO */}
+      <section className="table-section">
+        <h2 className="section-title">Métricas del Consultorio</h2>
+        <div className="stats-grid">
+          <div className="stat-card">
+            <span className="label">Total de Pacientes</span>
+            <span className="value">{consultorioStats?.totalPatients ?? '—'}</span>
+            <span className="desc">Pacientes vinculados a tu consulta</span>
+          </div>
+
+          <div className="stat-card">
+            <span className="label">Citas Este Mes</span>
+            <span className="value">{consultorioStats?.appointmentsThisMonth ?? '—'}</span>
+            <span className="desc">
+              {consultorioStats
+                ? `${consultorioStats.completedThisMonth} completadas · ${consultorioStats.cancelledThisMonth} canceladas`
+                : 'Cargando...'}
+            </span>
+          </div>
+
+          <div className="stat-card">
+            <span className="label">Tasa de Inasistencia</span>
+            <span className="value">{consultorioStats ? `${consultorioStats.noShowRate.toFixed(1)}%` : '—'}</span>
+            <span className="desc">Histórico de citas no atendidas</span>
+          </div>
+
+          <div className="stat-card">
+            <span className="label">Próximas Citas</span>
+            <span className="value">{consultorioStats?.upcomingAppointments ?? '—'}</span>
+            <span className="desc">Pendientes en los próximos 30 días</span>
+          </div>
+        </div>
+      </section>
 
       <section className="table-section">
         <h2 className="section-title">Lista de Atención del Día</h2>

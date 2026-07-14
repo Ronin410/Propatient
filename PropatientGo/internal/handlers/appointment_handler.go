@@ -391,6 +391,72 @@ func GetTodaySummary(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
+// GetConsultorioStats devuelve métricas agregadas del consultorio del doctor
+// (no de un paciente en particular, ver GetPatientStats para eso): total de
+// pacientes, citas del mes en curso por estado, tasa histórica de
+// inasistencia y próximas citas pendientes en los siguientes 30 días.
+func GetConsultorioStats(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		doctorID := c.MustGet("doctorID").(uint)
+		now := time.Now().UTC()
+
+		startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+		endOfMonth := startOfMonth.AddDate(0, 1, 0)
+
+		var stats struct {
+			TotalPatients         int64   `json:"totalPatients"`
+			AppointmentsThisMonth int64   `json:"appointmentsThisMonth"`
+			CompletedThisMonth    int64   `json:"completedThisMonth"`
+			CancelledThisMonth    int64   `json:"cancelledThisMonth"`
+			NoShowThisMonth       int64   `json:"noShowThisMonth"`
+			NoShowRate            float64 `json:"noShowRate"`
+			UpcomingAppointments  int64   `json:"upcomingAppointments"`
+		}
+
+		db.Table("patients").
+			Joins("JOIN doctor_patients ON doctor_patients.patient_id = patients.id").
+			Where("doctor_patients.doctor_id = ?", doctorID).
+			Count(&stats.TotalPatients)
+
+		db.Model(&models.Appointment{}).
+			Where("doctor_id = ? AND appointment_date_time >= ? AND appointment_date_time < ?", doctorID, startOfMonth, endOfMonth).
+			Count(&stats.AppointmentsThisMonth)
+
+		db.Model(&models.Appointment{}).
+			Where("doctor_id = ? AND status = ? AND appointment_date_time >= ? AND appointment_date_time < ?", doctorID, "COMPLETED", startOfMonth, endOfMonth).
+			Count(&stats.CompletedThisMonth)
+
+		db.Model(&models.Appointment{}).
+			Where("doctor_id = ? AND status = ? AND appointment_date_time >= ? AND appointment_date_time < ?", doctorID, "CANCELLED", startOfMonth, endOfMonth).
+			Count(&stats.CancelledThisMonth)
+
+		db.Model(&models.Appointment{}).
+			Where("doctor_id = ? AND status = ? AND appointment_date_time >= ? AND appointment_date_time < ?", doctorID, "NOSHOW", startOfMonth, endOfMonth).
+			Count(&stats.NoShowThisMonth)
+
+		// Tasa histórica de inasistencia: sobre todas las citas ya pasadas
+		// (no solo las de este mes), para que no oscile tanto mes a mes.
+		var totalPast int64
+		db.Model(&models.Appointment{}).
+			Where("doctor_id = ? AND appointment_date_time < ?", doctorID, now).
+			Count(&totalPast)
+		if totalPast > 0 {
+			var totalNoShow int64
+			db.Model(&models.Appointment{}).
+				Where("doctor_id = ? AND status = ? AND appointment_date_time < ?", doctorID, "NOSHOW", now).
+				Count(&totalNoShow)
+			stats.NoShowRate = float64(totalNoShow) / float64(totalPast) * 100
+		}
+
+		db.Model(&models.Appointment{}).
+			Where("doctor_id = ? AND status = ? AND appointment_date_time >= ? AND appointment_date_time <= ?",
+				doctorID, "PENDING", now, now.AddDate(0, 0, 30)).
+			Count(&stats.UpcomingAppointments)
+
+		c.JSON(http.StatusOK, stats)
+	}
+}
+
 // GetUpcomingAppointments devuelve las próximas 5 citas programadas
 func GetUpcomingAppointments(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
