@@ -61,6 +61,7 @@ func main() {
 		var parsed []string
 		for _, origin := range strings.Split(frontendURL, ",") {
 			origin = strings.TrimSpace(origin)
+			origin = strings.TrimSuffix(origin, "/")
 			if origin == "" {
 				continue // ignora comas sobrantes, ej. "https://foo.com,"
 			}
