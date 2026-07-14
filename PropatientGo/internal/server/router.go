@@ -20,7 +20,6 @@ import (
 func NewRouter(db *gorm.DB) *gin.Engine {
 	r := gin.Default()
 	r.MaxMultipartMemory = 8 << 20 // 8 MiB por request de carga de archivos
-	r.Static("/uploads", "./uploads")
 
 	// El origen del frontend se toma de FRONTEND_URL (soporta varios separados
 	// por coma, útil para tener local + producción a la vez). Si no está
@@ -56,6 +55,15 @@ func NewRouter(db *gorm.DB) *gin.Engine {
 	}))
 	r.RedirectTrailingSlash = true
 	r.RedirectFixedPath = false
+
+	// Registrado DESPUÉS de cors.New(): si se registra antes, gin no incluye
+	// el middleware de CORS en la cadena de esta ruta y las imágenes servidas
+	// aquí (logo/avatar del doctor) quedan sin cabecera
+	// Access-Control-Allow-Origin. Eso rompía la carga de la imagen vía
+	// <img crossOrigin="anonymous"> que usa el frontend para incrustar el
+	// logo en el PDF de la receta (fallaba en silencio y caía al texto de
+	// respaldo "MÉDICO GENERAL").
+	r.Static("/uploads", "./uploads")
 
 	api := r.Group("/api")
 	{

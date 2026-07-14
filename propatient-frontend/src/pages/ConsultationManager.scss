@@ -308,6 +308,75 @@
     }
   }
 
+  /* Botones genéricos reutilizados en toda la pantalla de consulta
+     (estados de error, "Volver al Inicio", y la barra de acciones final) */
+  .btn-primary, .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s, opacity 0.2s;
+
+    .material-icons-outlined { font-size: 18px; }
+
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+  }
+
+  .btn-primary {
+    background-color: #002d42;
+    color: #ffffff;
+    border: none;
+    box-shadow: 0 4px 10px rgba(0, 45, 66, 0.15);
+
+    &:hover:not(:disabled) { background-color: #001f30; }
+  }
+
+  .btn-secondary {
+    background-color: #ffffff;
+    color: #002d42;
+    border: 1px solid #cccaa6;
+
+    &:hover:not(:disabled) { background-color: #f8f9fa; border-color: #002d42; }
+
+    &.recipe-generated {
+      background-color: #e6fffa;
+      border-color: #319795;
+      color: #234e52;
+    }
+  }
+
+  /* Barra de acciones de la sección de notas: botones + pista de validación */
+  .recipe-actions-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+    .recipe-actions-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .recipe-hint {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0;
+      font-size: 13px;
+      color: #92580a;
+      background-color: #fff8ec;
+      border: 1px solid #f5deb0;
+      border-radius: 6px;
+      padding: 8px 12px;
+
+      .material-icons-outlined { font-size: 16px; }
+    }
+  }
+
   /* Notificación flotante superior/inferior de autoguardado */
   .autosave-toast {
     position: fixed; bottom: 24px; right: 24px;
@@ -334,9 +403,13 @@
   .history-subsection {
     background: #fbfbfc;
     border: 1px solid #eef0eb;
+    border-left: 3px solid #cccaa6;
     border-radius: 8px;
     padding: 16px 20px;
-    
+    transition: box-shadow 0.2s, border-color 0.2s;
+
+    &:hover { box-shadow: 0 2px 8px rgba(0, 45, 66, 0.05); }
+
     h4 {
       display: flex;
       align-items: center;
@@ -356,7 +429,8 @@
     &.critical-box {
       background-color: #fff9f9;
       border-color: #fcdbd9;
-      
+      border-left-color: #c92a2a;
+
       h4 {
         color: #c92a2a;
         .material-icons-outlined { color: #c92a2a; }

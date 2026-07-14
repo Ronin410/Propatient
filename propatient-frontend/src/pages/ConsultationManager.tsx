@@ -22,6 +22,7 @@ export const ConsultationManager: React.FC = () => {
     setRecipeSections,
     recipeGenerated,
     generatingRecipe,
+    hasSectionsForRecipe,
     patientForm,
     setPatientFormData,
     uploadedFiles,
@@ -264,7 +265,7 @@ export const ConsultationManager: React.FC = () => {
                       <div className="form-group">
                         <label>Antecedentes Patológicos</label>
                         <textarea
-                          rows={2}
+                          rows={3}
                           placeholder="Enfermedades crónicas, cardiovasculares, etc."
                           value={patientForm.medicalHistory.pathological_history}
                           onChange={e => setPatientFormData({
@@ -276,7 +277,7 @@ export const ConsultationManager: React.FC = () => {
                       <div className="form-group">
                         <label>Antecedentes Quirúrgicos y Traumas</label>
                         <textarea
-                          rows={2}
+                          rows={3}
                           placeholder="Cirugías previas, hospitalizaciones, fracturas..."
                           value={patientForm.medicalHistory.surgical_history}
                           onChange={e => setPatientFormData({
@@ -295,7 +296,7 @@ export const ConsultationManager: React.FC = () => {
                       <div className="form-group">
                         <label>Heredofamiliares (Padres, Abuelos, Hermanos)</label>
                         <textarea
-                          rows={2}
+                          rows={3}
                           placeholder="Diabetes, hipertensión, neoplasias en la familia..."
                           value={patientForm.medicalHistory.hereditaryHistory}
                           onChange={e => setPatientFormData({
@@ -307,7 +308,7 @@ export const ConsultationManager: React.FC = () => {
                       <div className="form-group">
                         <label>Hábitos, Estilo de Vida y No Patológicos</label>
                         <textarea
-                          rows={2}
+                          rows={3}
                           placeholder="Tabaquismo, alcohol, actividad física, alimentación..."
                           value={patientForm.medicalHistory.habitsLifestyle}
                           onChange={e => setPatientFormData({
@@ -451,30 +452,41 @@ export const ConsultationManager: React.FC = () => {
             </div>
           </section>
 
-          {/* PASO 1: GENERA LA RECETA, LA GUARDA EN EL EXPEDIENTE Y ABRE LA IMPRESIÓN */}
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={handleGenerateAndPrintRecipe}
-            disabled={generatingRecipe || loading}
-            style={{ backgroundColor: recipeGenerated ? '#e6fffa' : '', borderColor: recipeGenerated ? '#319795' : '' }}
-          >
-            <span className="material-icons-outlined">
-              {recipeGenerated ? 'badge' : 'print'}
-            </span>
-            {generatingRecipe ? 'Generando...' : recipeGenerated ? 'Receta Guardada — Reimprimir' : '1. Generar e Imprimir Receta'}
-          </button>
+          {/* BARRA DE ACCIONES: GENERAR RECETA Y FINALIZAR CONSULTA */}
+          <div className="recipe-actions-bar">
+            <div className="recipe-actions-buttons">
+              {/* PASO 1: GENERA LA RECETA, LA GUARDA EN EL EXPEDIENTE Y ABRE LA IMPRESIÓN */}
+              <button
+                type="button"
+                className={`btn-secondary${recipeGenerated ? ' recipe-generated' : ''}`}
+                onClick={handleGenerateAndPrintRecipe}
+                disabled={generatingRecipe || loading || !hasSectionsForRecipe}
+                title={!hasSectionsForRecipe ? 'Marca "Incluir en Receta" en al menos un apartado con contenido para poder generarla' : undefined}
+              >
+                <span className="material-icons-outlined">
+                  {recipeGenerated ? 'badge' : 'print'}
+                </span>
+                {generatingRecipe ? 'Generando...' : recipeGenerated ? 'Receta Guardada — Reimprimir' : '1. Generar e Imprimir Receta'}
+              </button>
 
-          {/* PASO 2: FINALIZAR Y CERRAR EL EXPEDIENTE DE LA CITA */}
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={handleFinalize}
-            disabled={loading}
-          >
-            <span className="material-icons-outlined">task_alt</span>
-            2. Finalizar Consulta
-          </button>
+              {/* PASO 2: FINALIZAR Y CERRAR EL EXPEDIENTE DE LA CITA */}
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handleFinalize}
+                disabled={loading}
+              >
+                <span className="material-icons-outlined">task_alt</span>
+                2. Finalizar Consulta
+              </button>
+            </div>
+            {!hasSectionsForRecipe && !recipeGenerated && (
+              <p className="recipe-hint">
+                <span className="material-icons-outlined">info</span>
+                Selecciona al menos un apartado con contenido (casilla "Incluir en Receta") para poder generarla.
+              </p>
+            )}
+          </div>
         </main>
 
         {/* PANEL DERECHO: VISOR DE IMÁGENES / PDFS DE FORMA LATERAL */}

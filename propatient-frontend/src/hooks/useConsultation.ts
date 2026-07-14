@@ -382,10 +382,20 @@ export function useConsultation(appointmentId: string | undefined) {
     }
   };
 
+  // Apartados que realmente van a aparecer en la receta: marcados como
+  // "Incluir en Receta" (true por defecto) y con contenido escrito.
+  const sectionsIncludedInRecipe = sectionsConfig.filter(
+    (sec) => recipeSections[sec.label] !== false && (dynamicNotes[sec.label] ?? '').trim() !== ''
+  );
+
   // --- Receta: generar, guardar e imprimir en un solo paso ---
   const handleGenerateAndPrintRecipe = async () => {
     if (!appointmentId || appointmentId === 'undefined') {
       alert('Error: No se encontró un ID de cita válido para generar la receta.');
+      return;
+    }
+    if (sectionsIncludedInRecipe.length === 0) {
+      alert('Selecciona al menos un apartado con contenido para incluir en la receta antes de generarla (revisa las casillas "Incluir en Receta").');
       return;
     }
     setGeneratingRecipe(true);
@@ -508,6 +518,7 @@ export function useConsultation(appointmentId: string | undefined) {
     setRecipeSections,
     recipeGenerated,
     generatingRecipe,
+    hasSectionsForRecipe: sectionsIncludedInRecipe.length > 0,
     patientForm,
     setPatientFormData,
     uploadedFiles,
