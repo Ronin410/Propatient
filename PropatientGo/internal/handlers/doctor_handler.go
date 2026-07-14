@@ -3,9 +3,9 @@ package handlers
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
 	"propatient-api/internal/models"
+	"propatient-api/internal/storage"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -20,7 +20,7 @@ type doctorWithCalendarStatus struct {
 	GoogleCalendarConnected bool `json:"googleCalendarConnected"`
 }
 
-func GetCurrentDoctor(db *gorm.DB) gin.HandlerFunc {
+func GetCurrentDoctor(db *gorm.DB, storageClient storage.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		doctorID := c.MustGet("doctorID").(uint)
 
@@ -29,6 +29,8 @@ func GetCurrentDoctor(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Doctor no encontrado"})
 			return
 		}
+
+		presignDoctorFiles(c.Request.Context(), storageClient, &doctor)
 
 		// GORM ya tiene json:"-" en PasswordHash y en el refresh token de
 		// Google Calendar en el modelo, por lo que nunca se envían.
@@ -39,7 +41,7 @@ func GetCurrentDoctor(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func UpdateCurrentDoctor(db *gorm.DB) gin.HandlerFunc {
+func UpdateCurrentDoctor(db *gorm.DB, storageClient storage.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		doctorID := c.MustGet("doctorID").(uint)
 
@@ -49,43 +51,32 @@ func UpdateCurrentDoctor(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		// 1. Crear la carpeta para almacenar las imágenes si no existe (ej: ./uploads/profiles)
-		uploadDir := "./uploads/profiles"
-		if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al preparar el almacenamiento en el servidor"})
-			return
-		}
-
-		// 2. Procesar y guardar el AVATAR (Foto de perfil) si viene en la petición
+		// 1. Procesar y guardar el AVATAR (Foto de perfil) si viene en la petición
 		avatarFile, err := c.FormFile("avatar")
 		if err == nil && avatarFile != nil {
-			// Generar nombre único usando timestamp para evitar sobreescritura
 			ext := filepath.Ext(avatarFile.Filename)
-			avatarName := fmt.Sprintf("doc_%d_avatar_%d%s", doctorID, time.Now().Unix(), ext)
-			avatarPath := filepath.Join(uploadDir, avatarName)
+			key := fmt.Sprintf("profiles/doc_%d_avatar_%d%s", doctorID, time.Now().Unix(), ext)
 
-			// Guardar el archivo físicamente en la carpeta del backend
-			if err := c.SaveUploadedFile(avatarFile, avatarPath); err != nil {
+			storedRef, err := storageClient.Save(c.Request.Context(), key, avatarFile)
+			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al guardar la foto de perfil"})
 				return
 			}
-			// Guardar la URL o ruta estática relativa en la base de datos
-			// Nota: Si configuraste archivos estáticos en Gin, la ruta pública limpia sería: "/uploads/profiles/" + avatarName
-			doctor.AvatarUrl = "/uploads/profiles/" + avatarName
+			doctor.AvatarUrl = storedRef
 		}
 
-		// 3. Procesar y guardar el LOGO de la clínica si viene en la petición
+		// 2. Procesar y guardar el LOGO de la clínica si viene en la petición
 		logoFile, err := c.FormFile("logo")
 		if err == nil && logoFile != nil {
 			ext := filepath.Ext(logoFile.Filename)
-			logoName := fmt.Sprintf("doc_%d_logo_%d%s", doctorID, time.Now().Unix(), ext)
-			logoPath := filepath.Join(uploadDir, logoName)
+			key := fmt.Sprintf("profiles/doc_%d_logo_%d%s", doctorID, time.Now().Unix(), ext)
 
-			if err := c.SaveUploadedFile(logoFile, logoPath); err != nil {
+			storedRef, err := storageClient.Save(c.Request.Context(), key, logoFile)
+			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al guardar el logo de la clínica"})
 				return
 			}
-			doctor.LogoUrl = "/uploads/profiles/" + logoName
+			doctor.LogoUrl = storedRef
 		}
 
 		// 4. Leer los campos de texto regulares utilizando PostForm (ya que vienen en multipart)
@@ -113,6 +104,8 @@ func UpdateCurrentDoctor(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo actualizar el perfil"})
 			return
 		}
+
+		presignDoctorFiles(c.Request.Context(), storageClient, &doctor)
 
 		// 6. IMPORTANTE: Devolver el objeto actualizado o las nuevas URLs
 		// para que el FrontEnd las mapee de inmediato en el estado de React

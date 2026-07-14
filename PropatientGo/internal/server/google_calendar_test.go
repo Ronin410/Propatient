@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"testing"
@@ -8,6 +9,7 @@ import (
 	"propatient-api/internal/googlecalendar"
 	"propatient-api/internal/models"
 	"propatient-api/internal/server"
+	"propatient-api/internal/storage"
 	"propatient-api/internal/testutil"
 
 	"github.com/stretchr/testify/assert"
@@ -17,7 +19,8 @@ import (
 func TestGoogleCalendarSync_SkippedWhenNotConnected(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	mock := newMockCalendarClient()
-	router := server.NewRouterWithCalendar(db, googlecalendar.Config{}, mock)
+	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, mock, testStorage)
 
 	doc := testutil.CreateTestDoctor(t, db, "doctor_cal_off", "password123")
 	token := testutil.TokenFor(t, doc.ID, doc.Username)
@@ -39,7 +42,8 @@ func TestGoogleCalendarSync_SkippedWhenNotConnected(t *testing.T) {
 func TestGoogleCalendarSync_FullLifecycle(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	mock := newMockCalendarClient()
-	router := server.NewRouterWithCalendar(db, googlecalendar.Config{}, mock)
+	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, mock, testStorage)
 
 	doc := testutil.CreateTestDoctor(t, db, "doctor_cal_on", "password123")
 	token := testutil.TokenFor(t, doc.ID, doc.Username)
@@ -89,7 +93,8 @@ func TestGoogleCalendarSync_FullLifecycle(t *testing.T) {
 
 func TestGetCurrentDoctor_GoogleCalendarConnectedField(t *testing.T) {
 	db := testutil.SetupTestDB(t)
-	router := server.NewRouterWithCalendar(db, googlecalendar.Config{}, newMockCalendarClient())
+	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, newMockCalendarClient(), testStorage)
 
 	doc := testutil.CreateTestDoctor(t, db, "doctor_cal_field", "password123")
 	token := testutil.TokenFor(t, doc.ID, doc.Username)
@@ -112,7 +117,8 @@ func TestGetCurrentDoctor_GoogleCalendarConnectedField(t *testing.T) {
 func TestConnectGoogleCalendar_NotConfigured(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	// Config vacía: simula un servidor sin GOOGLE_CLIENT_SECRET configurado.
-	router := server.NewRouterWithCalendar(db, googlecalendar.Config{}, newMockCalendarClient())
+	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, newMockCalendarClient(), testStorage)
 
 	doc := testutil.CreateTestDoctor(t, db, "doctor_cal_notconfigured", "password123")
 	token := testutil.TokenFor(t, doc.ID, doc.Username)

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"propatient-api/internal/models"
+	"propatient-api/internal/storage"
 	"strings"
 	"time"
 
@@ -167,7 +168,7 @@ func UpdateProfileHandler(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func UpdateLicenseFullHandler(db *gorm.DB) gin.HandlerFunc {
+func UpdateLicenseFullHandler(db *gorm.DB, storageClient storage.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 1. OBTENER AL DOCTOR LOGUEADO DESDE EL CONTEXTO JWT DE FORMA SEGURA
 		doctorContext, exists := c.Get("doctorID")
@@ -209,14 +210,11 @@ func UpdateLicenseFullHandler(db *gorm.DB) gin.HandlerFunc {
 
 		// 4. CREAR NOMBRE ÚNICO E INMUTABLE PARA EL ARCHIVO LIGADO AL DOCTOR
 		ext := filepath.Ext(file.Filename)
-		uniqueFileName := fmt.Sprintf("ine_doctor_%d_%d%s", doctorID, time.Now().Unix(), ext)
+		key := fmt.Sprintf("identidad/ine_doctor_%d_%d%s", doctorID, time.Now().Unix(), ext)
 
-		// Carpeta destino (Asegúrate de que este directorio exista en tu servidor o créalo dinámicamente)
-		uploadFolder := "./uploads/documentos_identidad/"
-		dst := filepath.Join(uploadFolder, uniqueFileName)
-
-		// Guardar el archivo físicamente en el disco
-		if err := c.SaveUploadedFile(file, dst); err != nil {
+		// Guardar el archivo (disco local o S3, según configuración)
+		storedRef, err := storageClient.Save(c.Request.Context(), key, file)
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo almacenar el archivo de identidad en el servidor."})
 			return
 		}
@@ -232,7 +230,7 @@ func UpdateLicenseFullHandler(db *gorm.DB) gin.HandlerFunc {
 		doctor.LicenseNumber = licenseNumber
 		doctor.RFC = rfc
 		doctor.CURP = curp
-		doctor.IneDocumentPath = dst         // Guardamos la ruta relativa del archivo guardado
+		doctor.IneDocumentPath = storedRef   // Guardamos la referencia (path local o key de S3), nunca la ruta física de disco
 		doctor.CedulaValidated = "CAPTURADA" // Cambia el estado para que el Login detecte el mensaje de espera
 
 		// Persistir cambios con GORM

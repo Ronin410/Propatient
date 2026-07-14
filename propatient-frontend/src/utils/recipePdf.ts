@@ -1,7 +1,8 @@
 import pdfMake from 'pdfmake/build/pdfmake';
 import * as pdfFonts from 'pdfmake/build/vfs_fonts';
-import api, { BACKEND_ORIGIN } from '../api/axios';
+import api from '../api/axios';
 import type { Patient } from '../types';
+import { toAbsoluteFileUrl } from './fileUrl';
 
 // Sincronización robusta para el bundle de Vite (movida desde ConsultationManager.tsx)
 if (pdfFonts && (pdfFonts as any).pdfMake) {
@@ -83,9 +84,7 @@ export async function buildRecipeDocDefinition({
   let doctorLogoBase64 = '';
   if (doctorInfo?.logoUrl) {
     try {
-      const cleanFullUrl = doctorInfo.logoUrl.startsWith('http')
-        ? doctorInfo.logoUrl
-        : `${BACKEND_ORIGIN}${doctorInfo.logoUrl}`;
+      const cleanFullUrl = toAbsoluteFileUrl(doctorInfo.logoUrl);
       doctorLogoBase64 = await getBase64FromUrl(cleanFullUrl);
     } catch (err) {
       console.error('No se pudo mapear el logo del doctor, usando respaldo de texto:', err);

@@ -1,16 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import api, { BACKEND_ORIGIN } from '../api/axios';
+import api from '../api/axios';
 import { formatToLocalDate, formatToLocalTime } from '../utils/dateFormatter';
 import type { Patient, MedicalHistory } from '../types';
 import { useFetchData } from '../hooks/useFetchData';
 import { downloadPatientHistoryPDF } from '../utils/patientHistoryPdf';
+import { toAbsoluteFileUrl } from '../utils/fileUrl';
 import './PatientDetail.scss';
-
-// Asegura exactamente un "/" inicial: registros viejos de recipePdfPath se
-// guardaron como ruta de disco ("uploads/recipes/x.pdf") en vez de URL
-// pública ("/uploads/recipes/x.pdf").
-const toPublicUrl = (path: string) => `${BACKEND_ORIGIN}${path.startsWith('/') ? path : `/${path}`}`;
 
 export const PatientDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -176,7 +172,7 @@ export const PatientDetail: React.FC = () => {
                           {app.recipePdfPath && (
                             <a
                               className="btn-text"
-                              href={toPublicUrl(app.recipePdfPath)}
+                              href={toAbsoluteFileUrl(app.recipePdfPath)}
                               target="_blank"
                               rel="noreferrer"
                             >

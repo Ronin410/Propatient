@@ -7,10 +7,10 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"path/filepath"
 	"propatient-api/internal/googlecalendar"
 	"propatient-api/internal/models"
+	"propatient-api/internal/storage"
 	"strconv"
 	"time"
 
@@ -191,7 +191,7 @@ func CreateAppointment(db *gorm.DB, calClient googlecalendar.Client) gin.Handler
 
 // UploadDocuments maneja la carga de archivos para una cita específica.
 // Ruta: /api/appointments/:id/documents
-func UploadDocuments(db *gorm.DB) gin.HandlerFunc {
+func UploadDocuments(db *gorm.DB, storageClient storage.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		appointmentID := c.Param("id")
 		doctorID := c.MustGet("doctorID").(uint)
@@ -213,42 +213,31 @@ func UploadDocuments(db *gorm.DB) gin.HandlerFunc {
 		files := form.File["files"]
 		isPrescription := c.PostForm("isPrescription") == "true"
 
-		// Definir y crear la carpeta de destino local si no existe
-		uploadDir := "./uploads"
-		if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo crear el directorio de subidas"})
-			return
-		}
-
 		for _, fileHeader := range files {
 			// Generamos un nombre de archivo propio a partir de la extensión únicamente.
-			// Nunca usamos el nombre que manda el cliente para construir la ruta en disco:
+			// Nunca usamos el nombre que manda el cliente para construir la key:
 			// eso permitiría path traversal (ej. "../../main.go") o sobrescribir archivos.
 			ext := filepath.Ext(filepath.Base(fileHeader.Filename))
-			uniqueFileName := fmt.Sprintf("%s_%d%s", appointmentID, time.Now().UnixNano(), ext)
-			dst := filepath.Join(uploadDir, uniqueFileName)
+			key := fmt.Sprintf("documents/%s_%d%s", appointmentID, time.Now().UnixNano(), ext)
 
-			// 3. Guardar el archivo físicamente en la carpeta del Backend
-			if err := c.SaveUploadedFile(fileHeader, dst); err != nil {
-				// Si falla el guardado físico en disco, pasamos al siguiente
+			// 3. Guardar el archivo (disco local o S3, según configuración)
+			storedRef, err := storageClient.Save(c.Request.Context(), key, fileHeader)
+			if err != nil {
+				log.Printf("⚠️ No se pudo guardar el documento %s: %v", fileHeader.Filename, err)
 				continue
 			}
-
-			// 4. Definir la URL pública que se guardará en la BD.
-			// Debe coincidir con r.Static("/uploads", "./uploads") en main.go.
-			fileURL := fmt.Sprintf("/uploads/%s", uniqueFileName)
 
 			doc := models.MedicalDocument{
 				FileName:      fileHeader.Filename,
 				FileType:      fileHeader.Header.Get("Content-Type"),
-				FilePath:      fileURL, // <--- Guardamos la URL pública en lugar de los bytes
+				FilePath:      storedRef,
 				AppointmentID: appointment.ID,
 				Prescription:  isPrescription,
 			}
 
 			if err := db.Create(&doc).Error; err != nil {
-				// Si falla el registro en la BD, podrías opcionalmente borrar el archivo físico del disco
-				os.Remove(dst)
+				// Si falla el registro en la BD, borramos el archivo ya subido para no dejarlo huérfano.
+				storageClient.Delete(c.Request.Context(), storedRef)
 				continue
 			}
 		}
@@ -269,7 +258,7 @@ var validAppointmentStatuses = map[string]bool{
 }
 
 // Capturamos los parámetros de la URL: /api/appointments?start=...&end=...&status=...
-func GetAppointments(db *gorm.DB) gin.HandlerFunc {
+func GetAppointments(db *gorm.DB, storageClient storage.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		doctorID := c.MustGet("doctorID").(uint)
 
@@ -310,11 +299,12 @@ func GetAppointments(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		query.Order("appointment_date_time ASC").Find(&appointments)
+		presignAppointmentsFiles(c.Request.Context(), storageClient, appointments)
 		c.JSON(http.StatusOK, appointments)
 	}
 }
 
-func GetAppointmentDetail(db *gorm.DB) gin.HandlerFunc {
+func GetAppointmentDetail(db *gorm.DB, storageClient storage.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		doctorID := c.MustGet("doctorID").(uint)
@@ -332,6 +322,8 @@ func GetAppointmentDetail(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Cita no encontrada"})
 			return
 		}
+
+		presignAppointmentFiles(c.Request.Context(), storageClient, &appointment)
 
 		c.JSON(http.StatusOK, appointment)
 	}
@@ -646,7 +638,7 @@ func UpdateAppointmentDocument(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func SaveRecipePDF(db *gorm.DB) gin.HandlerFunc {
+func SaveRecipePDF(db *gorm.DB, storageClient storage.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		doctorID := c.MustGet("doctorID").(uint)
@@ -665,36 +657,26 @@ func SaveRecipePDF(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		// 2. Definir una ruta física para guardar las recetas dentro del servidor
-		uploadDir := "./uploads/recipes"
-		if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo crear el directorio de almacenamiento"})
-			return
-		}
-
 		// Generamos el nombre nosotros mismos (nunca confiar en el filename del cliente
-		// para construir una ruta en disco: riesgo de path traversal/sobrescritura).
+		// para construir la key: riesgo de path traversal/sobrescritura).
 		ext := filepath.Ext(filepath.Base(file.Filename))
 		if ext == "" {
 			ext = ".pdf"
 		}
-		uniqueFileName := fmt.Sprintf("receta_%s_%d%s", id, time.Now().UnixNano(), ext)
-		filePath := filepath.Join(uploadDir, uniqueFileName)
+		key := fmt.Sprintf("recipes/receta_%s_%d%s", id, time.Now().UnixNano(), ext)
 
-		// 3. Guardar el archivo en el sistema de archivos del servidor/contenedor
-		if err := c.SaveUploadedFile(file, filePath); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al escribir el archivo en disco"})
+		// 2. Guardar el archivo (disco local o S3, según configuración)
+		storedRef, err := storageClient.Save(c.Request.Context(), key, file)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al guardar el archivo"})
 			return
 		}
 
-		// 4. Actualizar la columna RecipePDFPath con la URL pública (no la ruta
-		// física de disco): debe coincidir con r.Static("/uploads", "./uploads")
-		// para que el frontend pueda abrirla directamente, igual que
-		// MedicalDocument.FilePath.
-		publicPath := "/uploads/recipes/" + uniqueFileName
+		// 3. Actualizar la columna RecipePDFPath con la referencia guardada
+		// (path público en disco local, key de objeto en S3).
 		err = db.Model(&models.Appointment{}).
 			Where("id = ? AND doctor_id = ?", id, doctorID).
-			Update("recipe_pdf_path", publicPath).Error
+			Update("recipe_pdf_path", storedRef).Error
 
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al actualizar la cita en la base de datos"})
@@ -703,7 +685,6 @@ func SaveRecipePDF(db *gorm.DB) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Receta en PDF almacenada y asociada correctamente",
-			"path":    filePath,
 		})
 	}
 }

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import api, { BACKEND_ORIGIN } from '../api/axios';
+import api from '../api/axios';
 import './DoctorProfile.scss';
 import { Popup } from '../components/Popup';
 import { getErrorMessage } from '../utils/errorMessage';
+import { toAbsoluteFileUrl } from '../utils/fileUrl';
 
 interface ProfileData {
   rfc: string;
@@ -20,8 +21,6 @@ interface ProfileData {
   logoUrl?: string;
   googleCalendarConnected?: boolean;
 }
-
-const BACKEND_URL = BACKEND_ORIGIN;
 
 export const DoctorProfile = () => {
   const [profile, setProfile] = useState<ProfileData>({
@@ -83,11 +82,11 @@ export const DoctorProfile = () => {
           setProfile(prev => ({ ...prev, ...res.data }));
           if (res.data.avatarUrl) {
             // Si la url ya viene completa de casualidad, la dejas, si no, le pegas el Host
-            const fullAvatar = res.data.avatarUrl.startsWith('http') ? res.data.avatarUrl : `${BACKEND_URL}${res.data.avatarUrl}`;
+            const fullAvatar = toAbsoluteFileUrl(res.data.avatarUrl);
             setAvatarPreview(fullAvatar);
           }
           if (res.data.logoUrl) {
-            const fullLogo = res.data.logoUrl.startsWith('http') ? res.data.logoUrl : `${BACKEND_URL}${res.data.logoUrl}`;
+            const fullLogo = toAbsoluteFileUrl(res.data.logoUrl);
             setLogoPreview(fullLogo);
           }
 
@@ -250,8 +249,8 @@ export const DoctorProfile = () => {
           logoUrl: data.logoUrl || prev.logoUrl
         }));
 
-        if (data.avatarUrl) setAvatarPreview(data.avatarUrl.startsWith('http') ? data.avatarUrl : `${BACKEND_URL}${data.avatarUrl}`);
-        if (data.logoUrl) setLogoPreview(data.logoUrl.startsWith('http') ? data.logoUrl : `${BACKEND_URL}${data.logoUrl}`);
+        if (data.avatarUrl) setAvatarPreview(toAbsoluteFileUrl(data.avatarUrl));
+        if (data.logoUrl) setLogoPreview(toAbsoluteFileUrl(data.logoUrl));
 
         setPopupConfig({
           isOpen: true,

@@ -1,6 +1,8 @@
 package server
 
 import (
+	"context"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -8,6 +10,7 @@ import (
 	"propatient-api/internal/auth"
 	"propatient-api/internal/googlecalendar"
 	"propatient-api/internal/handlers"
+	"propatient-api/internal/storage"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -25,13 +28,26 @@ func NewRouter(db *gorm.DB) *gin.Engine {
 	// configurado; sin eso, todas las llamadas relacionadas quedan en
 	// no-op — no requiere credenciales para que el resto de la app funcione.
 	calendarConfig := googlecalendar.LoadConfigFromEnv()
-	return NewRouterWithCalendar(db, calendarConfig, googlecalendar.NewClient(calendarConfig))
+
+	// Cliente de archivos: S3 si AWS_S3_BUCKET/AWS_REGION están
+	// configurados, si no cae de vuelta al disco local (mismo
+	// comportamiento que tenía la app antes de esta integración). Un error
+	// aquí solo puede venir de credenciales de AWS mal formadas — no debe
+	// tumbar el servidor entero, así que se degrada a disco local.
+	storageConfig := storage.LoadConfigFromEnv()
+	storageClient, err := storage.NewClient(context.Background(), storageConfig)
+	if err != nil {
+		log.Printf("⚠️ No se pudo inicializar el almacenamiento en S3, usando disco local: %v", err)
+		storageClient, _ = storage.NewClient(context.Background(), storage.Config{})
+	}
+
+	return NewRouterWithDeps(db, calendarConfig, googlecalendar.NewClient(calendarConfig), storageClient)
 }
 
-// NewRouterWithCalendar es la variante inyectable de NewRouter: permite a
-// los tests de integración pasar un googlecalendar.Client simulado, sin
-// hacer llamadas reales a la API de Google.
-func NewRouterWithCalendar(db *gorm.DB, calendarConfig googlecalendar.Config, calendarClient googlecalendar.Client) *gin.Engine {
+// NewRouterWithDeps es la variante inyectable de NewRouter: permite a los
+// tests de integración pasar un googlecalendar.Client y un storage.Client
+// simulados, sin hacer llamadas reales a Google ni a AWS.
+func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calendarClient googlecalendar.Client, storageClient storage.Client) *gin.Engine {
 	r := gin.Default()
 	r.MaxMultipartMemory = 8 << 20 // 8 MiB por request de carga de archivos
 
@@ -125,7 +141,7 @@ func NewRouterWithCalendar(db *gorm.DB, calendarConfig googlecalendar.Config, ca
 			{
 				users.POST("/update-profile", auth.UpdateProfileHandler(db))
 				users.POST("/update-license", auth.UpdateLicenseHandler(db))
-				users.POST("/update-license-full", auth.UpdateLicenseFullHandler(db))
+				users.POST("/update-license-full", auth.UpdateLicenseFullHandler(db, storageClient))
 			}
 
 			patients := protected.Group("/patients")
@@ -134,7 +150,7 @@ func NewRouterWithCalendar(db *gorm.DB, calendarConfig googlecalendar.Config, ca
 				patients.POST("", handlers.CreatePatient(db))
 				patients.GET("/search", handlers.SearchPatients(db))
 				patients.GET("/:id", handlers.GetPatientById(db))
-				patients.GET("/:id/history", handlers.GetPatientMedicalHistory(db))
+				patients.GET("/:id/history", handlers.GetPatientMedicalHistory(db, storageClient))
 				patients.GET("/:id/stats", handlers.GetPatientStats(db))
 				patients.PUT("/:id", handlers.UpdatePatient(db))
 				patients.PUT("/:id/medical-history", handlers.UpdateMedicalHistory(db))
@@ -146,20 +162,20 @@ func NewRouterWithCalendar(db *gorm.DB, calendarConfig googlecalendar.Config, ca
 			{
 				// Importante: Usar "" en lugar de "/" para evitar redirecciones 301/307
 				// que el navegador a veces bloquea en CORS.
-				appointments.GET("", handlers.GetAppointments(db))
+				appointments.GET("", handlers.GetAppointments(db, storageClient))
 				appointments.POST("", handlers.CreateAppointment(db, calendarClient))
-				appointments.GET("/:id", handlers.GetAppointmentDetail(db))
+				appointments.GET("/:id", handlers.GetAppointmentDetail(db, storageClient))
 				appointments.PUT("/:id", handlers.UpdateAppointment(db, calendarClient))
 				appointments.PUT("/:id/cancel", handlers.CancelAppointment(db, calendarClient))
-				appointments.POST("/:id/upload-document", handlers.UploadDocuments(db))
+				appointments.POST("/:id/upload-document", handlers.UploadDocuments(db, storageClient))
 				appointments.PUT("/:id/documents/:docId", handlers.UpdateAppointmentDocument(db))
-				appointments.POST("/:id/save-recipe-pdf", handlers.SaveRecipePDF(db))
+				appointments.POST("/:id/save-recipe-pdf", handlers.SaveRecipePDF(db, storageClient))
 			}
 
 			doctorRoutes := protected.Group("/doctor")
 			{
-				doctorRoutes.GET("/me", handlers.GetCurrentDoctor(db))
-				doctorRoutes.PUT("/me", handlers.UpdateCurrentDoctor(db))
+				doctorRoutes.GET("/me", handlers.GetCurrentDoctor(db, storageClient))
+				doctorRoutes.PUT("/me", handlers.UpdateCurrentDoctor(db, storageClient))
 				doctorRoutes.GET("/template", handlers.GetDoctorTemplate(db))
 				doctorRoutes.POST("/template", handlers.SaveDoctorTemplate(db))
 				doctorRoutes.GET("/google-calendar/connect", handlers.ConnectGoogleCalendar(calendarConfig))

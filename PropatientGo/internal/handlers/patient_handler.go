@@ -5,6 +5,7 @@ import (
 	"math"
 	"net/http"
 	"propatient-api/internal/models"
+	"propatient-api/internal/storage"
 	"strconv"
 	"strings"
 	"time"
@@ -281,7 +282,7 @@ func GetPatientById(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func GetPatientMedicalHistory(db *gorm.DB) gin.HandlerFunc {
+func GetPatientMedicalHistory(db *gorm.DB, storageClient storage.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		patientID := c.Param("id")
 		doctorID := c.MustGet("doctorID").(uint)
@@ -302,6 +303,8 @@ func GetPatientMedicalHistory(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Historial no encontrado"})
 			return
 		}
+
+		presignAppointmentsFiles(c.Request.Context(), storageClient, patient.Appointments)
 
 		c.JSON(http.StatusOK, patient)
 	}

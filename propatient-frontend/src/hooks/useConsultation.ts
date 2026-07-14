@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Appointment } from '../types';
-import api, { BACKEND_ORIGIN } from '../api/axios';
+import api from '../api/axios';
 import { getErrorMessage } from '../utils/errorMessage';
 import { generateAndSaveRecipePDF, pdfMake } from '../utils/recipePdf';
+import { toAbsoluteFileUrl } from '../utils/fileUrl';
 
 export interface AppointmentFile {
   id?: number;
@@ -176,7 +177,7 @@ export function useConsultation(appointmentId: string | undefined) {
           name: doc.filename || '',
           type: doc.fileType || '',
           size: 0,
-          url: `${BACKEND_ORIGIN}${doc.file_path || ''}`,
+          url: toAbsoluteFileUrl(doc.file_path),
           isServerFile: true,
         }));
         setUploadedFiles(mappedInitialFiles);
@@ -207,7 +208,7 @@ export function useConsultation(appointmentId: string | undefined) {
           name: doc.filename,
           type: doc.fileType,
           size: 0,
-          url: `${BACKEND_ORIGIN}${doc.file_path}`,
+          url: toAbsoluteFileUrl(doc.file_path),
           isServerFile: true,
         }));
 

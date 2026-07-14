@@ -48,6 +48,20 @@ services:
         sync: false
       - key: GOOGLE_CALENDAR_REDIRECT_URI
         sync: false # ej. https://propatient-api-xxxx.onrender.com/api/auth/google-calendar/callback
+      # Integración opcional con AWS S3 (ver .env.example para la guía).
+      # Sin estas cuatro, los archivos (documentos, recetas, logo/avatar,
+      # INE) se guardan en disco local dentro del contenedor — funciona,
+      # pero se pierde en cada deploy porque el filesystem no es persistente.
+      # Con las cuatro configuradas, todo se sube a un bucket S3 privado y
+      # se sirve con URLs firmadas temporales.
+      - key: AWS_S3_BUCKET
+        sync: false
+      - key: AWS_REGION
+        sync: false # ej. us-east-1
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
 
   # --- FRONTEND (React / Vite) ---
   - type: web

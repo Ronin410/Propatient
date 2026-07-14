@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import './ConsultationManager.scss';
 import { useConsultation, type AppointmentFile } from '../hooks/useConsultation';
-import { BACKEND_ORIGIN } from '../api/axios';
+import { toAbsoluteFileUrl } from '../utils/fileUrl';
 
 type FormSection = 'generalData' | 'medicalHistory';
 
@@ -473,7 +473,7 @@ export const ConsultationManager: React.FC = () => {
                 {appointment?.recipePdfPath && (
                   <a
                     className="btn-secondary"
-                    href={`${BACKEND_ORIGIN}${appointment.recipePdfPath.startsWith('/') ? appointment.recipePdfPath : `/${appointment.recipePdfPath}`}`}
+                    href={toAbsoluteFileUrl(appointment.recipePdfPath)}
                     target="_blank"
                     rel="noreferrer"
                   >
