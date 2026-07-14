@@ -9,7 +9,7 @@
     width: 100vw;
     margin: 0;
     padding: 0;
-    background-color: #e6e4e0; /* Fondo arena unificado */
+    background-color: var(--bg-cream); /* Fondo arena unificado */
     overflow: hidden;
 }
 
@@ -166,6 +166,30 @@
         }
     }
 
+    .theme-toggle-link {
+        color: rgba(255, 255, 255, 0.85);
+        border: none;
+        background: none;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 500;
+        transition: background 0.2s;
+
+        .material-icons-outlined {
+            font-size: 20px;
+        }
+
+        &:hover {
+            background-color: rgba(255, 255, 255, 0.08);
+        }
+    }
+
     .logout-link {
         color: #ff6b6b;
         border: none;
@@ -192,7 +216,7 @@
 /* ================================================= */
 
 .main-content {
-    background-color: #e6e4e0; /* Fondo arena sutil de la app */
+    background-color: var(--bg-cream); /* Fondo arena sutil de la app */
     height: 100vh;
     overflow-y: auto;
     padding: 2.5rem;

@@ -93,7 +93,7 @@ export const Login = () => {
       <div style={{
         width: '110px',
         height: '110px',
-        backgroundColor: '#007370', // Color verde azulado / Teal corporativo exacto
+        backgroundColor: 'var(--color-primary)', // Color verde azulado / Teal corporativo exacto
         borderRadius: '50%',
         position: 'absolute',
         top: '-15px',
@@ -115,7 +115,7 @@ export const Login = () => {
       {/* 📄 TARJETA CONTENEDORA BLANCA */}
       <div className="card" style={{ 
         padding: '80px 35px 40px 35px', // Margen superior amplio para dar espacio al escudo flotante
-        backgroundColor: '#f5f4f0',    // Color hueso/crema suave para aislar el contenedor del fondo de la pantalla
+        backgroundColor: 'var(--bg)',    // Color hueso/crema suave para aislar el contenedor del fondo de la pantalla
         borderRadius: '24px',          // Bordes redondeados modernos y orgánicos
         boxShadow: '0 20px 40px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02)',
         boxSizing: 'border-box',
@@ -125,10 +125,10 @@ export const Login = () => {
         
         {/* Encabezado */}
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <h1 style={{ fontSize: '26px', fontWeight: 700, color: '#0c1017', margin: 0, letterSpacing: '-0.5px' }}>
+          <h1 style={{ fontSize: '26px', fontWeight: 700, color: 'var(--color-heading)', margin: 0, letterSpacing: '-0.5px' }}>
             Acceso al Sistema
           </h1>
-          <p style={{ fontSize: '14px', color: '#535865', marginTop: '6px', fontWeight: 500 }}>
+          <p style={{ fontSize: '14px', color: 'var(--color-secondary)', marginTop: '6px', fontWeight: 500 }}>
             ProPatient Medical System
           </p>
         </div>
@@ -139,13 +139,13 @@ export const Login = () => {
               marginBottom: '1.5rem', 
               padding: '12px 14px', 
               borderRadius: '8px', 
-              backgroundColor: '#fee2e2', 
-              color: '#b91c1c', 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '10px', 
+              backgroundColor: 'var(--color-danger-bg)',
+              color: 'var(--color-danger)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
               fontSize: '13px',
-              border: '1px solid #fca5a5'
+              border: '1px solid var(--color-danger-border)'
             }}>
               <span>⚠️</span>
               <span style={{ fontWeight: 500 }}>{error}</span>
@@ -154,8 +154,8 @@ export const Login = () => {
 
           {isLoading ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 0', gap: '14px' }}>
-              <div className="spinner-border" role="status" style={{ color: '#007370' }}></div>
-              <p style={{ fontSize: '14px', color: '#535865', fontWeight: 500 }}>Validando identidad médica...</p>
+              <div className="spinner-border" role="status" style={{ color: 'var(--color-primary)' }}></div>
+              <p style={{ fontSize: '14px', color: 'var(--color-secondary)', fontWeight: 500 }}>Validando identidad médica...</p>
             </div>
           ) : (
             <>
@@ -167,7 +167,7 @@ export const Login = () => {
               {/* Leyenda de Seguridad */}
               <p style={{ 
                 fontSize: '12px', 
-                color: '#6e7582', 
+                color: 'var(--color-secondary)',
                 textAlign: 'center', 
                 lineHeight: '1.6', 
                 margin: 0,

@@ -437,10 +437,10 @@ export const ConsultationManager: React.FC = () => {
 
                     {/* Checkbox para incluir/excluir este apartado específico de la receta (no aplica en modo lectura) */}
                     {!isCompleted && (
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#005073', cursor: 'pointer', fontWeight: 500 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--color-primary)', cursor: 'pointer', fontWeight: 500 }}>
                         <input
                           type="checkbox"
-                          style={{ width: '16px', height: '16px', accentColor: '#005073', cursor: 'pointer' }}
+                          style={{ width: '16px', height: '16px', accentColor: 'var(--color-primary)', cursor: 'pointer' }}
                           checked={recipeSections[section.label] !== false} // Por defecto true si no está explícitamente en false
                           onChange={(e) => setRecipeSections({
                             ...recipeSections,

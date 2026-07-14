@@ -145,7 +145,7 @@ export const AppointmentTracking: React.FC = () => {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh', color: '#005073' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh', color: 'var(--color-primary)' }}>
         <div className="spinner-border" role="status"></div>
       </div>
     );
@@ -292,7 +292,7 @@ export const AppointmentTracking: React.FC = () => {
                       </td>
                       <td className="action-cell">
                         {isCompleted ? (
-                          <span style={{ fontSize: '13px', color: '#137333', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          <span style={{ fontSize: '13px', color: 'var(--color-success)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                             ✓ Atendido
                           </span>
                         ) : (
@@ -359,7 +359,7 @@ export const AppointmentTracking: React.FC = () => {
               type="datetime-local"
               value={newDateTime}
               onChange={(e) => setNewDateTime(e.target.value)}
-              style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #dee2e6', marginTop: '8px' }}
+              style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid var(--border)', marginTop: '8px' }}
             />
             <div className="modal-footer">
               <button className="btn-text" onClick={() => setAppToReschedule(null)} disabled={rescheduling}>Cancelar</button>

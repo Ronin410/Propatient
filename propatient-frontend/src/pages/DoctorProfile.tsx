@@ -279,7 +279,7 @@ export const DoctorProfile = () => {
 
   if (isLoading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh', color: '#005073' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh', color: 'var(--color-primary)' }}>
         <div className="spinner-border" role="status"></div>
       </div>
     );
@@ -299,9 +299,9 @@ export const DoctorProfile = () => {
       {message && (
         <div className={`profile-alert alert-${message.type}`} style={{
           padding: '12px 16px', borderRadius: '8px', marginBottom: '24px', fontSize: '14px', fontWeight: 500,
-          backgroundColor: message.type === 'success' ? '#e6f4ea' : '#fce8e6',
-          color: message.type === 'success' ? '#137333' : '#c5221f',
-          border: `1px solid ${message.type === 'success' ? '#ceead6' : '#fad2cf'}`
+          backgroundColor: message.type === 'success' ? 'var(--color-success-bg)' : 'var(--color-danger-bg)',
+          color: message.type === 'success' ? 'var(--color-success)' : 'var(--color-danger)',
+          border: `1px solid ${message.type === 'success' ? 'var(--color-success)' : 'var(--color-danger-border)'}`
         }}>
           {message.type === 'success' ? '✓ ' : '⚠️ '} {message.text}
         </div>
@@ -359,7 +359,7 @@ export const DoctorProfile = () => {
             <div className="upload-box">
               <span className="box-title">Foto de Perfil</span>
               <div className="avatar-circle" onClick={() => avatarInputRef.current?.click()}>
-                {avatarPreview ? <img src={avatarPreview} alt="Avatar" /> : <span className="material-icons-outlined" style={{color:'#b8b6b2', fontSize: '28px'}}>add_a_photo</span>}
+                {avatarPreview ? <img src={avatarPreview} alt="Avatar" /> : <span className="material-icons-outlined" style={{color:'var(--color-secondary)', fontSize: '28px'}}>add_a_photo</span>}
               </div>
               <input type="file" ref={avatarInputRef} accept="image/*" style={{ display: 'none' }} onChange={(e) => handleFileChange(e, 'avatar')} />
               <p className="upload-hint">Formatos JPG o PNG.</p>
@@ -368,7 +368,7 @@ export const DoctorProfile = () => {
             <div className="upload-box">
               <span className="box-title">Logotipo Corporativo (Recetas)</span>
               <div className="logo-rectangle" onClick={() => logoInputRef.current?.click()}>
-                {logoPreview ? <img src={logoPreview} alt="Logo" /> : <span className="material-icons-outlined" style={{color:'#b8b6b2', fontSize: '28px'}}>upload_file</span>}
+                {logoPreview ? <img src={logoPreview} alt="Logo" /> : <span className="material-icons-outlined" style={{color:'var(--color-secondary)', fontSize: '28px'}}>upload_file</span>}
               </div>
               <input type="file" ref={logoInputRef} accept="image/*" style={{ display: 'none' }} onChange={(e) => handleFileChange(e, 'logo')} />
               <p className="upload-hint">Preferiblemente PNG transparente.</p>

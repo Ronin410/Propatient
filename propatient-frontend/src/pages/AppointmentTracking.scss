@@ -14,12 +14,12 @@
 
         h1 { 
             margin: 0; 
-            color: #002d42; 
+            color: var(--color-heading); 
             font-size: 24px; 
             font-weight: 700;
         }
         .subtitle { 
-            color: #6e7582; 
+            color: var(--color-secondary); 
             margin-top: 4px; 
             font-size: 14px;
         }
@@ -53,8 +53,8 @@
         margin-bottom: 2.5rem;
 
         .stat-card {
-            background-color: #ffffff;
-            border: 1px solid #eef0eb;
+            background-color: var(--bg);
+            border: 1px solid var(--border);
             border-radius: 12px;
             padding: 20px 24px;
             display: flex;
@@ -63,7 +63,7 @@
             
             .label { 
                 font-size: 0.8rem;
-                color: #6e7582; 
+                color: var(--color-secondary); 
                 font-weight: 600; 
                 text-transform: uppercase;
                 letter-spacing: 0.5px;
@@ -72,13 +72,13 @@
             .value { 
                 font-size: 2rem;
                 font-weight: 700; 
-                color: #005073; 
+                color: var(--color-primary); 
                 margin: 6px 0;
             }
             
             .desc { 
                 font-size: 0.85rem; 
-                color: #8a909d; 
+                color: var(--color-secondary); 
             }
 
             /* Estilo variante para el siguiente paciente */
@@ -96,8 +96,8 @@
 
     /* Contenedor de la Tabla Blanca Estilo Tarjeta */
     .table-section {
-        background: #ffffff;
-        border: 1px solid #eef0eb;
+        background: var(--bg);
+        border: 1px solid var(--border);
         border-radius: 12px;
         padding: 24px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.015);
@@ -105,7 +105,7 @@
         .section-title {
             font-size: 16px;
             font-weight: 700;
-            color: #002d42;
+            color: var(--color-heading);
             margin: 0 0 20px 0;
         }
     }
@@ -127,14 +127,14 @@
         align-items: center;
         flex-wrap: wrap;
         gap: 12px;
-        background-color: #f8f9fa;
-        border: 1px solid #eef0eb;
+        background-color: var(--bg-subtle);
+        border: 1px solid var(--border);
         border-radius: 8px;
         padding: 14px 18px;
 
         &.overdue {
-            background-color: #fff9f9;
-            border-color: #fcdbd9;
+            background-color: var(--color-danger-bg);
+            border-color: var(--color-danger-border);
         }
 
         .follow-up-info {
@@ -142,13 +142,13 @@
             align-items: center;
             gap: 12px;
 
-            .material-icons-outlined { color: #005073; font-size: 22px; }
+            .material-icons-outlined { color: var(--color-primary); font-size: 22px; }
 
-            strong { display: block; color: #002d42; font-size: 14px; }
-            .follow-up-date { display: block; font-size: 12px; color: #6e7582; margin-top: 2px; }
+            strong { display: block; color: var(--color-heading); font-size: 14px; }
+            .follow-up-date { display: block; font-size: 12px; color: var(--color-secondary); margin-top: 2px; }
         }
 
-        &.overdue .follow-up-date { color: #c92a2a; font-weight: 600; }
+        &.overdue .follow-up-date { color: var(--color-danger-alt); font-weight: 600; }
 
         .follow-up-actions {
             display: flex;
@@ -164,17 +164,17 @@
         font-size: 14px;
 
         th {
-            background-color: #f8f9fa;
-            color: #002d42;
+            background-color: var(--bg-subtle);
+            color: var(--color-heading);
             font-weight: 600;
             padding: 14px 16px;
-            border-bottom: 2px solid #eef0eb;
+            border-bottom: 2px solid var(--border);
         }
 
         td {
             padding: 14px 16px;
-            border-bottom: 1px solid #eef0eb;
-            color: #343a40;
+            border-bottom: 1px solid var(--border);
+            color: var(--text);
             vertical-align: middle;
         }
 
@@ -184,7 +184,7 @@
 
         .time-cell {
             font-weight: 600;
-            color: #005073;
+            color: var(--color-primary);
             display: flex;
             align-items: center;
             gap: 6px;
@@ -192,11 +192,11 @@
 
         .patient-name {
             font-weight: 600;
-            color: #0c1017;
+            color: var(--color-heading);
         }
 
         .reason-cell {
-            color: #6e7582;
+            color: var(--color-secondary);
             max-width: 300px;
             white-space: nowrap;
             overflow: hidden;
@@ -210,7 +210,7 @@
 
     /* Botones Modernos */
     .btn-primary {
-        background-color: #005073;
+        background-color: var(--color-primary);
         color: #ffffff;
         border: none;
         padding: 8px 16px;
@@ -224,14 +224,14 @@
         transition: background-color 0.2s;
 
         &:hover {
-            background-color: #002d42;
+            background-color: var(--color-primary-dark);
         }
     }
 
     .empty-msg {
         padding: 3rem 0;
         text-align: center;
-        color: #6e7582;
+        color: var(--color-secondary);
         font-size: 14px;
     }
 
@@ -247,7 +247,7 @@
         backdrop-filter: blur(4px);
 
         .modal-content {
-            background: #ffffff;
+            background: var(--bg);
             max-width: 420px;
             width: 90%;
             padding: 28px;
@@ -263,12 +263,12 @@
 
                 .alert-icon { 
                     font-size: 42px; 
-                    color: #005073; 
+                    color: var(--color-primary); 
                     margin-bottom: 12px; 
                 }
                 h3 { 
                     margin: 0; 
-                    color: #002d42; 
+                    color: var(--color-heading); 
                     font-size: 18px; 
                     font-weight: 700;
                 }
@@ -276,12 +276,12 @@
 
             p {
                 font-size: 14px;
-                color: #535865;
+                color: var(--color-secondary);
                 line-height: 1.6;
                 margin: 0 0 24px 0;
                 
                 strong {
-                    color: #0c1017;
+                    color: var(--color-heading);
                     font-size: 15px;
                 }
             }
@@ -293,8 +293,8 @@
 
                 .btn-text {
                     background: none;
-                    border: 1px solid #dcdad6;
-                    color: #535865;
+                    border: 1px solid var(--border);
+                    color: var(--color-secondary);
                     padding: 10px 18px;
                     border-radius: 6px;
                     font-size: 13px;
@@ -302,7 +302,7 @@
                     cursor: pointer;
                     transition: background 0.2s;
 
-                    &:hover { background-color: #f8f9fa; }
+                    &:hover { background-color: var(--bg-subtle); }
                 }
 
                 .btn-primary {

@@ -9,20 +9,20 @@
   padding: 10px;
 
   .settings-card {
-    background-color: #ffffff;
+    background-color: var(--bg);
     border-radius: 12px;
     padding: 2.5rem;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
 
     h2 {
-      color: #002d42; // Azul profundo idéntico al Login/Sidebar[cite: 17]
+      color: var(--color-heading); // Azul profundo idéntico al Login/Sidebar[cite: 17]
       font-size: 1.8rem;
       margin-top: 0;
       margin-bottom: 0.5rem;
     }
 
     .description {
-      color: #555555;
+      color: var(--text);
       font-size: 0.95rem;
       line-height: 1.5;
       margin-bottom: 2rem;
@@ -41,19 +41,19 @@
     display: flex;
     align-items: flex-end;
     gap: 16px;
-    background-color: #fcfbfa; // Tono claro armónico con el fondo arena[cite: 17]
-    border: 1px solid #e2e0db;
+    background-color: var(--bg); // Tono claro armónico con el fondo arena[cite: 17]
+    border: 1px solid var(--border);
     padding: 1.2rem;
     border-radius: 8px;
     transition: border-color 0.2s;
 
     &:hover {
-      border-color: #005073; // Brillo azul corporativo[cite: 17]
+      border-color: var(--color-primary); // Brillo azul corporativo[cite: 17]
     }
 
     .row-number {
       font-weight: 700;
-      color: #005073;
+      color: var(--color-primary);
       padding-bottom: 10px;
       font-size: 1.1rem;
     }
@@ -67,19 +67,19 @@
       label {
         font-size: 0.85rem;
         font-weight: 600;
-        color: #002d42;
+        color: var(--color-heading);
       }
 
       input[type="text"] {
         padding: 10px 14px;
-        border: 1px solid #cbd5e0;
+        border: 1px solid var(--border);
         border-radius: 6px;
         font-size: 0.9rem;
         outline: none;
-        background-color: #ffffff;
+        background-color: var(--bg);
 
         &:focus {
-          border-color: #005073;
+          border-color: var(--color-primary);
           box-shadow: 0 0 0 3px rgba(0, 80, 115, 0.15);
         }
       }
@@ -91,7 +91,7 @@
       gap: 8px;
       font-size: 0.9rem;
       font-weight: 500;
-      color: #002d42;
+      color: var(--color-heading);
       cursor: pointer;
       padding-bottom: 12px;
       white-space: nowrap;
@@ -99,7 +99,7 @@
       input[type="checkbox"] {
         width: 16px;
         height: 16px;
-        accent-color: #005073;
+        accent-color: var(--color-primary);
         cursor: pointer;
       }
     }
@@ -107,7 +107,7 @@
     .btn-delete {
       background: transparent;
       border: none;
-      color: #a0aec0;
+      color: var(--color-secondary);
       cursor: pointer;
       padding: 10px;
       border-radius: 6px;
@@ -116,8 +116,8 @@
       margin-bottom: 2px;
 
       &:hover {
-        color: #ff6b6b; // Rojo del sidebar footer[cite: 17]
-        background-color: rgba(255, 107, 107, 0.1);
+        color: var(--color-danger); // Rojo del sidebar footer[cite: 17]
+        background-color: var(--color-danger-bg);
       }
     }
   }
@@ -128,13 +128,13 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-top: 1px solid #e2e0db;
+  border-top: 1px solid var(--border);
   padding-top: 1.5rem;
 
   .btn-add {
     background-color: transparent;
-    color: #005073;
-    border: 1px dashed #005073;
+    color: var(--color-primary);
+    border: 1px dashed var(--color-primary);
     padding: 10px 20px;
     border-radius: 6px;
     font-weight: 600;
@@ -150,7 +150,7 @@
   }
 
   .btn-save-main {
-    background-color: #005073;
+    background-color: var(--color-primary);
     color: #ffffff;
     border: none;
     padding: 12px 24px;
@@ -161,11 +161,11 @@
     transition: background 0.2s;
 
     &:hover:not(:disabled) {
-      background-color: #002d42;
+      background-color: var(--color-primary-dark);
     }
 
     &:disabled {
-      background-color: #a0aec0;
+      background-color: var(--color-secondary);
       cursor: not-allowed;
       box-shadow: none;
     }
@@ -178,6 +178,6 @@
   align-items: center;
   height: 50vh;
   font-size: 1.1rem;
-  color: #002d42;
+  color: var(--color-heading);
   font-weight: 500;
 }

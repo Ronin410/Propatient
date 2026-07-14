@@ -92,7 +92,7 @@ export const ValidateLicense = () => {
     color: 'var(--text-h, #333)',
     outline: 'none',
     transition: 'border-color 0.2s, box-shadow 0.2s',
-    background: '#ffffff',
+    background: 'var(--bg)',
     boxSizing: 'border-box'
   };
 
@@ -109,7 +109,7 @@ export const ValidateLicense = () => {
       <div className="card" style={{ 
         width: '100%', 
         padding: '35px',
-        backgroundColor: '#ffffff',
+        backgroundColor: 'var(--bg)',
         borderRadius: '12px',
         boxShadow: 'var(--shadow, 0 4px 12px rgba(0, 0, 0, 0.05))',
         boxSizing: 'border-box'
@@ -130,8 +130,8 @@ export const ValidateLicense = () => {
               lineHeight: '1.4',
               padding: '12px',
               borderRadius: '6px',
-              backgroundColor: '#fee2e2',
-              color: '#b91c1c',
+              backgroundColor: 'var(--color-danger-bg)',
+              color: 'var(--color-danger)',
               fontSize: '14px'
             }}>
               ⚠️ {error}
@@ -188,7 +188,7 @@ export const ValidateLicense = () => {
           </div>
 
           <div style={{ 
-            background: '#f8f9fa', 
+            background: 'var(--bg-subtle)', 
             padding: '20px', 
             borderRadius: '8px', 
             border: '2px dashed var(--border, #ccc)',

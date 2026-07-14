@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import './DashboardLayout.scss';
 
 export const DashboardLayout = () => {
   const { logout } = useAuth();
+  const { resolvedTheme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -102,6 +104,16 @@ export const DashboardLayout = () => {
             </div>
             <p className="doctor-name">{doctorName}</p>
           </div>
+          <button
+            className="theme-toggle-link"
+            onClick={toggleTheme}
+            aria-label={resolvedTheme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+          >
+            <span className="material-icons-outlined">
+              {resolvedTheme === 'dark' ? 'light_mode' : 'dark_mode'}
+            </span>
+            {resolvedTheme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
+          </button>
           <button className="logout-link" onClick={handleLogout}>
             <span className="material-icons-outlined">logout</span>
             Cerrar Sesión

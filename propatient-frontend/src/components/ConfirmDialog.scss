@@ -12,7 +12,7 @@
   animation: confirmDialogFadeIn 0.2s ease-out;
 
   .confirm-dialog-content {
-    background-color: #ffffff;
+    background-color: var(--bg);
     padding: 32px;
     border-radius: 12px;
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
@@ -25,20 +25,20 @@
       font-size: 48px;
       margin-bottom: 16px;
 
-      &.icon-default { color: #007370; }
-      &.icon-danger { color: #d32f2f; }
+      &.icon-default { color: var(--color-primary); }
+      &.icon-danger { color: var(--color-danger); }
     }
 
     h3 {
       font-size: 20px;
       font-weight: 700;
-      color: #002d42;
+      color: var(--color-heading);
       margin: 0 0 8px 0;
     }
 
     p {
       font-size: 14px;
-      color: #6e7582;
+      color: var(--color-secondary);
       line-height: 1.5;
       margin: 0 0 24px 0;
     }
@@ -61,15 +61,15 @@
       }
 
       .btn-cancel {
-        background-color: #f0f1f3;
-        color: #535865;
+        background-color: var(--bg-subtle);
+        color: var(--color-secondary);
       }
 
       .btn-confirm {
         color: #ffffff;
 
-        &.btn-default { background-color: #007370; }
-        &.btn-danger { background-color: #d32f2f; }
+        &.btn-default { background-color: var(--color-primary); }
+        &.btn-danger { background-color: var(--color-danger); }
       }
     }
   }

@@ -10,7 +10,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
       display: 'flex',
       minHeight: '100vh',
       width: '100vw',
-      backgroundColor: '#e6e4e0', // Fondo crema de la mitad derecha según image_850f73.jpg
+      backgroundColor: 'var(--bg-cream)', // Fondo crema de la mitad derecha según image_850f73.jpg
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
     }}>
       {/* 💻 MITAD IZQUIERDA: Panel Visual Corporativo */}
@@ -89,7 +89,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
         alignItems: 'center',
         justifyContent: 'center',
         padding: '40px 20px',
-        backgroundColor: '#e6e4e0', // Fondo arena unificado
+        backgroundColor: 'var(--bg-cream)', // Fondo arena unificado
         maxHeight: '100vh',
         overflowY: 'auto',
         boxSizing: 'border-box'
