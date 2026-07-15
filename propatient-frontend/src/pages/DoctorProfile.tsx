@@ -4,6 +4,7 @@ import './DoctorProfile.scss';
 import { Popup } from '../components/Popup';
 import { getErrorMessage } from '../utils/errorMessage';
 import { toAbsoluteFileUrl } from '../utils/fileUrl';
+import { LocationPicker } from '../components/LocationPicker';
 
 interface ProfileData {
   rfc: string;
@@ -23,6 +24,8 @@ interface ProfileData {
   publicListed?: boolean;
   publicBio?: string;
   publicSlug?: string;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export const DoctorProfile = () => {
@@ -39,7 +42,9 @@ export const DoctorProfile = () => {
     recipeLegend: 'Favor de no automedicarse. En caso de presentar reacciones adversas suspenda el medicamento y consulte a su médico.',
     resume: '',
     publicListed: false,
-    publicBio: ''
+    publicBio: '',
+    latitude: null,
+    longitude: null
   });
   // Estado único para controlar la configuración del popup genérico
   const [popupConfig, setPopupConfig] = useState({
@@ -195,6 +200,10 @@ export const DoctorProfile = () => {
     setProfile(prev => ({ ...prev, publicListed: e.target.checked }));
   };
 
+  const handleLocationChange = (lat: number, lng: number) => {
+    setProfile(prev => ({ ...prev, latitude: lat, longitude: lng }));
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'avatar' | 'logo') => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -232,6 +241,10 @@ export const DoctorProfile = () => {
       formData.append('resume', profile.resume);
       formData.append('publicListed', profile.publicListed ? 'true' : 'false');
       formData.append('publicBio', profile.publicBio || '');
+      if (profile.latitude != null && profile.longitude != null) {
+        formData.append('latitude', String(profile.latitude));
+        formData.append('longitude', String(profile.longitude));
+      }
 
       // 3. Adjuntar los archivos (si se han seleccionado)
       if (avatarFile) {
@@ -260,7 +273,9 @@ export const DoctorProfile = () => {
           logoUrl: data.logoUrl || prev.logoUrl,
           publicListed: data.publicListed,
           publicBio: data.publicBio,
-          publicSlug: data.publicSlug || prev.publicSlug
+          publicSlug: data.publicSlug || prev.publicSlug,
+          latitude: data.latitude ?? prev.latitude,
+          longitude: data.longitude ?? prev.longitude
         }));
 
         if (data.avatarUrl) setAvatarPreview(toAbsoluteFileUrl(data.avatarUrl));
@@ -460,6 +475,16 @@ export const DoctorProfile = () => {
             <div className="form-group full-width">
               <label>Dirección Física del Consultorio</label>
               <input type="text" name="address" value={profile.address} onChange={handleInputChange} />
+            </div>
+
+            <div className="form-group full-width">
+              <label>Ubicación en el Mapa</label>
+              <LocationPicker
+                address={profile.address}
+                latitude={profile.latitude ?? null}
+                longitude={profile.longitude ?? null}
+                onChange={handleLocationChange}
+              />
             </div>
 
             <div className="form-group full-width">

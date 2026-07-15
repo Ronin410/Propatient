@@ -3,11 +3,13 @@ package auth
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/smtp"
 	"os"
 	"path/filepath"
 	"propatient-api/internal/billing"
+	"propatient-api/internal/geocoding"
 	"propatient-api/internal/models"
 	"propatient-api/internal/storage"
 	"strings"
@@ -121,7 +123,7 @@ func GoogleLoginHandler(db *gorm.DB) gin.HandlerFunc {
 }
 
 // Handler para la segunda pantalla: Carga de datos extras del Perfil
-func UpdateProfileHandler(db *gorm.DB) gin.HandlerFunc {
+func UpdateProfileHandler(db *gorm.DB, geoClient geocoding.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// NOTA: Aquí debes extraer el ID del doctor desde el JWT que envía el Middleware de autenticación
 		doctorID, _ := c.Get("doctorID")
@@ -136,6 +138,10 @@ func UpdateProfileHandler(db *gorm.DB) gin.HandlerFunc {
 			//RFC              string `json:"rfc"`
 			//CURP             string `json:"curp"`
 			University string `json:"university"`
+			// Posición del pin si el doctor la ajustó en el mapa interactivo
+			// del registro; ver geocoding.ResolveCoordinates.
+			Latitude  string `json:"latitude"`
+			Longitude string `json:"longitude"`
 		}
 
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -147,6 +153,20 @@ func UpdateProfileHandler(db *gorm.DB) gin.HandlerFunc {
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Formato de fecha de nacimiento inválido"})
 			return
+		}
+
+		var existingDoctor models.Doctor
+		if err := db.First(&existingDoctor, doctorID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Doctor no encontrado"})
+			return
+		}
+
+		lat, lng, geoErr := geocoding.ResolveCoordinates(
+			c.Request.Context(), geoClient, req.Address, existingDoctor.Address, existingDoctor.Latitude, existingDoctor.Longitude,
+			req.Latitude, req.Longitude,
+		)
+		if geoErr != nil {
+			log.Printf("⚠️ No se pudo geocodificar la dirección del doctor %v: %v", doctorID, geoErr)
 		}
 
 		// Actualizamos los datos del doctor y marcamos perfil como completado
@@ -161,6 +181,8 @@ func UpdateProfileHandler(db *gorm.DB) gin.HandlerFunc {
 			//RFC:              req.RFC,
 			//CURP:             req.CURP,
 			University: req.University,
+			Latitude:   lat,
+			Longitude:  lng,
 		}).Error
 
 		if err != nil {

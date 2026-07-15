@@ -104,24 +104,25 @@ func UpdateCurrentDoctor(db *gorm.DB, storageClient storage.Client, geoClient ge
 
 		// Directorio público (landing page): opt-in explícito del doctor.
 		// El slug se genera una sola vez (nunca cambia, para no romper
-		// enlaces ya compartidos) y la geocodificación solo se repite si
-		// la dirección cambió, para no golpear la API de Nominatim en
-		// cada guardado del perfil.
+		// enlaces ya compartidos).
 		doctor.PublicListed = c.PostForm("publicListed") == "true"
 		doctor.PublicBio = c.PostForm("publicBio")
-		if doctor.PublicListed {
-			if doctor.PublicSlug == "" {
-				doctor.PublicSlug = generateDoctorSlug(doctor.FullName, doctor.ID)
-			}
-			if doctor.Address != "" && (doctor.Address != previousAddress || doctor.Latitude == nil) {
-				if coords, err := geoClient.Geocode(c.Request.Context(), doctor.Address); err != nil {
-					log.Printf("⚠️ No se pudo geocodificar la dirección del doctor %d: %v", doctorID, err)
-				} else if coords != nil {
-					doctor.Latitude = &coords.Latitude
-					doctor.Longitude = &coords.Longitude
-				}
-			}
+		if doctor.PublicListed && doctor.PublicSlug == "" {
+			doctor.PublicSlug = generateDoctorSlug(doctor.FullName, doctor.ID)
 		}
+
+		// Ubicación del consultorio: se guarda siempre que haya dirección
+		// (no solo si está en el directorio público), con el mapa del
+		// perfil como fuente de verdad si el doctor arrastró el pin —
+		// ver geocoding.ResolveCoordinates.
+		lat, lng, geoErr := geocoding.ResolveCoordinates(
+			c.Request.Context(), geoClient, doctor.Address, previousAddress, doctor.Latitude, doctor.Longitude,
+			c.PostForm("latitude"), c.PostForm("longitude"),
+		)
+		if geoErr != nil {
+			log.Printf("⚠️ No se pudo geocodificar la dirección del doctor %d: %v", doctorID, geoErr)
+		}
+		doctor.Latitude, doctor.Longitude = lat, lng
 
 		// 5. Persistir los cambios en la Base de Datos
 		if err := db.Save(&doctor).Error; err != nil {
@@ -147,6 +148,34 @@ func UpdateCurrentDoctor(db *gorm.DB, storageClient storage.Client, geoClient ge
 			"publicListed":     doctor.PublicListed,
 			"publicBio":        doctor.PublicBio,
 			"publicSlug":       doctor.PublicSlug,
+			"latitude":         doctor.Latitude,
+			"longitude":        doctor.Longitude,
 		})
+	}
+}
+
+// PreviewGeocode ubica una dirección en el mapa sin guardarla todavía —
+// la usa el mapa interactivo del perfil y del registro para centrar el pin
+// cuando el doctor escribe su dirección y presiona "Ubicar en el mapa",
+// antes de que decida arrastrarlo o confirmar el guardado.
+func PreviewGeocode(geoClient geocoding.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		address := c.Query("address")
+		if address == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Falta la dirección a ubicar"})
+			return
+		}
+
+		coords, err := geoClient.Geocode(c.Request.Context(), address)
+		if err != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "No se pudo consultar el servicio de mapas, intenta de nuevo"})
+			return
+		}
+		if coords == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "No pudimos ubicar esa dirección en el mapa"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"latitude": coords.Latitude, "longitude": coords.Longitude})
 	}
 }

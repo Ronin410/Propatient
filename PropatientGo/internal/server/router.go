@@ -195,7 +195,7 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 				users := gated.Group("/user")
 				users.Use(auth.RequireDoctorRole())
 				{
-					users.POST("/update-profile", auth.UpdateProfileHandler(db))
+					users.POST("/update-profile", auth.UpdateProfileHandler(db, geoClient))
 					users.POST("/update-license", auth.UpdateLicenseHandler(db))
 					users.POST("/update-license-full", auth.UpdateLicenseFullHandler(db, storageClient))
 				}
@@ -240,6 +240,9 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 				{
 					doctorRoutes.GET("/me", handlers.GetCurrentDoctor(db, storageClient))
 					doctorRoutes.PUT("/me", handlers.UpdateCurrentDoctor(db, storageClient, geoClient))
+					// Ubica una dirección en el mapa sin guardarla: la usa el mapa
+					// interactivo del registro y del perfil para centrar el pin.
+					doctorRoutes.GET("/geocode", handlers.PreviewGeocode(geoClient))
 					doctorRoutes.GET("/template", handlers.GetDoctorTemplate(db))
 					doctorRoutes.POST("/template", handlers.SaveDoctorTemplate(db))
 					doctorRoutes.GET("/google-calendar/connect", handlers.ConnectGoogleCalendar(calendarConfig))

@@ -85,3 +85,39 @@ func (n *nominatimClient) Geocode(ctx context.Context, address string) (*Coordin
 
 	return &Coordinates{Latitude: lat, Longitude: lon}, nil
 }
+
+// ResolveCoordinates decide la posición final a guardar para un doctor,
+// compartida entre el registro inicial (CompleteProfile.tsx) y el perfil
+// (DoctorProfile.tsx), ambos con un mapa donde el doctor puede arrastrar el
+// pin para corregir la ubicación automática.
+//
+// Prioridad: 1) posición manual (el doctor arrastró el pin en el mapa,
+// llega como manualLatStr/manualLngStr) siempre gana, sin volver a
+// geocodificar; 2) si la dirección no cambió y ya había coordenadas, se
+// dejan igual, para no golpear la API en cada guardado; 3) si no, se
+// geocodifica la dirección nueva.
+func ResolveCoordinates(ctx context.Context, client Client, address, previousAddress string, existingLat, existingLng *float64, manualLatStr, manualLngStr string) (lat *float64, lng *float64, err error) {
+	if manualLatStr != "" && manualLngStr != "" {
+		mLat, errLat := strconv.ParseFloat(manualLatStr, 64)
+		mLng, errLng := strconv.ParseFloat(manualLngStr, 64)
+		if errLat == nil && errLng == nil {
+			return &mLat, &mLng, nil
+		}
+	}
+
+	if address == "" {
+		return existingLat, existingLng, nil
+	}
+	if address == previousAddress && existingLat != nil {
+		return existingLat, existingLng, nil
+	}
+
+	coords, geoErr := client.Geocode(ctx, address)
+	if geoErr != nil {
+		return existingLat, existingLng, geoErr
+	}
+	if coords == nil {
+		return existingLat, existingLng, nil
+	}
+	return &coords.Latitude, &coords.Longitude, nil
+}

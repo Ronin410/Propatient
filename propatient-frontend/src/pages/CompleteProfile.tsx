@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { AuthLayout } from './AuthLayout';
 import { getErrorMessage } from '../utils/errorMessage';
+import { LocationPicker } from '../components/LocationPicker';
 
 export const CompleteProfile = () => {
   const [formData, setFormData] = useState({
@@ -13,6 +14,10 @@ export const CompleteProfile = () => {
     postalCode: '',
     medicalSpecialty: '',
     university: ''
+  });
+  const [location, setLocation] = useState<{ latitude: number | null; longitude: number | null }>({
+    latitude: null,
+    longitude: null
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,8 +64,12 @@ export const CompleteProfile = () => {
     }
 
     try {
-      await api.post('/user/update-profile', formData);
-      navigate('/registro/validar-cedula'); 
+      await api.post('/user/update-profile', {
+        ...formData,
+        latitude: location.latitude != null ? String(location.latitude) : '',
+        longitude: location.longitude != null ? String(location.longitude) : ''
+      });
+      navigate('/registro/validar-cedula');
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Ocurrió un error al guardar tu perfil.'));
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -252,6 +261,18 @@ export const CompleteProfile = () => {
                 e.target.style.borderColor = 'var(--border)';
                 e.target.style.boxShadow = 'none';
               }}
+            />
+          </div>
+
+          <div>
+            <label style={{ ...labelStyle, color: 'var(--text)' }}>
+              Ubicación en el Mapa <span style={{ fontWeight: 'normal', fontSize: '12px' }}>(Opcional)</span>
+            </label>
+            <LocationPicker
+              address={formData.address}
+              latitude={location.latitude}
+              longitude={location.longitude}
+              onChange={(lat, lng) => setLocation({ latitude: lat, longitude: lng })}
             />
           </div>
 
