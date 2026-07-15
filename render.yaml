@@ -62,13 +62,13 @@ services:
         sync: false
       - key: AWS_SECRET_ACCESS_KEY
         sync: false
-      # Envío de correos (invitación de personal, solicitud de cita pública,
-      # recordatorio de cita). Sin estas dos, la app funciona igual pero no
-      # se manda el correo (falla rápido, no bloquea la petición). Ver
-      # .env.example para cómo generar la contraseña de aplicación de Gmail.
-      - key: SMTP_EMAIL
+      # Envío de correos vía Resend (ver .env.example para la guía completa
+      # y por qué es HTTP y no SMTP). Sin RESEND_API_KEY, la app funciona
+      # igual pero no se manda el correo (falla rápido, no bloquea la
+      # petición).
+      - key: RESEND_API_KEY
         sync: false
-      - key: SMTP_PASSWORD
+      - key: RESEND_FROM_EMAIL
         sync: false
       # Cobro de suscripción con Stripe (ver .env.example para la guía).
       # Sin estas tres, la app funciona igual, solo el botón "Suscribirse"

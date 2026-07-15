@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/smtp"
 	"os"
 	"path/filepath"
 	"propatient-api/internal/billing"
@@ -24,11 +23,6 @@ type LoginRequest struct {
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
 }
-
-const (
-	SMTPServer = "smtp.gmail.com"
-	SMTPPort   = "587"
-)
 
 func GoogleLoginHandler(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -407,14 +401,7 @@ func RegisterDoctor(db *gorm.DB) gin.HandlerFunc {
 }
 
 func SendValidationEmail(toEmail string, doctorName string) error {
-
-	senderEmail := os.Getenv("SMTP_EMAIL")
-	senderPass := os.Getenv("SMTP_PASSWORD")
-
-	auth := smtp.PlainAuth("", senderEmail, senderPass, SMTPServer)
-
-	subject := "Subject: ProPatient - Tu cuenta está en proceso de validación\n"
-	mime := "MIME-version: 1.0;\nContent-Type: text/html; charset=\"UTF-8\";\n\n"
+	subject := "ProPatient - Tu cuenta está en proceso de validación"
 
 	body := fmt.Sprintf(`
 		<html>
@@ -437,8 +424,5 @@ func SendValidationEmail(toEmail string, doctorName string) error {
 		</html>
 	`, doctorName)
 
-	msg := []byte(subject + mime + body)
-	addr := SMTPServer + ":" + SMTPPort
-
-	return smtp.SendMail(addr, auth, senderEmail, []string{toEmail}, msg)
+	return sendViaResend(toEmail, subject, body)
 }

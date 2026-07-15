@@ -15,8 +15,8 @@
                                 //"DATABASE_URL": "postgresql://admin:vto19bkZHO5LQBdfBj@postgres.render.com/propatient-",
                 "JWT_SECRET": "MiClaveSuperSecreta123",
                 "PORT": "8095",
-                "SMTP_EMAIL": "alejandrobuenomendoza@gmail.com",
-                "SMTP_PASSWORD": "yfsk dinm xblm vjcp"
+                "RESEND_API_KEY": "",
+                "RESEND_FROM_EMAIL": ""
             }
         }
     ]
