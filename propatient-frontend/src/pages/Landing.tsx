@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import api from '../api/axios';
 import { toAbsoluteFileUrl } from '../utils/fileUrl';
 import type { PublicDoctor } from '../types';
+import { Footer } from '../components/Footer';
 import './Landing.scss';
 
 const ROTATION_MS = 5000;
@@ -123,9 +124,7 @@ export const Landing: React.FC = () => {
         <Link to="/login" className="btn-primary-lg">Crear mi cuenta</Link>
       </section>
 
-      <footer className="landing-footer">
-        <p>© {new Date().getFullYear()} ProPatient Medical System.</p>
-      </footer>
+      <Footer />
     </div>
   );
 };

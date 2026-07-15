@@ -9,6 +9,7 @@ import 'leaflet/dist/leaflet.css';
 import api from '../api/axios';
 import { toAbsoluteFileUrl } from '../utils/fileUrl';
 import type { PublicDoctor } from '../types';
+import { Footer } from '../components/Footer';
 import './DoctorDirectory.scss';
 
 // Vite empaqueta los PNG del propio paquete leaflet como assets; sin esto,
@@ -129,6 +130,8 @@ export const DoctorDirectory: React.FC = () => {
           )}
         </div>
       </div>
+
+      <Footer />
     </div>
   );
 };

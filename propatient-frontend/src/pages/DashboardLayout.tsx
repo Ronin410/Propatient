@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { Footer } from '../components/Footer';
 import './DashboardLayout.scss';
 
 export const DashboardLayout = () => {
@@ -130,6 +131,7 @@ export const DashboardLayout = () => {
       {/* ÁREA DE CONTENIDO */}
       <main className="main-content">
         <Outlet />
+        <Footer />
       </main>
     </div>
   );

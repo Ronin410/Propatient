@@ -13,6 +13,7 @@ import { DashboardLayout } from './pages/DashboardLayout';
 import { Landing } from './pages/Landing';
 import { DoctorDirectory } from './pages/DoctorDirectory';
 import { PublicDoctorProfile } from './pages/PublicDoctorProfile';
+import { PrivacyPolicy } from './pages/PrivacyPolicy';
 
 // Nuevas Pantallas que estamos migrando
 import { AppointmentTracking } from './pages/AppointmentTracking';
@@ -56,6 +57,7 @@ function App() {
           <Route path="/" element={<RootRoute />} />
           <Route path="/doctores" element={<DoctorDirectory />} />
           <Route path="/dr/:slug" element={<PublicDoctorProfile />} />
+          <Route path="/privacidad" element={<PrivacyPolicy />} />
           <Route path="/login" element={<Login />} />
           <Route path="/staff-login" element={<StaffLogin />} />
           <Route path="/personal/invitacion/:token" element={<AcceptStaffInvite />} />

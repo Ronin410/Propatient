@@ -10,6 +10,7 @@ import api from '../api/axios';
 import { toAbsoluteFileUrl } from '../utils/fileUrl';
 import { getErrorMessage } from '../utils/errorMessage';
 import type { PublicDoctor } from '../types';
+import { Footer } from '../components/Footer';
 import './PublicDoctorProfile.scss';
 
 const defaultIcon = L.icon({
@@ -243,6 +244,8 @@ export const PublicDoctorProfile: React.FC = () => {
           )}
         </section>
       </div>
+
+      <Footer />
     </div>
   );
 };
