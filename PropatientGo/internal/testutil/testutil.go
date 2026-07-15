@@ -42,13 +42,14 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 	if err := db.AutoMigrate(
 		&models.Doctor{}, &models.Patient{}, &models.MedicalHistory{},
 		&models.Appointment{}, &models.MedicalDocument{}, &models.DoctorTemplate{},
+		&models.Staff{},
 	); err != nil {
 		t.Fatalf("Error en AutoMigrate de la DB de pruebas: %v", err)
 	}
 
 	// Limpieza total antes de cada test para que no arrastre datos de corridas anteriores.
 	if err := db.Exec(
-		"TRUNCATE TABLE doctor_patients, medical_documents, appointments, medical_histories, patients, doctor_templates, doctors RESTART IDENTITY CASCADE",
+		"TRUNCATE TABLE doctor_patients, medical_documents, appointments, medical_histories, patients, doctor_templates, staffs, doctors RESTART IDENTITY CASCADE",
 	).Error; err != nil {
 		t.Fatalf("Error al limpiar la DB de pruebas: %v", err)
 	}
@@ -86,6 +87,41 @@ func TokenFor(t *testing.T, doctorID uint, username string) string {
 	token, err := auth.GenerateToken(doctorID, username)
 	if err != nil {
 		t.Fatalf("Error al generar JWT de prueba: %v", err)
+	}
+	return token
+}
+
+// CreateTestStaff inserta una cuenta de personal de prueba con contraseña
+// conocida, vinculada al doctor indicado.
+func CreateTestStaff(t *testing.T, db *gorm.DB, doctorID uint, email, password string) models.Staff {
+	t.Helper()
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("Error al hashear password de prueba: %v", err)
+	}
+
+	staff := models.Staff{
+		DoctorID:     doctorID,
+		FullName:     "Personal de prueba",
+		Email:        email,
+		PasswordHash: string(hashed),
+		Active:       true,
+		PasswordSet:  true,
+	}
+	if err := db.Create(&staff).Error; err != nil {
+		t.Fatalf("Error al crear personal de prueba: %v", err)
+	}
+	return staff
+}
+
+// TokenForStaff genera un JWT real de personal (mismo doctorID del dueño
+// del consultorio, con role "STAFF") para el registro de Staff indicado.
+func TokenForStaff(t *testing.T, doctorID, staffID uint, email string) string {
+	t.Helper()
+	token, err := auth.GenerateStaffToken(doctorID, staffID, email)
+	if err != nil {
+		t.Fatalf("Error al generar JWT de personal de prueba: %v", err)
 	}
 	return token
 }

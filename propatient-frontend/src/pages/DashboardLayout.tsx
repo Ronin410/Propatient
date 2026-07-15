@@ -5,7 +5,7 @@ import { useTheme } from '../context/ThemeContext';
 import './DashboardLayout.scss';
 
 export const DashboardLayout = () => {
-  const { logout } = useAuth();
+  const { logout, isStaff } = useAuth();
   const { resolvedTheme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
@@ -20,12 +20,17 @@ export const DashboardLayout = () => {
     setIsSidebarOpen(false);
   }, [location.pathname]);
 
+  // El personal solo gestiona agenda y pacientes: sin Perfil, Ajustes ni
+  // gestión de Personal (todo eso ya está bloqueado también en el backend).
   const menuItems = [
     { label: 'Dashboard', icon: 'home', route: '/inicio' },
     { label: 'Pacientes', icon: 'people', route: '/pacientes' },
     { label: 'Citas', icon: 'calendar_month', route: '/calendar' },
-    { label: 'Perfil', icon: 'settings', route: '/profile' },
-    { label: 'Ajustes Notas', icon: 'tune', route: '/ajustes-notas' }
+    ...(!isStaff ? [
+      { label: 'Personal', icon: 'badge', route: '/personal' },
+      { label: 'Perfil', icon: 'settings', route: '/profile' },
+      { label: 'Ajustes Notas', icon: 'tune', route: '/ajustes-notas' }
+    ] : [])
   ];
 
   const handleLogout = () => {

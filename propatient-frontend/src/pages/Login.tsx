@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { AuthLayout } from './AuthLayout';
 import { getErrorMessage } from '../utils/errorMessage';
 import './Login.scss';
@@ -174,6 +174,10 @@ export const Login = () => {
                 padding: '0 5px'
               }}>
                 Para garantizar la seguridad de los expedientes clínicos, el acceso está restringido a correos institucionales o de Gmail verificados.
+              </p>
+
+              <p style={{ fontSize: '13px', color: 'var(--color-secondary)', textAlign: 'center', marginTop: '20px' }}>
+                ¿Eres personal del consultorio? <Link to="/staff-login" style={{ color: 'var(--color-primary)', fontWeight: 600 }}>Inicia sesión aquí</Link>
               </p>
             </>
           )}

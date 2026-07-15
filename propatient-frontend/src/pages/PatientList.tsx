@@ -4,6 +4,7 @@ import api from '../api/axios';
 import { formatToLocalDate } from '../utils/dateFormatter';
 import type { Patient } from '../types';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { useAuth } from '../context/AuthContext';
 import './PatientList.scss';
 
 const PAGE_SIZE = 20;
@@ -16,6 +17,7 @@ export const PatientList: React.FC = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [patientToDelete, setPatientToDelete] = useState<Patient | null>(null);
   const navigate = useNavigate();
+  const { isStaff } = useAuth();
 
   const isSearching = searchTerm.length > 0;
 
@@ -157,12 +159,21 @@ export const PatientList: React.FC = () => {
                           </span>
                         </td>
                         <td className="actions-cell">
-                          <button
-                            className="btn-outline-sm"
-                            onClick={() => navigate(`/pacientes/${patient.id}`)}
-                          >
-                            Ver Historial
-                          </button>
+                          {isStaff ? (
+                            <button
+                              className="btn-outline-sm"
+                              onClick={() => navigate(`/pacientes/editar/${patient.id}`)}
+                            >
+                              Editar
+                            </button>
+                          ) : (
+                            <button
+                              className="btn-outline-sm"
+                              onClick={() => navigate(`/pacientes/${patient.id}`)}
+                            >
+                              Ver Historial
+                            </button>
+                          )}
                           <button
                             className="btn-outline-sm danger"
                             onClick={() => setPatientToDelete(patient)}

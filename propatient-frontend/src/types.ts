@@ -1,3 +1,13 @@
+export interface Staff {
+  id: number;
+  doctorId: number;
+  fullName: string;
+  email: string;
+  active: boolean;
+  passwordSet: boolean;
+  created_at?: string;
+}
+
 export interface MedicalHistory {
   allergies: string;
   pathological_history: string;

@@ -1,9 +1,12 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { OnboardingGuard } from './context/OnboardingGuard';
+import { DoctorOnlyRoute } from './components/DoctorOnlyRoute';
 
 // Páginas de Estructura y Login
 import { Login } from './pages/Login';
+import { StaffLogin } from './pages/StaffLogin';
+import { AcceptStaffInvite } from './pages/AcceptStaffInvite';
 import { DashboardLayout } from './pages/DashboardLayout';
 
 // Nuevas Pantallas que estamos migrando
@@ -18,6 +21,7 @@ import { CompleteProfile } from './pages/CompleteProfile';
 import { ValidateLicense } from './pages/ValidateLicense';
 import { DoctorProfile } from './pages/DoctorProfile';
 import { SettingsNotes } from './pages/SettingsNotes';
+import { StaffManagement } from './pages/StaffManagement';
 // Componente para proteger rutas privadas básicas
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated } = useAuth();
@@ -34,8 +38,10 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* 🔓 RUTA PÚBLICA */}
+          {/* 🔓 RUTAS PÚBLICAS */}
           <Route path="/login" element={<Login />} />
+          <Route path="/staff-login" element={<StaffLogin />} />
+          <Route path="/personal/invitacion/:token" element={<AcceptStaffInvite />} />
 
           {/* 📑 SECCIÓN ONBOARDING: Totalmente independiente de la estructura del Dashboard */}
           <Route
@@ -68,14 +74,18 @@ function App() {
               <Route index element={<Navigate to="/inicio" replace />} />
               <Route path="inicio" element={<AppointmentTracking />} />
               <Route path="pacientes" element={<PatientList />} />
-              <Route path="pacientes/:id" element={<PatientDetail />} />
               <Route path="pacientes/nuevo" element={<PatientForm />} />
               <Route path="pacientes/editar/:id" element={<PatientForm />} />
               <Route path="calendar" element={<AppointmentCalendar />} />
               <Route path="appointments/new" element={<AppointmentForm />} />
-              <Route path="consulta/:appointmentId" element={<ConsultationManager />} />
-              <Route path="profile" element={<DoctorProfile />} />
-              <Route path="ajustes-notas" element={<SettingsNotes />} />
+              {/* Historial clínico, contenido de consultas y configuración del
+                  doctor: el backend ya las bloquea para personal, aquí solo
+                  evitamos que lleguen a una pantalla que va a fallar. */}
+              <Route path="pacientes/:id" element={<DoctorOnlyRoute><PatientDetail /></DoctorOnlyRoute>} />
+              <Route path="consulta/:appointmentId" element={<DoctorOnlyRoute><ConsultationManager /></DoctorOnlyRoute>} />
+              <Route path="profile" element={<DoctorOnlyRoute><DoctorProfile /></DoctorOnlyRoute>} />
+              <Route path="ajustes-notas" element={<DoctorOnlyRoute><SettingsNotes /></DoctorOnlyRoute>} />
+              <Route path="personal" element={<DoctorOnlyRoute><StaffManagement /></DoctorOnlyRoute>} />
             </Route>
           </Route>
 

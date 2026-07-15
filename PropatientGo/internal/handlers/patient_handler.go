@@ -69,12 +69,26 @@ func UpdatePatient(db *gorm.DB) gin.HandlerFunc {
 		if patient.MedicalHistory == nil {
 			patient.MedicalHistory = &models.MedicalHistory{}
 		}
+		// Copia POR VALOR, no el puntero: json.Unmarshal reutiliza el
+		// puntero existente de un campo struct no-nil y escribe encima del
+		// mismo objeto en memoria, así que guardar solo el puntero aquí no
+		// protegería nada — "original" terminaría apuntando al mismo dato
+		// ya sobreescrito por el bind de abajo.
+		originalHistory := *patient.MedicalHistory
 
 		// 2. Mapeamos los datos que vienen del frontend sobre el objeto ya cargado.
 		// Al hacer esto, los campos de texto cambian, pero los IDs originales de la BD se conservan.
 		if err := c.ShouldBindJSON(&patient); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
+		}
+
+		// El personal (role "STAFF") solo administra datos generales del
+		// paciente, nunca antecedentes clínicos: aunque este mismo endpoint
+		// también acepta MedicalHistory, se descarta cualquier cambio que
+		// venga en el body y se conserva el historial tal como estaba.
+		if role, _ := c.Get("role"); role == "STAFF" {
+			patient.MedicalHistory = &originalHistory
 		}
 
 		// 3. Forzar de forma explícita que el PatientID del historial coincida con el del paciente
@@ -183,6 +197,11 @@ func CreatePatient(db *gorm.DB) gin.HandlerFunc {
 		if err := c.ShouldBindJSON(&patient); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
+		}
+
+		// El personal no da de alta antecedentes clínicos, solo datos generales.
+		if role, _ := c.Get("role"); role == "STAFF" {
+			patient.MedicalHistory = nil
 		}
 
 		// Un mismo paciente puede atenderse con varios doctores del sistema.

@@ -5,6 +5,7 @@ import { formatToLocalTime, formatToLocalDate } from '../utils/dateFormatter';
 import type { Appointment } from '../types';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useFetchData } from '../hooks/useFetchData';
+import { useAuth } from '../context/AuthContext';
 import './AppointmentTracking.scss';
 
 interface DashboardSummary {
@@ -28,6 +29,7 @@ export const AppointmentTracking: React.FC = () => {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const { isStaff } = useAuth();
 
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [selectedApp, setSelectedApp] = useState<Appointment | null>(null);
@@ -297,10 +299,12 @@ export const AppointmentTracking: React.FC = () => {
                           </span>
                         ) : (
                           <div style={{ display: 'flex', gap: '8px' }}>
-                            <button className="btn-primary" onClick={() => handleStartConsultationClick(app)}>
-                              <span className="material-icons-outlined" style={{ fontSize: '16px' }}>play_arrow</span>
-                              Iniciar Atencion
-                            </button>
+                            {!isStaff && (
+                              <button className="btn-primary" onClick={() => handleStartConsultationClick(app)}>
+                                <span className="material-icons-outlined" style={{ fontSize: '16px' }}>play_arrow</span>
+                                Iniciar Atencion
+                              </button>
+                            )}
                             <button className="btn-text" onClick={() => handleRescheduleClick(app)}>
                               Reprogramar
                             </button>

@@ -38,7 +38,7 @@ func main() {
 	}
 
 	// 3. Automigración y Seed
-	db.AutoMigrate(&models.Doctor{}, &models.Patient{}, &models.MedicalHistory{}, &models.Appointment{}, &models.MedicalDocument{}, &models.DoctorTemplate{})
+	db.AutoMigrate(&models.Doctor{}, &models.Patient{}, &models.MedicalHistory{}, &models.Appointment{}, &models.MedicalDocument{}, &models.DoctorTemplate{}, &models.Staff{})
 
 	// Limpieza de compatibilidad: patients.email ya no debe ser único a nivel
 	// de base de datos (un mismo paciente puede estar vinculado a varios

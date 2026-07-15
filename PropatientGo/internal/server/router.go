@@ -117,6 +117,9 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 			authRoutes.POST("/login", auth.LoginHandler(db))
 			authRoutes.POST("/register", auth.RegisterDoctor(db))
 			authRoutes.POST("/google-login", auth.GoogleLoginHandler(db))
+			authRoutes.POST("/staff-login", handlers.StaffLoginHandler(db))
+			authRoutes.GET("/staff-invite/:token", handlers.GetStaffInvite(db))
+			authRoutes.POST("/staff-invite/:token", handlers.AcceptStaffInvite(db))
 			// Callback de Google Calendar: lo llama el navegador tras el
 			// consentimiento (redirect de Google), sin header Authorization,
 			// así que va fuera del grupo protegido. La identidad del doctor
@@ -137,7 +140,10 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 				dashboard.GET("/follow-ups", handlers.GetFollowUps(db))
 			}
 
+			// Datos de la propia cuenta del doctor (RFC/CURP/cédula/INE):
+			// nunca disponible para el personal.
 			users := protected.Group("/user")
+			users.Use(auth.RequireDoctorRole())
 			{
 				users.POST("/update-profile", auth.UpdateProfileHandler(db))
 				users.POST("/update-license", auth.UpdateLicenseHandler(db))
@@ -146,33 +152,40 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 
 			patients := protected.Group("/patients")
 			{
+				// Agenda y datos generales: disponible también para personal.
 				patients.GET("", handlers.GetPatients(db))
 				patients.POST("", handlers.CreatePatient(db))
 				patients.GET("/search", handlers.SearchPatients(db))
 				patients.GET("/:id", handlers.GetPatientById(db))
-				patients.GET("/:id/history", handlers.GetPatientMedicalHistory(db, storageClient))
 				patients.GET("/:id/stats", handlers.GetPatientStats(db))
 				patients.PUT("/:id", handlers.UpdatePatient(db))
-				patients.PUT("/:id/medical-history", handlers.UpdateMedicalHistory(db))
 				patients.DELETE("/:id", handlers.RemovePatientFromDoctor(db))
 				patients.POST("/:id/link", handlers.LinkExistingPatient(db))
+				// Historial clínico: solo el doctor.
+				patients.GET("/:id/history", auth.RequireDoctorRole(), handlers.GetPatientMedicalHistory(db, storageClient))
+				patients.PUT("/:id/medical-history", auth.RequireDoctorRole(), handlers.UpdateMedicalHistory(db))
 			}
 
 			appointments := protected.Group("/appointments")
 			{
 				// Importante: Usar "" en lugar de "/" para evitar redirecciones 301/307
 				// que el navegador a veces bloquea en CORS.
+				// Agenda: disponible también para personal (agendar/cancelar,
+				// sin ver el contenido clínico de la consulta).
 				appointments.GET("", handlers.GetAppointments(db, storageClient))
 				appointments.POST("", handlers.CreateAppointment(db, calendarClient))
-				appointments.GET("/:id", handlers.GetAppointmentDetail(db, storageClient))
-				appointments.PUT("/:id", handlers.UpdateAppointment(db, calendarClient))
 				appointments.PUT("/:id/cancel", handlers.CancelAppointment(db, calendarClient))
-				appointments.POST("/:id/upload-document", handlers.UploadDocuments(db, storageClient))
-				appointments.PUT("/:id/documents/:docId", handlers.UpdateAppointmentDocument(db))
-				appointments.POST("/:id/save-recipe-pdf", handlers.SaveRecipePDF(db, storageClient))
+				// Contenido clínico de la consulta: solo el doctor.
+				appointments.GET("/:id", auth.RequireDoctorRole(), handlers.GetAppointmentDetail(db, storageClient))
+				appointments.PUT("/:id", auth.RequireDoctorRole(), handlers.UpdateAppointment(db, calendarClient))
+				appointments.POST("/:id/upload-document", auth.RequireDoctorRole(), handlers.UploadDocuments(db, storageClient))
+				appointments.PUT("/:id/documents/:docId", auth.RequireDoctorRole(), handlers.UpdateAppointmentDocument(db))
+				appointments.POST("/:id/save-recipe-pdf", auth.RequireDoctorRole(), handlers.SaveRecipePDF(db, storageClient))
 			}
 
+			// Perfil, plantillas y Google Calendar del doctor: nunca para el personal.
 			doctorRoutes := protected.Group("/doctor")
+			doctorRoutes.Use(auth.RequireDoctorRole())
 			{
 				doctorRoutes.GET("/me", handlers.GetCurrentDoctor(db, storageClient))
 				doctorRoutes.PUT("/me", handlers.UpdateCurrentDoctor(db, storageClient))
@@ -180,6 +193,16 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 				doctorRoutes.POST("/template", handlers.SaveDoctorTemplate(db))
 				doctorRoutes.GET("/google-calendar/connect", handlers.ConnectGoogleCalendar(calendarConfig))
 				doctorRoutes.POST("/google-calendar/disconnect", handlers.DisconnectGoogleCalendar(db))
+			}
+
+			// Alta/gestión de cuentas de personal: solo el doctor.
+			staffRoutes := protected.Group("/staff")
+			staffRoutes.Use(auth.RequireDoctorRole())
+			{
+				staffRoutes.GET("", handlers.ListStaff(db))
+				staffRoutes.POST("", handlers.InviteStaff(db))
+				staffRoutes.PUT("/:id/active", handlers.ToggleStaffActive(db))
+				staffRoutes.DELETE("/:id", handlers.DeleteStaff(db))
 			}
 
 			utils := protected.Group("/utils")

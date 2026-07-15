@@ -43,16 +43,40 @@ type Doctor struct {
 	Patients []Patient `gorm:"many2many:doctor_patients;" json:"-"`
 }
 
+// Staff representa a un miembro del personal (secretaria/asistente) de un
+// consultorio. Su token de sesión lleva el doctorID del dueño del
+// consultorio (para que toda la app siga filtrando por doctorID sin
+// cambios), más el claim "role": "STAFF" que el middleware usa para negar
+// el acceso a historial clínico, contenido de consultas y configuración
+// del perfil/facturación del doctor (ver auth.RequireDoctorRole).
+type Staff struct {
+	ID        uint           `gorm:"primaryKey" json:"id"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+	DoctorID  uint           `gorm:"not null;index" json:"doctorId"`
+	FullName  string         `json:"fullName"`
+	Email     string         `gorm:"uniqueIndex;not null" json:"email"`
+	// Nunca se envía al frontend.
+	PasswordHash string `json:"-"`
+	Active       bool   `gorm:"default:true" json:"active"`
+	// PasswordSet distingue una invitación pendiente (aún sin contraseña)
+	// de una cuenta ya activada.
+	PasswordSet          bool       `gorm:"default:false" json:"passwordSet"`
+	InviteToken          string     `json:"-"`
+	InviteTokenExpiresAt *time.Time `json:"-"`
+}
+
 // Patient representa la entidad Patient.java
 type Patient struct {
-	ID             uint            `gorm:"primaryKey" json:"id"`
-	CreatedAt      time.Time       `json:"created_at"`
-	UpdatedAt      time.Time       `json:"updated_at"`
-	DeletedAt      gorm.DeletedAt  `gorm:"index" json:"-"`
-	FirstName      string          `json:"firstName"`
-	LastName       string          `json:"lastName"`
-	BirthDate      string          `json:"birthDate"`
-	Gender         string          `json:"gender"`
+	ID        uint           `gorm:"primaryKey" json:"id"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+	FirstName string         `json:"firstName"`
+	LastName  string         `json:"lastName"`
+	BirthDate string         `json:"birthDate"`
+	Gender    string         `json:"gender"`
 	// Sin "unique" a nivel de columna: un mismo paciente puede estar
 	// vinculado a varios doctores (many2many vía doctor_patients), así que
 	// la unicidad de correo se valida en el handler (CreatePatient), no en

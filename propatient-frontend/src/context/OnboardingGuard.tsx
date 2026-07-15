@@ -2,11 +2,17 @@ import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export const OnboardingGuard = () => {
-  const { isAuthenticated, userStatus } = useAuth();
+  const { isAuthenticated, isStaff, userStatus } = useAuth();
 
   // 1. Si ni siquiera está logueado, al login de cabeza
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  // El personal no tiene cédula ni onboarding propio: siempre entra directo
+  // al dashboard del consultorio del doctor que lo invitó.
+  if (isStaff) {
+    return <Outlet />;
   }
 
   // Si aún está cargando el estado del usuario, puedes retornar un spinner breve

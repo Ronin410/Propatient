@@ -66,7 +66,40 @@ func AuthorizeJWT() gin.HandlerFunc {
 		// Ejemplo en handler: userID := c.MustGet("doctorID").(uint)
 		c.Set("doctorID", uint(doctorIDFloat))
 
+		// "role" identifica si la sesión es del doctor dueño del consultorio
+		// ("MEDICO") o de una cuenta de personal ("STAFF"). Los tokens
+		// emitidos antes de esta funcionalidad no traen el claim; se asume
+		// "MEDICO" para no romper sesiones existentes.
+		role, _ := claims["role"].(string)
+		if role == "" {
+			role = "MEDICO"
+		}
+		c.Set("role", role)
+
+		if staffIDFloat, ok := claims["staffId"].(float64); ok {
+			c.Set("staffId", uint(staffIDFloat))
+		}
+
 		// 5. Continuar al siguiente Handler
+		c.Next()
+	}
+}
+
+// RequireDoctorRole bloquea con 403 cualquier ruta a la que una cuenta de
+// personal ("STAFF") intente acceder. Debe montarse DESPUÉS de
+// AuthorizeJWT() (necesita que "role" ya esté en el contexto). Se usa en
+// las rutas de historial clínico, contenido de consultas, perfil del
+// doctor y gestión del propio personal — todo lo que el personal no debe
+// poder ver ni tocar.
+func RequireDoctorRole() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, _ := c.Get("role")
+		if role != "MEDICO" {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error": "Esta acción solo está disponible para la cuenta del doctor.",
+			})
+			return
+		}
 		c.Next()
 	}
 }
