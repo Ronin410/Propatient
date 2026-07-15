@@ -5,7 +5,15 @@ import { useTheme } from '../context/ThemeContext';
 import { Footer } from '../components/Footer';
 import './DashboardLayout.scss';
 
-export const DashboardLayout = () => {
+interface DashboardLayoutProps {
+  // Si se pasan children, se muestran en vez del <Outlet /> de la ruta
+  // anidada — usado por App.tsx para reutilizar el layout (con menú
+  // lateral) en páginas que no son rutas hijas del dashboard, como
+  // /privacidad cuando hay sesión iniciada.
+  children?: React.ReactNode;
+}
+
+export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const { logout, isStaff } = useAuth();
   const { resolvedTheme, toggleTheme } = useTheme();
   const location = useLocation();
@@ -130,7 +138,7 @@ export const DashboardLayout = () => {
 
       {/* ÁREA DE CONTENIDO */}
       <main className="main-content">
-        <Outlet />
+        {children ?? <Outlet />}
         <Footer />
       </main>
     </div>

@@ -14,6 +14,7 @@ import { Landing } from './pages/Landing';
 import { DoctorDirectory } from './pages/DoctorDirectory';
 import { PublicDoctorProfile } from './pages/PublicDoctorProfile';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
+import { PrivacyPolicyContent } from './pages/PrivacyPolicyContent';
 
 // Nuevas Pantallas que estamos migrando
 import { AppointmentTracking } from './pages/AppointmentTracking';
@@ -48,6 +49,21 @@ const RootRoute = () => {
   return isAuthenticated ? <Navigate to="/inicio" replace /> : <Landing />;
 };
 
+// Con sesión iniciada, /privacidad se muestra dentro del DashboardLayout
+// (mismo menú lateral que el resto del panel) en vez de la página pública
+// standalone, para que el doctor nunca "salga" de la app al consultarla.
+const PrivacyRoute = () => {
+  const { isAuthenticated } = useAuth();
+  if (isAuthenticated) {
+    return (
+      <DashboardLayout>
+        <PrivacyPolicyContent />
+      </DashboardLayout>
+    );
+  }
+  return <PrivacyPolicy />;
+};
+
 function App() {
   return (
     <AuthProvider>
@@ -57,7 +73,7 @@ function App() {
           <Route path="/" element={<RootRoute />} />
           <Route path="/doctores" element={<DoctorDirectory />} />
           <Route path="/dr/:slug" element={<PublicDoctorProfile />} />
-          <Route path="/privacidad" element={<PrivacyPolicy />} />
+          <Route path="/privacidad" element={<PrivacyRoute />} />
           <Route path="/login" element={<Login />} />
           <Route path="/staff-login" element={<StaffLogin />} />
           <Route path="/personal/invitacion/:token" element={<AcceptStaffInvite />} />

@@ -1,10 +1,17 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
+
+// wa.me quiere el número completo en formato internacional, sin "+" ni
+// espacios ni guiones. Mismo número que components/Footer.tsx.
+const SUPPORT_WHATSAPP_NUMBER = '526674983913';
 
 interface AuthLayoutProps {
   children: React.ReactNode;
 }
 
 export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
+  const year = new Date().getFullYear();
+
   return (
     <div style={{
       display: 'flex',
@@ -73,10 +80,17 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
           paddingTop: '20px',
           zIndex: 2
         }}>
-          <span>© 2026 ProPatient Medical System.</span>
+          <span>© {year} ProPatient Medical System.</span>
           <div style={{ display: 'flex', gap: '20px' }}>
-            <a href="#privacidad" style={{ color: 'inherit', textDecoration: 'none' }}>Privacidad</a>
-            <a href="#soporte" style={{ color: 'inherit', textDecoration: 'none' }}>Soporte</a>
+            <Link to="/privacidad" style={{ color: 'inherit', textDecoration: 'none' }}>Privacidad</Link>
+            <a
+              href={`https://wa.me/${SUPPORT_WHATSAPP_NUMBER}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: 'inherit', textDecoration: 'none' }}
+            >
+              Soporte
+            </a>
           </div>
         </div>
       </div>
