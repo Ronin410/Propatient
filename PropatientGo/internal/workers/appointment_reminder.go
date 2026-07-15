@@ -1,12 +1,14 @@
 package workers
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"time"
 
 	"propatient-api/internal/auth"
 	"propatient-api/internal/models"
+	"propatient-api/internal/whatsapp"
 
 	"gorm.io/gorm"
 )
@@ -23,24 +25,29 @@ type EmailSender func(toEmail, subject, htmlBody string) error
 
 // StartAppointmentReminderWorker corre en segundo plano y revisa cada 30
 // minutos si hay citas confirmadas (PENDING) que empiezan dentro de las
-// próximas 24 horas y todavía no tienen su recordatorio enviado.
-func StartAppointmentReminderWorker(db *gorm.DB, sendEmail EmailSender) {
+// próximas 24 horas y todavía no tienen su recordatorio enviado al
+// paciente. waClient puede ser nil si Twilio no está configurado — en ese
+// caso solo se manda el correo.
+func StartAppointmentReminderWorker(db *gorm.DB, sendEmail EmailSender, waClient whatsapp.Client) {
 	go func() {
 		ticker := time.NewTicker(30 * time.Minute)
 		defer ticker.Stop()
 
-		SendDueAppointmentReminders(db, sendEmail)
+		SendDueAppointmentReminders(db, sendEmail, waClient)
 		for range ticker.C {
-			SendDueAppointmentReminders(db, sendEmail)
+			SendDueAppointmentReminders(db, sendEmail, waClient)
 		}
 	}()
 }
 
-// SendDueAppointmentReminders manda el correo de recordatorio a cada cita
-// que lo necesite y marca ReminderSentAt para no repetirlo en la siguiente
+// SendDueAppointmentReminders manda el recordatorio (correo y, si hay
+// teléfono y Twilio configurado, WhatsApp) a cada cita que lo necesite, y
+// marca ReminderSentAt para no repetirlo en la siguiente pasada. Se marca
+// en cuanto se logra avisar por AL MENOS un canal; si ambos fallan (o el
+// paciente no tiene ni correo ni teléfono), se reintenta en la siguiente
 // pasada. Exportada para poder llamarla directo desde los tests sin
 // esperar al ticker.
-func SendDueAppointmentReminders(db *gorm.DB, sendEmail EmailSender) {
+func SendDueAppointmentReminders(db *gorm.DB, sendEmail EmailSender, waClient whatsapp.Client) {
 	now := time.Now().UTC()
 	until := now.Add(reminderWindow)
 
@@ -53,7 +60,7 @@ func SendDueAppointmentReminders(db *gorm.DB, sendEmail EmailSender) {
 	}
 
 	for _, appt := range appointments {
-		if appt.Patient == nil || appt.Patient.Email == "" {
+		if appt.Patient == nil {
 			continue
 		}
 
@@ -62,16 +69,37 @@ func SendDueAppointmentReminders(db *gorm.DB, sendEmail EmailSender) {
 			continue
 		}
 
-		subject := "Recordatorio: tu cita con Dr(a). " + doctor.FullName
-		body := fmt.Sprintf(
-			`<p>Hola %s,</p>
-			<p>Te recordamos tu cita con <strong>Dr(a). %s</strong> el <strong>%s</strong>.</p>
-			<p>— ProPatient</p>`,
-			appt.Patient.FirstName, doctor.FullName, auth.FormatSpanishDateTime(appt.AppointmentDateTime),
-		)
+		when := auth.FormatSpanishDateTime(appt.AppointmentDateTime)
+		notified := false
 
-		if err := sendEmail(appt.Patient.Email, subject, body); err != nil {
-			log.Printf("⚠️ No se pudo enviar el recordatorio de la cita %d: %v", appt.ID, err)
+		if appt.Patient.Email != "" {
+			subject := "Recordatorio: tu cita con Dr(a). " + doctor.FullName
+			body := fmt.Sprintf(
+				`<p>Hola %s,</p>
+				<p>Te recordamos tu cita con <strong>Dr(a). %s</strong> el <strong>%s</strong>.</p>
+				<p>— ProPatient</p>`,
+				appt.Patient.FirstName, doctor.FullName, when,
+			)
+			if err := sendEmail(appt.Patient.Email, subject, body); err != nil {
+				log.Printf("⚠️ No se pudo enviar el recordatorio por correo de la cita %d: %v", appt.ID, err)
+			} else {
+				notified = true
+			}
+		}
+
+		if waClient != nil && appt.Patient.Phone != "" {
+			body := fmt.Sprintf(
+				"Hola %s, te recordamos tu cita con Dr(a). %s el %s. — ProPatient",
+				appt.Patient.FirstName, doctor.FullName, when,
+			)
+			if err := waClient.SendMessage(context.Background(), appt.Patient.Phone, body); err != nil {
+				log.Printf("⚠️ No se pudo enviar el recordatorio por WhatsApp de la cita %d: %v", appt.ID, err)
+			} else {
+				notified = true
+			}
+		}
+
+		if !notified {
 			continue
 		}
 

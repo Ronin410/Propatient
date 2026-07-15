@@ -161,11 +161,16 @@ type Appointment struct {
 	// al reprogramar o cancelar la cita; nunca se expone al frontend.
 	GoogleEventID string `json:"-"`
 
-	// Marca cuándo se mandó el correo de recordatorio (~24h antes de la
-	// cita); nil = todavía no se envía. Ver
+	// Marca cuándo se mandó el correo/WhatsApp de recordatorio al PACIENTE
+	// (~24h antes de la cita); nil = todavía no se envía. Ver
 	// workers.SendDueAppointmentReminders — evita reenviarlo en cada pasada
 	// del worker en segundo plano.
 	ReminderSentAt *time.Time `json:"-"`
+
+	// Igual que ReminderSentAt, pero para el aviso al DOCTOR poco antes de
+	// que empiece la cita (WhatsApp, ~60 min antes). Ver
+	// workers.SendDueDoctorReminders.
+	DoctorReminderSentAt *time.Time `json:"-"`
 }
 
 type MedicalDocument struct {

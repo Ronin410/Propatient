@@ -8,9 +8,11 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"propatient-api/internal/auth"
 	"propatient-api/internal/googlecalendar"
 	"propatient-api/internal/models"
 	"propatient-api/internal/storage"
+	"propatient-api/internal/whatsapp"
 	"strconv"
 	"time"
 
@@ -346,7 +348,7 @@ func GetAppointmentDetail(db *gorm.DB, storageClient storage.Client) gin.Handler
 
 // CancelAppointment marca la cita como CANCELLED en vez de borrarla, para
 // conservar el historial clínico (misma cita, distinto estado).
-func CancelAppointment(db *gorm.DB, calClient googlecalendar.Client) gin.HandlerFunc {
+func CancelAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient whatsapp.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		doctorID := c.MustGet("doctorID").(uint)
@@ -356,6 +358,7 @@ func CancelAppointment(db *gorm.DB, calClient googlecalendar.Client) gin.Handler
 			c.JSON(http.StatusNotFound, gin.H{"error": "Cita no encontrada"})
 			return
 		}
+		wasPendingConfirmation := appointment.Status == "PENDING_CONFIRMATION"
 
 		result := db.Model(&models.Appointment{}).
 			Where("id = ? AND doctor_id = ?", id, doctorID).
@@ -372,6 +375,17 @@ func CancelAppointment(db *gorm.DB, calClient googlecalendar.Client) gin.Handler
 
 		deleteAppointmentFromGoogleCalendar(c.Request.Context(), db, calClient, appointment)
 
+		// Solo avisamos por WhatsApp cuando se está rechazando una solicitud
+		// en línea todavía sin confirmar — una cancelación normal de una cita
+		// ya aceptada no dispara este aviso (fuera del alcance pedido).
+		if wasPendingConfirmation {
+			var doctor models.Doctor
+			var patient models.Patient
+			if db.First(&doctor, doctorID).Error == nil && db.First(&patient, appointment.PatientID).Error == nil {
+				sendAppointmentDecisionWhatsApp(c.Request.Context(), waClient, doctor, patient, appointment, false)
+			}
+		}
+
 		c.JSON(http.StatusOK, gin.H{"message": "Cita cancelada", "status": "CANCELLED"})
 	}
 }
@@ -381,7 +395,7 @@ func CancelAppointment(db *gorm.DB, calClient googlecalendar.Client) gin.Handler
 // una cita normal. Solo el doctor/personal del consultorio puede
 // confirmarla, y solo si de verdad estaba pendiente de confirmación
 // (evita "confirmar" por error una cita ya cancelada o completada).
-func ConfirmAppointment(db *gorm.DB, calClient googlecalendar.Client) gin.HandlerFunc {
+func ConfirmAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient whatsapp.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		doctorID := c.MustGet("doctorID").(uint)
@@ -400,17 +414,47 @@ func ConfirmAppointment(db *gorm.DB, calClient googlecalendar.Client) gin.Handle
 			return
 		}
 
+		var doctor models.Doctor
 		var patient models.Patient
-		if err := db.First(&patient, appointment.PatientID).Error; err == nil {
+		if db.First(&doctor, doctorID).Error == nil && db.First(&patient, appointment.PatientID).Error == nil {
 			appointment.Status = "PENDING"
 			syncAppointmentToGoogleCalendar(c.Request.Context(), db, calClient, &appointment, patient)
+			sendAppointmentDecisionWhatsApp(c.Request.Context(), waClient, doctor, patient, appointment, true)
 		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "Cita confirmada", "status": "PENDING"})
 	}
 }
 
-func UpdateAppointment(db *gorm.DB, calClient googlecalendar.Client) gin.HandlerFunc {
+// sendAppointmentDecisionWhatsApp avisa al paciente, por WhatsApp, si su
+// solicitud de cita en línea fue aceptada o rechazada por el consultorio.
+// Mejor esfuerzo: nunca bloquea ni revierte la confirmación/cancelación en
+// sí si Twilio no está configurado o falla.
+func sendAppointmentDecisionWhatsApp(ctx context.Context, waClient whatsapp.Client, doctor models.Doctor, patient models.Patient, appointment models.Appointment, confirmed bool) {
+	if waClient == nil || patient.Phone == "" {
+		return
+	}
+
+	var body string
+	if confirmed {
+		body = fmt.Sprintf(
+			"¡Tu cita con Dr(a). %s quedó confirmada para el %s! — ProPatient",
+			doctor.FullName, auth.FormatSpanishDateTime(appointment.AppointmentDateTime),
+		)
+	} else {
+		body = fmt.Sprintf(
+			"El consultorio de Dr(a). %s no pudo aceptar tu solicitud de cita para el %s. Puedes intentar con otro horario desde el directorio de ProPatient.",
+			doctor.FullName, auth.FormatSpanishDateTime(appointment.AppointmentDateTime),
+		)
+	}
+
+	if err := waClient.SendMessage(ctx, patient.Phone, body); err != nil {
+		log.Printf("⚠️ No se pudo enviar el WhatsApp de %s al paciente (cita %d): %v",
+			map[bool]string{true: "confirmación", false: "rechazo"}[confirmed], appointment.ID, err)
+	}
+}
+
+func UpdateAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient whatsapp.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		doctorID := c.MustGet("doctorID").(uint)
@@ -440,6 +484,17 @@ func UpdateAppointment(db *gorm.DB, calClient googlecalendar.Client) gin.Handler
 			return
 		}
 		previousDateTime := appointment.AppointmentDateTime
+		// Copia POR VALOR, no el puntero: json.Unmarshal reutiliza el
+		// time.Time ya apuntado por un puntero no-nil existente en vez de
+		// asignar uno nuevo, así que una copia de puntero aquí apuntaría al
+		// mismo valor que ShouldBindJSON está a punto de sobreescribir —
+		// mismo bug ya corregido antes con MedicalHistory (ver
+		// patient_handler.go).
+		var previousFollowUpDate *time.Time
+		if appointment.FollowUpDate != nil {
+			t := *appointment.FollowUpDate
+			previousFollowUpDate = &t
+		}
 
 		// Leemos los cambios del Body (JSON)
 		if err := c.ShouldBindJSON(&appointment); err != nil {
@@ -464,7 +519,36 @@ func UpdateAppointment(db *gorm.DB, calClient googlecalendar.Client) gin.Handler
 			}
 		}
 
+		// Aviso de seguimiento: solo cuando FollowUpDate pasa de "sin
+		// seguimiento" (o de otra fecha) a una fecha nueva — no en cada
+		// guardado si ya tenía la misma marcada.
+		followUpChanged := appointment.FollowUpDate != nil &&
+			(previousFollowUpDate == nil || !previousFollowUpDate.Equal(*appointment.FollowUpDate))
+		if followUpChanged {
+			var doctor models.Doctor
+			var patient models.Patient
+			if db.First(&doctor, doctorID).Error == nil && db.First(&patient, appointment.PatientID).Error == nil {
+				sendFollowUpWhatsApp(c.Request.Context(), waClient, doctor, patient, *appointment.FollowUpDate)
+			}
+		}
+
 		c.JSON(http.StatusOK, appointment)
+	}
+}
+
+// sendFollowUpWhatsApp avisa al paciente, por WhatsApp, cuando el doctor
+// marca que le toca agendar una cita de seguimiento/control al terminar una
+// consulta (ver ConsultationManager.tsx). Mejor esfuerzo.
+func sendFollowUpWhatsApp(ctx context.Context, waClient whatsapp.Client, doctor models.Doctor, patient models.Patient, followUpDate time.Time) {
+	if waClient == nil || patient.Phone == "" {
+		return
+	}
+	body := fmt.Sprintf(
+		"Hola %s, Dr(a). %s sugiere agendar tu cita de seguimiento para el %s. Escríbele al consultorio para confirmar el horario. — ProPatient",
+		patient.FirstName, doctor.FullName, auth.FormatSpanishDateTime(followUpDate),
+	)
+	if err := waClient.SendMessage(ctx, patient.Phone, body); err != nil {
+		log.Printf("⚠️ No se pudo enviar el WhatsApp de seguimiento al paciente %d: %v", patient.ID, err)
 	}
 }
 

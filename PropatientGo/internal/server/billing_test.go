@@ -126,7 +126,7 @@ func TestBilling_StatusEndpoint_IsDoctorOnly(t *testing.T) {
 func TestBilling_WebhookRejectsBadSignature(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	billingConfig := billing.Config{WebhookSecret: "whsec_test_secret"}
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mustLocalStorage(t), billingConfig, nil, geocoding.NewClient())
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mustLocalStorage(t), billingConfig, nil, geocoding.NewClient(), nil)
 
 	req := map[string]any{"type": "customer.subscription.updated"}
 	w := doRequest(t, router, http.MethodPost, "/api/billing/webhook", "", req)

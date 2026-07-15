@@ -9,6 +9,7 @@ import (
 	"propatient-api/internal/database"
 	"propatient-api/internal/models"
 	"propatient-api/internal/server"
+	"propatient-api/internal/whatsapp"
 	"propatient-api/internal/workers"
 
 	"github.com/joho/godotenv"
@@ -68,8 +69,18 @@ func main() {
 
 	database.SeedDatabase(db)
 
+	// Cliente de WhatsApp (Twilio): solo se construye si las tres
+	// variables están configuradas. Sin eso, los workers de recordatorio
+	// simplemente no mandan WhatsApp (el correo sigue funcionando igual).
+	whatsappConfig := whatsapp.LoadConfigFromEnv()
+	var whatsappClient whatsapp.Client
+	if whatsappConfig.IsConfigured() {
+		whatsappClient = whatsapp.NewClient(whatsappConfig)
+	}
+
 	workers.StartNightClosureWorker(db)
-	workers.StartAppointmentReminderWorker(db, auth.SendEmail)
+	workers.StartAppointmentReminderWorker(db, auth.SendEmail, whatsappClient)
+	workers.StartDoctorReminderWorker(db, whatsappClient)
 
 	// 4. Configuración del Router (rutas, CORS, health check en internal/server)
 	r := server.NewRouter(db)

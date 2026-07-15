@@ -79,6 +79,14 @@ services:
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
+      # Envío de WhatsApp (Twilio, ver .env.example para la guía completa).
+      # Sin estas tres, la app funciona igual, solo no se manda el WhatsApp.
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_WHATSAPP_FROM
+        sync: false
 
   # --- FRONTEND (React / Vite) ---
   - type: web

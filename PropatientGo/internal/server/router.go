@@ -13,6 +13,7 @@ import (
 	"propatient-api/internal/googlecalendar"
 	"propatient-api/internal/handlers"
 	"propatient-api/internal/storage"
+	"propatient-api/internal/whatsapp"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -58,13 +59,23 @@ func NewRouter(db *gorm.DB) *gin.Engine {
 	// listado público activo.
 	geoClient := geocoding.NewClient()
 
-	return NewRouterWithDeps(db, calendarConfig, googlecalendar.NewClient(calendarConfig), storageClient, billingConfig, billingClient, geoClient)
+	// Cliente de WhatsApp (Twilio): solo se construye si las tres variables
+	// están configuradas. Sin eso, los avisos por WhatsApp simplemente no
+	// se mandan (mejor esfuerzo, igual que el correo) y el resto de la app
+	// funciona igual.
+	whatsappConfig := whatsapp.LoadConfigFromEnv()
+	var whatsappClient whatsapp.Client
+	if whatsappConfig.IsConfigured() {
+		whatsappClient = whatsapp.NewClient(whatsappConfig)
+	}
+
+	return NewRouterWithDeps(db, calendarConfig, googlecalendar.NewClient(calendarConfig), storageClient, billingConfig, billingClient, geoClient, whatsappClient)
 }
 
 // NewRouterWithDeps es la variante inyectable de NewRouter: permite a los
 // tests de integración pasar un googlecalendar.Client y un storage.Client
 // simulados, sin hacer llamadas reales a Google ni a AWS.
-func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calendarClient googlecalendar.Client, storageClient storage.Client, billingConfig billing.Config, billingClient billing.Client, geoClient geocoding.Client) *gin.Engine {
+func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calendarClient googlecalendar.Client, storageClient storage.Client, billingConfig billing.Config, billingClient billing.Client, geoClient geocoding.Client, whatsappClient whatsapp.Client) *gin.Engine {
 	r := gin.Default()
 	r.MaxMultipartMemory = 8 << 20 // 8 MiB por request de carga de archivos
 
@@ -156,7 +167,7 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 		{
 			public.GET("/doctors", handlers.GetPublicDoctors(db, storageClient))
 			public.GET("/doctors/:slug", handlers.GetPublicDoctorBySlug(db, storageClient))
-			public.POST("/appointments", handlers.CreatePublicAppointment(db))
+			public.POST("/appointments", handlers.CreatePublicAppointment(db, whatsappClient))
 		}
 
 		// --- RUTAS PROTEGIDAS ---
@@ -224,11 +235,11 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 					// sin ver el contenido clínico de la consulta).
 					appointments.GET("", handlers.GetAppointments(db, storageClient))
 					appointments.POST("", handlers.CreateAppointment(db, calendarClient))
-					appointments.PUT("/:id/cancel", handlers.CancelAppointment(db, calendarClient))
-					appointments.PUT("/:id/confirm", handlers.ConfirmAppointment(db, calendarClient))
+					appointments.PUT("/:id/cancel", handlers.CancelAppointment(db, calendarClient, whatsappClient))
+					appointments.PUT("/:id/confirm", handlers.ConfirmAppointment(db, calendarClient, whatsappClient))
 					// Contenido clínico de la consulta: solo el doctor.
 					appointments.GET("/:id", auth.RequireDoctorRole(), handlers.GetAppointmentDetail(db, storageClient))
-					appointments.PUT("/:id", auth.RequireDoctorRole(), handlers.UpdateAppointment(db, calendarClient))
+					appointments.PUT("/:id", auth.RequireDoctorRole(), handlers.UpdateAppointment(db, calendarClient, whatsappClient))
 					appointments.POST("/:id/upload-document", auth.RequireDoctorRole(), handlers.UploadDocuments(db, storageClient))
 					appointments.PUT("/:id/documents/:docId", auth.RequireDoctorRole(), handlers.UpdateAppointmentDocument(db))
 					appointments.POST("/:id/save-recipe-pdf", auth.RequireDoctorRole(), handlers.SaveRecipePDF(db, storageClient))

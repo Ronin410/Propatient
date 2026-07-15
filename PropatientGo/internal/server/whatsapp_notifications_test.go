@@ -1,0 +1,171 @@
+package server_test
+
+import (
+	"context"
+	"net/http"
+	"strconv"
+	"testing"
+	"time"
+
+	"propatient-api/internal/billing"
+	"propatient-api/internal/googlecalendar"
+	"propatient-api/internal/models"
+	"propatient-api/internal/server"
+	"propatient-api/internal/storage"
+	"propatient-api/internal/testutil"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// TestPublicAppointment_NotifiesPatientAndDoctorByWhatsApp confirma que,
+// con Twilio configurado, tanto el paciente como el doctor reciben un
+// WhatsApp al mandarse una solicitud de cita pública.
+func TestPublicAppointment_NotifiesPatientAndDoctorByWhatsApp(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
+	wa := newMockWhatsAppClient()
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), wa)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_wa_booking", "password123")
+	require.NoError(t, db.Model(&doc).Updates(map[string]any{
+		"public_listed": true, "public_slug": "dr-wa-booking-1", "phone": "5550009999",
+	}).Error)
+
+	w := doRequest(t, router, http.MethodPost, "/api/public/appointments", "", map[string]any{
+		"doctorId":            doc.ID,
+		"appointmentDateTime": "2026-09-01T10:00:00Z",
+		"patientFirstName":    "Sofía",
+		"patientLastName":     "Nuñez",
+		"patientPhone":        "5551237890",
+		"patientEmail":        "sofia.wa@test.local",
+	})
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+
+	assert.Equal(t, 1, wa.callsTo("5551237890"), "el paciente debe recibir un WhatsApp de confirmación de solicitud")
+	assert.Equal(t, 1, wa.callsTo("5550009999"), "el doctor debe recibir un WhatsApp de aviso de solicitud nueva")
+}
+
+// TestConfirmAppointment_NotifiesPatientByWhatsApp confirma que al aceptar
+// una solicitud, el paciente recibe un WhatsApp de confirmación.
+func TestConfirmAppointment_NotifiesPatientByWhatsApp(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
+	wa := newMockWhatsAppClient()
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), wa)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_wa_confirm", "password123")
+	require.NoError(t, db.Model(&doc).Updates(map[string]any{"public_listed": true, "public_slug": "dr-wa-confirm-1"}).Error)
+	docToken := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doRequest(t, router, http.MethodPost, "/api/public/appointments", "", map[string]any{
+		"doctorId":            doc.ID,
+		"appointmentDateTime": "2026-09-01T10:00:00Z",
+		"patientFirstName":    "Iván",
+		"patientLastName":     "Castro",
+		"patientPhone":        "5559990000",
+		"patientEmail":        "ivan.wa@test.local",
+	})
+	require.Equal(t, http.StatusCreated, w.Code)
+
+	w = doRequest(t, router, http.MethodGet, "/api/appointments?status=PENDING_CONFIRMATION", docToken, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	var requests []map[string]any
+	decodeJSONList(t, w, &requests)
+	require.Len(t, requests, 1)
+	apptID := strconv.Itoa(int(requests[0]["id"].(float64)))
+
+	// La solicitud pública ya le mandó 1 WhatsApp de confirmación de
+	// solicitud a este mismo teléfono; confirmar debe sumarle uno más.
+	callsToPatientBefore := wa.callsTo("5559990000")
+	require.Equal(t, 1, callsToPatientBefore)
+
+	callsBefore := wa.callCount()
+	w = doRequest(t, router, http.MethodPut, "/api/appointments/"+apptID+"/confirm", docToken, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	assert.Equal(t, callsBefore+1, wa.callCount())
+	assert.Equal(t, callsToPatientBefore+1, wa.callsTo("5559990000"))
+}
+
+// TestCancelAppointment_NotifiesPatientOnlyWhenRejectingOnlineRequest cubre
+// las dos ramas: rechazar una solicitud PENDING_CONFIRMATION sí manda
+// WhatsApp; cancelar una cita ya confirmada (PENDING normal) no lo manda —
+// fuera del alcance pedido.
+func TestCancelAppointment_NotifiesPatientOnlyWhenRejectingOnlineRequest(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
+	wa := newMockWhatsAppClient()
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), wa)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_wa_reject", "password123")
+	require.NoError(t, db.Model(&doc).Updates(map[string]any{"public_listed": true, "public_slug": "dr-wa-reject-1"}).Error)
+	docToken := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	// Solicitud pública que se va a rechazar.
+	w := doRequest(t, router, http.MethodPost, "/api/public/appointments", "", map[string]any{
+		"doctorId":            doc.ID,
+		"appointmentDateTime": "2026-09-01T10:00:00Z",
+		"patientFirstName":    "Rechazado",
+		"patientLastName":     "Prueba",
+		"patientPhone":        "5551110001",
+		"patientEmail":        "rechazado.wa@test.local",
+	})
+	require.Equal(t, http.StatusCreated, w.Code)
+
+	w = doRequest(t, router, http.MethodGet, "/api/appointments?status=PENDING_CONFIRMATION", docToken, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	var requests []map[string]any
+	decodeJSONList(t, w, &requests)
+	require.Len(t, requests, 1)
+	rejectID := strconv.Itoa(int(requests[0]["id"].(float64)))
+
+	callsBefore := wa.callsTo("5551110001")
+	w = doRequest(t, router, http.MethodPut, "/api/appointments/"+rejectID+"/cancel", docToken, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, callsBefore+1, wa.callsTo("5551110001"), "rechazar una solicitud en línea sí debe avisar por WhatsApp")
+
+	// Cita normal ya confirmada (creada directo, no como solicitud pública) que se cancela.
+	patient := models.Patient{FirstName: "Normal", LastName: "Prueba", Phone: "5552220002", Email: "normal.wa@test.local"}
+	require.NoError(t, db.Create(&patient).Error)
+	require.NoError(t, db.Model(&doc).Association("Patients").Append(&patient))
+	appt := models.Appointment{PatientID: patient.ID, DoctorID: doc.ID, AppointmentDateTime: time.Now().UTC().Add(48 * time.Hour), Status: "PENDING"}
+	require.NoError(t, db.Create(&appt).Error)
+
+	w = doRequest(t, router, http.MethodPut, "/api/appointments/"+strconv.Itoa(int(appt.ID))+"/cancel", docToken, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, 0, wa.callsTo("5552220002"), "cancelar una cita ya confirmada no debe mandar este aviso")
+}
+
+// TestUpdateAppointment_NotifiesPatientWhenFollowUpDateSet cubre el aviso
+// de seguimiento: se manda solo cuando FollowUpDate cambia a un valor
+// nuevo, no en cada guardado.
+func TestUpdateAppointment_NotifiesPatientWhenFollowUpDateSet(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
+	wa := newMockWhatsAppClient()
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), wa)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_wa_followup", "password123")
+	docToken := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	patient := models.Patient{FirstName: "Seguimiento", LastName: "Prueba", Phone: "5553330003", Email: "seguimiento.wa@test.local"}
+	require.NoError(t, db.Create(&patient).Error)
+	require.NoError(t, db.Model(&doc).Association("Patients").Append(&patient))
+	appt := models.Appointment{PatientID: patient.ID, DoctorID: doc.ID, AppointmentDateTime: time.Now().UTC().Add(-time.Hour), Status: "PENDING"}
+	require.NoError(t, db.Create(&appt).Error)
+
+	followUp := time.Now().UTC().Add(30 * 24 * time.Hour).Format(time.RFC3339)
+	w := doRequest(t, router, http.MethodPut, "/api/appointments/"+strconv.Itoa(int(appt.ID)), docToken, map[string]any{
+		"followUpDate": followUp,
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, 1, wa.callsTo("5553330003"))
+
+	// Guardar de nuevo con la MISMA fecha de seguimiento no debe repetir el aviso.
+	w = doRequest(t, router, http.MethodPut, "/api/appointments/"+strconv.Itoa(int(appt.ID)), docToken, map[string]any{
+		"followUpDate": followUp,
+	})
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, 1, wa.callsTo("5553330003"), "no debe repetirse si la fecha de seguimiento no cambió")
+}

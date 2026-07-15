@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -13,6 +14,7 @@ import (
 	"propatient-api/internal/auth"
 	"propatient-api/internal/models"
 	"propatient-api/internal/storage"
+	"propatient-api/internal/whatsapp"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -121,7 +123,7 @@ type publicAppointmentRequest struct {
 // PENDING_CONFIRMATION: no aparece como una cita real hasta que el doctor
 // (o su personal) la confirma con ConfirmAppointment — así una solicitud
 // falsa o spam nunca reserva un horario de verdad sin que alguien la revise.
-func CreatePublicAppointment(db *gorm.DB) gin.HandlerFunc {
+func CreatePublicAppointment(db *gorm.DB, waClient whatsapp.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req publicAppointmentRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -165,10 +167,11 @@ func CreatePublicAppointment(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Correos de aviso: "mejor esfuerzo", igual que la sincronización con
-		// Google Calendar — la solicitud ya se guardó y no debe fallar por un
-		// problema de SMTP ajeno a la reserva en sí.
+		// Correos y WhatsApp de aviso: "mejor esfuerzo", igual que la
+		// sincronización con Google Calendar — la solicitud ya se guardó y no
+		// debe fallar por un problema de SMTP/Twilio ajeno a la reserva en sí.
 		sendPublicBookingEmails(doctor, *patient, appointment)
+		sendPublicBookingWhatsApp(c.Request.Context(), waClient, doctor, *patient, appointment)
 
 		c.JSON(http.StatusCreated, gin.H{
 			"message": "Tu solicitud de cita fue enviada. El consultorio la confirmará pronto por teléfono o correo.",
@@ -213,6 +216,42 @@ func sendPublicBookingEmails(doctor models.Doctor, patient models.Patient, appoi
 		)
 		if err := auth.SendEmail(doctor.Email, subject, body); err != nil {
 			log.Printf("⚠️ No se pudo enviar el aviso de nueva solicitud al doctor %d: %v", doctor.ID, err)
+		}
+	}
+}
+
+// sendPublicBookingWhatsApp es el equivalente por WhatsApp de
+// sendPublicBookingEmails: mismo contenido, mismo criterio de "mejor
+// esfuerzo" (no interrumpe la reserva si Twilio no está configurado o
+// falla). waClient es nil si Twilio no está configurado (mismo patrón que
+// calClient en googlecalendar) — en ese caso no hace nada.
+func sendPublicBookingWhatsApp(ctx context.Context, waClient whatsapp.Client, doctor models.Doctor, patient models.Patient, appointment models.Appointment) {
+	if waClient == nil {
+		return
+	}
+	when := auth.FormatSpanishDateTime(appointment.AppointmentDateTime)
+
+	if patient.Phone != "" {
+		body := fmt.Sprintf(
+			"Hola %s, recibimos tu solicitud de cita con Dr(a). %s para el %s. El consultorio la revisará y te confirmará pronto — tu cita todavía no está agendada hasta entonces. — ProPatient",
+			patient.FirstName, doctor.FullName, when,
+		)
+		if err := waClient.SendMessage(ctx, patient.Phone, body); err != nil {
+			log.Printf("⚠️ No se pudo enviar el WhatsApp de confirmación al paciente (cita %d): %v", appointment.ID, err)
+		}
+	}
+
+	if doctor.Phone != "" {
+		reasonPart := ""
+		if appointment.Reason != "" {
+			reasonPart = fmt.Sprintf(" Motivo: %s.", appointment.Reason)
+		}
+		body := fmt.Sprintf(
+			"Nueva solicitud de cita: %s %s, %s.%s Revísala en tu panel de ProPatient, en \"Solicitudes de Cita Nuevas\".",
+			patient.FirstName, patient.LastName, when, reasonPart,
+		)
+		if err := waClient.SendMessage(ctx, doctor.Phone, body); err != nil {
+			log.Printf("⚠️ No se pudo enviar el WhatsApp de nueva solicitud al doctor %d: %v", doctor.ID, err)
 		}
 	}
 }
