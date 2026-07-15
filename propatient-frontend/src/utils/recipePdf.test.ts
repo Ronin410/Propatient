@@ -46,11 +46,14 @@ describe('buildRecipeDocDefinition', () => {
     });
 
     const flat = flattenText(doc.content);
-    const footerFlat = flattenText(typeof doc.footer === 'function' ? doc.footer() : doc.footer);
 
     expect(flat).toContain('DR. JUAN PÉREZ');
     expect(flat).toContain('CÉDULA PROFESIONAL: 12345678');
-    expect(footerFlat).toContain('DR. JUAN PÉREZ');
+    // El bloque de firma fluye como parte del contenido normal (no como
+    // "footer" fijo al fondo de cada página, ver recipePdf.ts) y debe
+    // aparecer una sola vez, con el nombre del doctor.
+    expect(flat).toContain('FIRMA DEL MÉDICO');
+    expect(doc.footer).toBeUndefined();
   });
 
   it('calcula la edad del paciente en vez de mostrar siempre N/A', async () => {

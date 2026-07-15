@@ -110,9 +110,25 @@ export async function buildRecipeDocDefinition({
     ...(doctorInfo?.university?.trim() ? [{ text: doctorInfo.university, style: 'doctorSub' }] : []),
   ];
 
+  // La firma va como parte normal del contenido (no como "footer" de
+  // pdfmake): un footer siempre se ancla al fondo de CADA página, así que
+  // con una consulta corta dejaba un hueco enorme entre el diagnóstico y
+  // la firma, y en una receta de dos páginas se repetía en ambas. Fluyendo
+  // justo después del contenido, la receta se ve compacta cuando hay poco
+  // texto y la firma solo aparece una vez, donde de verdad termina.
+  const signatureBlock = {
+    stack: [
+      { text: '_______________________________________', alignment: 'center', color: '#cbd5e0' },
+      { text: doctorFullName ? `DR. ${doctorFullName}`.toUpperCase() : 'MÉDICO GENERAL', alignment: 'center', fontSize: 10, bold: true, color: '#2d3748', margin: [0, 2, 0, 2] },
+      { text: 'FIRMA DEL MÉDICO', alignment: 'center', fontSize: 8, color: '#718096' },
+      { text: `Dirección: ${doctorInfo?.address || 'N/A'} | Tel: ${doctorInfo?.phone || 'N/A'}`, alignment: 'center', fontSize: 8, color: '#718096', margin: [0, 4, 0, 0] },
+    ],
+    margin: [0, 40, 0, 0],
+  };
+
   return {
     pageSize: 'LETTER',
-    pageMargins: [40, 32, 40, 70],
+    pageMargins: [40, 32, 40, 40],
     defaultStyle: { font: 'Roboto' },
     content: [
       {
@@ -164,18 +180,8 @@ export async function buildRecipeDocDefinition({
       ...(doctorInfo?.recipeLegend?.trim()
         ? [{ text: doctorInfo.recipeLegend, style: 'legend' }]
         : []),
+      signatureBlock,
     ],
-    footer: () => {
-      return {
-        stack: [
-          { text: '_______________________________________', alignment: 'center', color: '#cbd5e0' },
-          { text: doctorFullName ? `DR. ${doctorFullName}`.toUpperCase() : 'MÉDICO GENERAL', alignment: 'center', fontSize: 10, bold: true, color: '#2d3748', margin: [0, 2, 0, 2] },
-          { text: 'FIRMA DEL MÉDICO', alignment: 'center', fontSize: 8, color: '#718096' },
-          { text: `Dirección: ${doctorInfo?.address || 'N/A'} | Tel: ${doctorInfo?.phone || 'N/A'}`, alignment: 'center', fontSize: 8, color: '#718096', margin: [0, 4, 0, 0] },
-        ],
-        margin: [40, 0, 40, 0],
-      };
-    },
     styles: {
       doctorName: { fontSize: 15, bold: true, color: '#1a365d', alignment: 'right', margin: [0, 0, 0, 3] },
       doctorSpecialty: { fontSize: 10, bold: true, color: '#4a5568', alignment: 'right' },
