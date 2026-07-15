@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -127,24 +128,30 @@ func StripeWebhook(db *gorm.DB, cfg billing.Config) gin.HandlerFunc {
 
 		payload, err := io.ReadAll(c.Request.Body)
 		if err != nil {
+			log.Printf("⚠️ Webhook de Stripe: no se pudo leer el body: %v", err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "No se pudo leer el cuerpo de la petición"})
 			return
 		}
 
 		event, err := webhook.ConstructEvent(payload, c.GetHeader("Stripe-Signature"), cfg.WebhookSecret)
 		if err != nil {
+			log.Printf("⚠️ Webhook de Stripe: firma inválida (revisa STRIPE_WEBHOOK_SECRET): %v", err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Firma de Stripe inválida"})
 			return
 		}
+
+		log.Printf("📩 Webhook de Stripe recibido: %s", event.Type)
 
 		switch event.Type {
 		case "checkout.session.completed":
 			var sess stripe.CheckoutSession
 			if err := json.Unmarshal(event.Data.Raw, &sess); err != nil {
+				log.Printf("⚠️ Webhook checkout.session.completed: no se pudo decodificar el payload: %v", err)
 				break
 			}
 			doctorID, err := strconv.ParseUint(sess.ClientReferenceID, 10, 64)
 			if err != nil {
+				log.Printf("⚠️ Webhook checkout.session.completed: client_reference_id inválido (%q): %v", sess.ClientReferenceID, err)
 				break
 			}
 			updates := map[string]interface{}{"subscription_status": "active"}
@@ -154,25 +161,47 @@ func StripeWebhook(db *gorm.DB, cfg billing.Config) gin.HandlerFunc {
 			if sess.Subscription != nil {
 				updates["stripe_subscription_id"] = sess.Subscription.ID
 			}
-			db.Model(&models.Doctor{}).Where("id = ?", doctorID).Updates(updates)
+			result := db.Model(&models.Doctor{}).Where("id = ?", doctorID).Updates(updates)
+			if result.Error != nil {
+				log.Printf("⚠️ Webhook checkout.session.completed: error al actualizar doctor %d: %v", doctorID, result.Error)
+			} else if result.RowsAffected == 0 {
+				log.Printf("⚠️ Webhook checkout.session.completed: no existe ningún doctor con id %d", doctorID)
+			} else {
+				log.Printf("✅ Suscripción activada para el doctor %d", doctorID)
+			}
 
 		case "customer.subscription.updated":
 			var sub stripe.Subscription
 			if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
+				log.Printf("⚠️ Webhook customer.subscription.updated: no se pudo decodificar el payload: %v", err)
 				break
 			}
-			db.Model(&models.Doctor{}).
+			newStatus := mapStripeSubscriptionStatus(sub.Status)
+			result := db.Model(&models.Doctor{}).
 				Where("stripe_subscription_id = ?", sub.ID).
-				Update("subscription_status", mapStripeSubscriptionStatus(sub.Status))
+				Update("subscription_status", newStatus)
+			if result.Error != nil {
+				log.Printf("⚠️ Webhook customer.subscription.updated: error al actualizar suscripción %s: %v", sub.ID, result.Error)
+			} else if result.RowsAffected == 0 {
+				log.Printf("⚠️ Webhook customer.subscription.updated: ningún doctor tiene stripe_subscription_id=%s", sub.ID)
+			} else {
+				log.Printf("✅ Suscripción %s actualizada a %q", sub.ID, newStatus)
+			}
 
 		case "customer.subscription.deleted":
 			var sub stripe.Subscription
 			if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
+				log.Printf("⚠️ Webhook customer.subscription.deleted: no se pudo decodificar el payload: %v", err)
 				break
 			}
-			db.Model(&models.Doctor{}).
+			result := db.Model(&models.Doctor{}).
 				Where("stripe_subscription_id = ?", sub.ID).
 				Update("subscription_status", "canceled")
+			if result.Error != nil {
+				log.Printf("⚠️ Webhook customer.subscription.deleted: error al cancelar suscripción %s: %v", sub.ID, result.Error)
+			} else if result.RowsAffected == 0 {
+				log.Printf("⚠️ Webhook customer.subscription.deleted: ningún doctor tiene stripe_subscription_id=%s", sub.ID)
+			}
 		}
 
 		c.JSON(http.StatusOK, gin.H{"received": true})
