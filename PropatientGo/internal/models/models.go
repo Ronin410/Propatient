@@ -50,6 +50,23 @@ type Doctor struct {
 	StripeCustomerID     string     `json:"-"`
 	StripeSubscriptionID string     `json:"-"`
 
+	// Directorio público (landing page): el doctor decide si aparece
+	// (opt-in, PublicListed empieza en false). PublicSlug identifica su
+	// URL pública (/dr/:slug), Latitude/Longitude se calculan a partir de
+	// Address vía geocoding.GeocodeAddress cuando activa el listado o
+	// cambia su dirección — ver UpdateCurrentDoctor.
+	//
+	// Índice normal, NO "uniqueIndex": generateDoctorSlug ya garantiza
+	// unicidad incluyendo el ID del doctor, y un índice único sobre un
+	// campo que empieza vacío ("") en todos los doctores existentes
+	// choca en cuanto hay dos — el mismo bug real que ya se corrigió una
+	// vez con Patient.Email (ver la limpieza de migración en main.go).
+	PublicListed bool     `gorm:"default:false" json:"publicListed"`
+	PublicBio    string   `json:"publicBio"`
+	PublicSlug   string   `gorm:"index" json:"publicSlug"`
+	Latitude     *float64 `json:"latitude"`
+	Longitude    *float64 `json:"longitude"`
+
 	Patients []Patient `gorm:"many2many:doctor_patients;" json:"-"`
 }
 

@@ -9,6 +9,7 @@ import (
 
 	"propatient-api/internal/auth"
 	"propatient-api/internal/billing"
+	"propatient-api/internal/geocoding"
 	"propatient-api/internal/googlecalendar"
 	"propatient-api/internal/handlers"
 	"propatient-api/internal/storage"
@@ -52,13 +53,18 @@ func NewRouter(db *gorm.DB) *gin.Engine {
 		billingClient = billing.NewClient(billingConfig)
 	}
 
-	return NewRouterWithDeps(db, calendarConfig, googlecalendar.NewClient(calendarConfig), storageClient, billingConfig, billingClient)
+	// Geocodificación (Nominatim/OpenStreetMap): sin API key, siempre
+	// disponible. Solo se llama cuando un doctor guarda su perfil con el
+	// listado público activo.
+	geoClient := geocoding.NewClient()
+
+	return NewRouterWithDeps(db, calendarConfig, googlecalendar.NewClient(calendarConfig), storageClient, billingConfig, billingClient, geoClient)
 }
 
 // NewRouterWithDeps es la variante inyectable de NewRouter: permite a los
 // tests de integración pasar un googlecalendar.Client y un storage.Client
 // simulados, sin hacer llamadas reales a Google ni a AWS.
-func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calendarClient googlecalendar.Client, storageClient storage.Client, billingConfig billing.Config, billingClient billing.Client) *gin.Engine {
+func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calendarClient googlecalendar.Client, storageClient storage.Client, billingConfig billing.Config, billingClient billing.Client, geoClient geocoding.Client) *gin.Engine {
 	r := gin.Default()
 	r.MaxMultipartMemory = 8 << 20 // 8 MiB por request de carga de archivos
 
@@ -143,6 +149,16 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 		// autentica la petición, así que va fuera de /auth y del grupo protegido.
 		api.POST("/billing/webhook", handlers.StripeWebhook(db, billingConfig))
 
+		// Directorio público (landing page): sin autenticación, para que
+		// cualquier visitante pueda ver doctores y agendar una solicitud de
+		// cita. Nunca expone historial clínico ni datos de otros pacientes.
+		public := api.Group("/public")
+		{
+			public.GET("/doctors", handlers.GetPublicDoctors(db, storageClient))
+			public.GET("/doctors/:slug", handlers.GetPublicDoctorBySlug(db, storageClient))
+			public.POST("/appointments", handlers.CreatePublicAppointment(db))
+		}
+
 		// --- RUTAS PROTEGIDAS ---
 		// Usamos un grupo vacío "" para que las rutas cuelguen de /api/ directamente
 		protected := api.Group("")
@@ -209,6 +225,7 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 					appointments.GET("", handlers.GetAppointments(db, storageClient))
 					appointments.POST("", handlers.CreateAppointment(db, calendarClient))
 					appointments.PUT("/:id/cancel", handlers.CancelAppointment(db, calendarClient))
+					appointments.PUT("/:id/confirm", handlers.ConfirmAppointment(db, calendarClient))
 					// Contenido clínico de la consulta: solo el doctor.
 					appointments.GET("/:id", auth.RequireDoctorRole(), handlers.GetAppointmentDetail(db, storageClient))
 					appointments.PUT("/:id", auth.RequireDoctorRole(), handlers.UpdateAppointment(db, calendarClient))
@@ -222,7 +239,7 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 				doctorRoutes.Use(auth.RequireDoctorRole())
 				{
 					doctorRoutes.GET("/me", handlers.GetCurrentDoctor(db, storageClient))
-					doctorRoutes.PUT("/me", handlers.UpdateCurrentDoctor(db, storageClient))
+					doctorRoutes.PUT("/me", handlers.UpdateCurrentDoctor(db, storageClient, geoClient))
 					doctorRoutes.GET("/template", handlers.GetDoctorTemplate(db))
 					doctorRoutes.POST("/template", handlers.SaveDoctorTemplate(db))
 					doctorRoutes.GET("/google-calendar/connect", handlers.ConnectGoogleCalendar(calendarConfig))

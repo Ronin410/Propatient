@@ -224,6 +224,28 @@
     }
   }
 
+  /* Directorio público */
+  .public-listing-toggle {
+    margin-bottom: 16px;
+
+    .toggle-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--color-heading);
+      cursor: pointer;
+
+      input[type='checkbox'] {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--color-primary);
+        cursor: pointer;
+      }
+    }
+  }
+
   /* Integración con Google Calendar */
   .calendar-integration-box {
     display: flex;

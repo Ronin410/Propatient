@@ -9,6 +9,11 @@ import { StaffLogin } from './pages/StaffLogin';
 import { AcceptStaffInvite } from './pages/AcceptStaffInvite';
 import { DashboardLayout } from './pages/DashboardLayout';
 
+// Landing pública, directorio de doctores y agendamiento sin cuenta
+import { Landing } from './pages/Landing';
+import { DoctorDirectory } from './pages/DoctorDirectory';
+import { PublicDoctorProfile } from './pages/PublicDoctorProfile';
+
 // Nuevas Pantallas que estamos migrando
 import { AppointmentTracking } from './pages/AppointmentTracking';
 import { PatientList } from './pages/PatientList';
@@ -26,12 +31,20 @@ import { BillingPage } from './pages/BillingPage';
 // Componente para proteger rutas privadas básicas
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated } = useAuth();
-  
+
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
   return <>{children}</>;
+};
+
+// "/" es pública (landing) para quien no tiene sesión; quien ya inició
+// sesión pasa directo a su panel. No es un "index" del dashboard: por eso
+// vive fuera de la sección protegida, como su propia ruta con path="/".
+const RootRoute = () => {
+  const { isAuthenticated } = useAuth();
+  return isAuthenticated ? <Navigate to="/inicio" replace /> : <Landing />;
 };
 
 function App() {
@@ -40,6 +53,9 @@ function App() {
       <BrowserRouter>
         <Routes>
           {/* 🔓 RUTAS PÚBLICAS */}
+          <Route path="/" element={<RootRoute />} />
+          <Route path="/doctores" element={<DoctorDirectory />} />
+          <Route path="/dr/:slug" element={<PublicDoctorProfile />} />
           <Route path="/login" element={<Login />} />
           <Route path="/staff-login" element={<StaffLogin />} />
           <Route path="/personal/invitacion/:token" element={<AcceptStaffInvite />} />
@@ -72,7 +88,6 @@ function App() {
               }
             >
               {/* Rutas Hijas que sí llevan el menú lateral y barra de navegación */}
-              <Route index element={<Navigate to="/inicio" replace />} />
               <Route path="inicio" element={<AppointmentTracking />} />
               <Route path="pacientes" element={<PatientList />} />
               <Route path="pacientes/nuevo" element={<PatientForm />} />

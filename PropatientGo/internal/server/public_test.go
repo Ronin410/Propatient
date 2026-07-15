@@ -1,0 +1,200 @@
+package server_test
+
+import (
+	"context"
+	"net/http"
+	"strconv"
+	"testing"
+	"time"
+
+	"propatient-api/internal/billing"
+	"propatient-api/internal/googlecalendar"
+	"propatient-api/internal/models"
+	"propatient-api/internal/server"
+	"propatient-api/internal/storage"
+	"propatient-api/internal/testutil"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// TestUpdateCurrentDoctor_PublicListing_GeneratesSlugAndGeocodes cubre el
+// flujo de opt-in: el doctor activa el listado público con una dirección,
+// y el perfil queda con slug propio y coordenadas geocodificadas.
+func TestUpdateCurrentDoctor_PublicListing_GeneratesSlugAndGeocodes(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
+	geo := newMockGeocodingClient()
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, geo)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_public_listing", "password123")
+	token := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doMultipartRequest(t, router, http.MethodPut, "/api/doctor/me", token, map[string]string{
+		"fullName":     "José Ángel Pérez",
+		"publicListed": "true",
+		"publicBio":    "Urólogo con 10 años de experiencia.",
+		"address":      "Av. Insurgentes Sur 123, CDMX",
+	}, "", "", nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var updated models.Doctor
+	require.NoError(t, db.First(&updated, doc.ID).Error)
+	assert.True(t, updated.PublicListed)
+	assert.NotEmpty(t, updated.PublicSlug)
+	assert.Contains(t, updated.PublicSlug, "jose-angel-perez")
+	require.NotNil(t, updated.Latitude)
+	require.NotNil(t, updated.Longitude)
+	assert.Equal(t, 25.789, *updated.Latitude)
+	assert.Equal(t, 1, geo.callCount())
+
+	// Guardar de nuevo sin cambiar la dirección no debe volver a geocodificar.
+	w = doMultipartRequest(t, router, http.MethodPut, "/api/doctor/me", token, map[string]string{
+		"fullName":     "José Ángel Pérez",
+		"publicListed": "true",
+		"publicBio":    "Bio actualizada.",
+		"address":      "Av. Insurgentes Sur 123, CDMX",
+	}, "", "", nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, 1, geo.callCount(), "no debe volver a geocodificar si la dirección no cambió")
+
+	// El slug no debe cambiar tampoco entre guardados (rompería enlaces ya compartidos).
+	var updatedAgain models.Doctor
+	require.NoError(t, db.First(&updatedAgain, doc.ID).Error)
+	assert.Equal(t, updated.PublicSlug, updatedAgain.PublicSlug)
+}
+
+// TestPublicDoctors_OnlyShowsOptedInAndActive confirma las dos reglas del
+// directorio: solo aparecen doctores que activaron el listado, y solo si
+// tienen prueba vigente o suscripción activa.
+func TestPublicDoctors_OnlyShowsOptedInAndActive(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient())
+
+	listedActive := testutil.CreateTestDoctor(t, db, "doc_listed_active", "password123")
+	require.NoError(t, db.Model(&listedActive).Updates(map[string]any{
+		"public_listed": true, "public_slug": "dr-activo-1", "full_name": "Dr. Activo",
+	}).Error)
+
+	notListed := testutil.CreateTestDoctor(t, db, "doc_not_listed", "password123")
+	_ = notListed
+
+	listedButExpired := testutil.CreateTestDoctor(t, db, "doc_listed_expired", "password123")
+	expired := time.Now().UTC().Add(-time.Hour)
+	require.NoError(t, db.Model(&listedButExpired).Updates(map[string]any{
+		"public_listed": true, "public_slug": "dr-vencido-1", "trial_ends_at": expired,
+	}).Error)
+
+	w := doRequest(t, router, http.MethodGet, "/api/public/doctors", "", nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	var doctors []map[string]any
+	decodeJSONList(t, w, &doctors)
+
+	require.Len(t, doctors, 1)
+	assert.Equal(t, "Dr. Activo", doctors[0]["fullName"])
+}
+
+// TestPublicAppointment_FullLifecycle cubre el flujo completo: alguien sin
+// cuenta agenda con un doctor público, la cita nace pendiente de
+// confirmación (no ocupa el horario todavía), y el doctor la confirma.
+func TestPublicAppointment_FullLifecycle(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
+	mockCal := newMockCalendarClient()
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, mockCal, testStorage, billing.Config{}, nil, newMockGeocodingClient())
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_public_booking", "password123")
+	require.NoError(t, db.Model(&doc).Updates(map[string]any{"public_listed": true, "public_slug": "dr-booking-1"}).Error)
+	docToken := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doRequest(t, router, http.MethodPost, "/api/public/appointments", "", map[string]any{
+		"doctorId":            doc.ID,
+		"appointmentDateTime": "2026-09-01T10:00:00Z",
+		"reason":              "Dolor de espalda",
+		"patientFirstName":    "Carlos",
+		"patientLastName":     "Ramírez",
+		"patientPhone":        "5551234567",
+		"patientEmail":        "carlos.publico@test.local",
+	})
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+
+	// La cita nace PENDING_CONFIRMATION: no debe aparecer en la agenda normal del doctor.
+	w = doRequest(t, router, http.MethodGet, "/api/appointments?status=PENDING", docToken, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	var pending []map[string]any
+	decodeJSONList(t, w, &pending)
+	assert.Empty(t, pending, "una solicitud pública sin confirmar no debe aparecer como cita PENDING normal")
+
+	w = doRequest(t, router, http.MethodGet, "/api/appointments?status=PENDING_CONFIRMATION", docToken, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	var requests []map[string]any
+	decodeJSONList(t, w, &requests)
+	require.Len(t, requests, 1)
+	apptID := int(requests[0]["id"].(float64))
+	assert.Equal(t, 0, mockCal.createdCount(), "no debe sincronizarse a Calendar hasta que el doctor confirme")
+
+	// El doctor confirma.
+	w = doRequest(t, router, http.MethodPut, "/api/appointments/"+strconv.Itoa(apptID)+"/confirm", docToken, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	w = doRequest(t, router, http.MethodGet, "/api/appointments?status=PENDING", docToken, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	decodeJSONList(t, w, &pending)
+	require.Len(t, pending, 1, "tras confirmar, la cita ya debe verse como PENDING normal")
+
+	// Confirmar otra vez debe fallar (ya no está en PENDING_CONFIRMATION).
+	w = doRequest(t, router, http.MethodPut, "/api/appointments/"+strconv.Itoa(apptID)+"/confirm", docToken, nil)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// TestPublicAppointment_RejectsDoctorNotListed evita que alguien agende
+// adivinando el ID de un doctor que nunca activó el directorio público.
+func TestPublicAppointment_RejectsDoctorNotListed(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient())
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_not_public", "password123")
+
+	w := doRequest(t, router, http.MethodPost, "/api/public/appointments", "", map[string]any{
+		"doctorId":            doc.ID,
+		"appointmentDateTime": "2026-09-01T10:00:00Z",
+		"patientFirstName":    "Ana",
+		"patientLastName":     "López",
+		"patientPhone":        "5559876543",
+		"patientEmail":        "ana.publico@test.local",
+	})
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// TestPublicAppointment_DedupesPatientByEmail confirma que dos solicitudes
+// con el mismo correo reutilizan el mismo paciente, sin duplicarlo.
+func TestPublicAppointment_DedupesPatientByEmail(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient())
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_public_dedupe", "password123")
+	require.NoError(t, db.Model(&doc).Updates(map[string]any{"public_listed": true, "public_slug": "dr-dedupe-1"}).Error)
+
+	body := map[string]any{
+		"doctorId":            doc.ID,
+		"appointmentDateTime": "2026-09-01T10:00:00Z",
+		"patientFirstName":    "Luis",
+		"patientLastName":     "Torres",
+		"patientPhone":        "5551112222",
+		"patientEmail":        "luis.dedupe@test.local",
+	}
+
+	w := doRequest(t, router, http.MethodPost, "/api/public/appointments", "", body)
+	require.Equal(t, http.StatusCreated, w.Code)
+
+	body["appointmentDateTime"] = "2026-09-05T12:00:00Z"
+	w = doRequest(t, router, http.MethodPost, "/api/public/appointments", "", body)
+	require.Equal(t, http.StatusCreated, w.Code)
+
+	var count int64
+	db.Model(&models.Patient{}).Where("email = ?", "luis.dedupe@test.local").Count(&count)
+	assert.Equal(t, int64(1), count, "no debe crear un paciente duplicado en la segunda solicitud")
+}

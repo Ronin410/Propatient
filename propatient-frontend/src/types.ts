@@ -1,3 +1,16 @@
+export interface PublicDoctor {
+  id: number;
+  fullName: string;
+  medicalSpecialty: string;
+  publicBio: string;
+  avatarUrl?: string;
+  address: string;
+  phone: string;
+  latitude: number | null;
+  longitude: number | null;
+  publicSlug: string;
+}
+
 export interface Staff {
   id: number;
   doctorId: number;

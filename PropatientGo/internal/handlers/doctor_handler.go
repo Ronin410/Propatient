@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"path/filepath"
+	"propatient-api/internal/geocoding"
 	"propatient-api/internal/models"
 	"propatient-api/internal/storage"
 	"time"
@@ -41,7 +43,7 @@ func GetCurrentDoctor(db *gorm.DB, storageClient storage.Client) gin.HandlerFunc
 	}
 }
 
-func UpdateCurrentDoctor(db *gorm.DB, storageClient storage.Client) gin.HandlerFunc {
+func UpdateCurrentDoctor(db *gorm.DB, storageClient storage.Client, geoClient geocoding.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		doctorID := c.MustGet("doctorID").(uint)
 
@@ -50,6 +52,7 @@ func UpdateCurrentDoctor(db *gorm.DB, storageClient storage.Client) gin.HandlerF
 			c.JSON(http.StatusNotFound, gin.H{"error": "Doctor no encontrado"})
 			return
 		}
+		previousAddress := doctor.Address
 
 		// 1. Procesar y guardar el AVATAR (Foto de perfil) si viene en la petición
 		avatarFile, err := c.FormFile("avatar")
@@ -99,6 +102,27 @@ func UpdateCurrentDoctor(db *gorm.DB, storageClient storage.Client) gin.HandlerF
 			doctor.LicenseNumber = license
 		}
 
+		// Directorio público (landing page): opt-in explícito del doctor.
+		// El slug se genera una sola vez (nunca cambia, para no romper
+		// enlaces ya compartidos) y la geocodificación solo se repite si
+		// la dirección cambió, para no golpear la API de Nominatim en
+		// cada guardado del perfil.
+		doctor.PublicListed = c.PostForm("publicListed") == "true"
+		doctor.PublicBio = c.PostForm("publicBio")
+		if doctor.PublicListed {
+			if doctor.PublicSlug == "" {
+				doctor.PublicSlug = generateDoctorSlug(doctor.FullName, doctor.ID)
+			}
+			if doctor.Address != "" && (doctor.Address != previousAddress || doctor.Latitude == nil) {
+				if coords, err := geoClient.Geocode(c.Request.Context(), doctor.Address); err != nil {
+					log.Printf("⚠️ No se pudo geocodificar la dirección del doctor %d: %v", doctorID, err)
+				} else if coords != nil {
+					doctor.Latitude = &coords.Latitude
+					doctor.Longitude = &coords.Longitude
+				}
+			}
+		}
+
 		// 5. Persistir los cambios en la Base de Datos
 		if err := db.Save(&doctor).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo actualizar el perfil"})
@@ -120,6 +144,9 @@ func UpdateCurrentDoctor(db *gorm.DB, storageClient storage.Client) gin.HandlerF
 			"address":          doctor.Address,
 			"recipeLegend":     doctor.RecipeLegend,
 			"resume":           doctor.Resume,
+			"publicListed":     doctor.PublicListed,
+			"publicBio":        doctor.PublicBio,
+			"publicSlug":       doctor.PublicSlug,
 		})
 	}
 }

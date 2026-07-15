@@ -42,6 +42,38 @@ export const AppointmentTracking: React.FC = () => {
     () => api.get('/dashboard/follow-ups').then((res) => res.data)
   );
 
+  // Solicitudes de agendamiento público (sin cuenta) que aún no confirma el
+  // consultorio: ver ConfirmAppointment/CreatePublicAppointment en el backend.
+  const { data: pendingRequests, setData: setPendingRequests } = useFetchData<Appointment[]>(
+    () => api.get('/appointments?status=PENDING_CONFIRMATION').then((res) => res.data)
+  );
+  const [requestActionId, setRequestActionId] = useState<number | null>(null);
+
+  const handleConfirmRequest = async (appointmentId: number) => {
+    setRequestActionId(appointmentId);
+    try {
+      await api.put(`/appointments/${appointmentId}/confirm`);
+      setPendingRequests((prev) => (prev || []).filter((a) => a.id !== appointmentId));
+      fetchDashboardData();
+    } catch (err) {
+      console.error('Error al confirmar la solicitud de cita:', err);
+    } finally {
+      setRequestActionId(null);
+    }
+  };
+
+  const handleRejectRequest = async (appointmentId: number) => {
+    setRequestActionId(appointmentId);
+    try {
+      await api.put(`/appointments/${appointmentId}/cancel`);
+      setPendingRequests((prev) => (prev || []).filter((a) => a.id !== appointmentId));
+    } catch (err) {
+      console.error('Error al rechazar la solicitud de cita:', err);
+    } finally {
+      setRequestActionId(null);
+    }
+  };
+
   const handleDismissFollowUp = async (appointmentId: number) => {
     try {
       await api.put(`/appointments/${appointmentId}`, { followUpDate: null });
@@ -226,6 +258,45 @@ export const AppointmentTracking: React.FC = () => {
           </div>
         </div>
       </section>
+
+      {/* SOLICITUDES DE CITA PÚBLICAS PENDIENTES DE CONFIRMAR */}
+      {pendingRequests && pendingRequests.length > 0 && (
+        <section className="table-section">
+          <h2 className="section-title">Solicitudes de Cita Nuevas</h2>
+          <div className="follow-up-list">
+            {pendingRequests.map((app) => (
+              <div key={app.id} className="follow-up-item">
+                <div className="follow-up-info">
+                  <span className="material-icons-outlined">mark_email_unread</span>
+                  <div>
+                    <strong>{app.patient?.firstName || 'Paciente'} {app.patient?.lastName || ''}</strong>
+                    <span className="follow-up-date">
+                      Solicita cita para el {formatToLocalDate(app.appointmentDateTime)} a las {formatToLocalTime(app.appointmentDateTime)}
+                      {app.reason ? ` · ${app.reason}` : ''}
+                    </span>
+                  </div>
+                </div>
+                <div className="follow-up-actions">
+                  <button
+                    className="btn-primary"
+                    disabled={requestActionId === app.id}
+                    onClick={() => handleConfirmRequest(app.id)}
+                  >
+                    Confirmar
+                  </button>
+                  <button
+                    className="btn-text"
+                    disabled={requestActionId === app.id}
+                    onClick={() => handleRejectRequest(app.id)}
+                  >
+                    Rechazar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* SEGUIMIENTO PROGRAMADO */}
       {followUps && followUps.length > 0 && (

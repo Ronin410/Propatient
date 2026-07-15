@@ -251,10 +251,11 @@ func UploadDocuments(db *gorm.DB, storageClient storage.Client) gin.HandlerFunc 
 // ConsultationForm) — se usan para validar el filtro ?status= y así rechazar
 // typos con un 400 claro en vez de devolver una lista vacía sin explicación.
 var validAppointmentStatuses = map[string]bool{
-	"PENDING":   true,
-	"COMPLETED": true,
-	"CANCELLED": true,
-	"NOSHOW":    true,
+	"PENDING":              true,
+	"COMPLETED":            true,
+	"CANCELLED":            true,
+	"NOSHOW":               true,
+	"PENDING_CONFIRMATION": true,
 }
 
 // Capturamos los parámetros de la URL: /api/appointments?start=...&end=...&status=...
@@ -292,7 +293,7 @@ func GetAppointments(db *gorm.DB, storageClient storage.Client) gin.HandlerFunc 
 
 		if status != "" {
 			if !validAppointmentStatuses[status] {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Parámetro 'status' inválido. Valores permitidos: PENDING, COMPLETED, CANCELLED, NOSHOW"})
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Parámetro 'status' inválido. Valores permitidos: PENDING, COMPLETED, CANCELLED, NOSHOW, PENDING_CONFIRMATION"})
 				return
 			}
 			query = query.Where("status = ?", status)
@@ -358,6 +359,40 @@ func CancelAppointment(db *gorm.DB, calClient googlecalendar.Client) gin.Handler
 		deleteAppointmentFromGoogleCalendar(c.Request.Context(), db, calClient, appointment)
 
 		c.JSON(http.StatusOK, gin.H{"message": "Cita cancelada", "status": "CANCELLED"})
+	}
+}
+
+// ConfirmAppointment acepta una solicitud de cita agendada públicamente
+// (status PENDING_CONFIRMATION, ver CreatePublicAppointment) y la vuelve
+// una cita normal. Solo el doctor/personal del consultorio puede
+// confirmarla, y solo si de verdad estaba pendiente de confirmación
+// (evita "confirmar" por error una cita ya cancelada o completada).
+func ConfirmAppointment(db *gorm.DB, calClient googlecalendar.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.Param("id")
+		doctorID := c.MustGet("doctorID").(uint)
+
+		var appointment models.Appointment
+		if err := db.Where("id = ? AND doctor_id = ? AND status = ?", id, doctorID, "PENDING_CONFIRMATION").
+			First(&appointment).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "No hay ninguna solicitud pendiente con ese ID"})
+			return
+		}
+
+		if err := db.Model(&models.Appointment{}).
+			Where("id = ? AND doctor_id = ?", id, doctorID).
+			Update("status", "PENDING").Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo confirmar la cita"})
+			return
+		}
+
+		var patient models.Patient
+		if err := db.First(&patient, appointment.PatientID).Error; err == nil {
+			appointment.Status = "PENDING"
+			syncAppointmentToGoogleCalendar(c.Request.Context(), db, calClient, &appointment, patient)
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Cita confirmada", "status": "PENDING"})
 	}
 }
 

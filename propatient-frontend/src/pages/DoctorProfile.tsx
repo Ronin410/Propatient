@@ -20,6 +20,9 @@ interface ProfileData {
   avatarUrl?: string;
   logoUrl?: string;
   googleCalendarConnected?: boolean;
+  publicListed?: boolean;
+  publicBio?: string;
+  publicSlug?: string;
 }
 
 export const DoctorProfile = () => {
@@ -34,7 +37,9 @@ export const DoctorProfile = () => {
     university: '',
     address: '',
     recipeLegend: 'Favor de no automedicarse. En caso de presentar reacciones adversas suspenda el medicamento y consulte a su médico.',
-    resume: ''
+    resume: '',
+    publicListed: false,
+    publicBio: ''
   });
   // Estado único para controlar la configuración del popup genérico
   const [popupConfig, setPopupConfig] = useState({
@@ -186,6 +191,10 @@ export const DoctorProfile = () => {
     setProfile(prev => ({ ...prev, [name]: value }));
   };
 
+  const handlePublicListedChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setProfile(prev => ({ ...prev, publicListed: e.target.checked }));
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'avatar' | 'logo') => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -221,6 +230,8 @@ export const DoctorProfile = () => {
       formData.append('address', profile.address);
       formData.append('recipeLegend', profile.recipeLegend);
       formData.append('resume', profile.resume);
+      formData.append('publicListed', profile.publicListed ? 'true' : 'false');
+      formData.append('publicBio', profile.publicBio || '');
 
       // 3. Adjuntar los archivos (si se han seleccionado)
       if (avatarFile) {
@@ -246,7 +257,10 @@ export const DoctorProfile = () => {
         setProfile(prev => ({
           ...prev,
           avatarUrl: data.avatarUrl || prev.avatarUrl,
-          logoUrl: data.logoUrl || prev.logoUrl
+          logoUrl: data.logoUrl || prev.logoUrl,
+          publicListed: data.publicListed,
+          publicBio: data.publicBio,
+          publicSlug: data.publicSlug || prev.publicSlug
         }));
 
         if (data.avatarUrl) setAvatarPreview(toAbsoluteFileUrl(data.avatarUrl));
@@ -453,6 +467,41 @@ export const DoctorProfile = () => {
               <textarea name="recipeLegend" value={profile.recipeLegend} onChange={handleInputChange} rows={2} />
             </div>
           </div>
+        </div>
+
+        {/* DIRECTORIO PÚBLICO */}
+        <div className="profile-form-section">
+          <div className="section-title">
+            <h3>Directorio Público de ProPatient</h3>
+            <p>Si lo activas, tu perfil aparece en el directorio público de doctores y pacientes nuevos podrán encontrarte y solicitar una cita en línea, sin necesidad de crear una cuenta.</p>
+          </div>
+          <div className="public-listing-toggle">
+            <label className="toggle-checkbox">
+              <input type="checkbox" checked={!!profile.publicListed} onChange={handlePublicListedChange} />
+              <span>Aparecer en el directorio público de doctores</span>
+            </label>
+          </div>
+
+          {profile.publicListed && (
+            <div className="grid-layout">
+              <div className="form-group full-width">
+                <label>Biografía pública (se muestra en tu perfil y en el directorio)</label>
+                <textarea
+                  name="publicBio"
+                  value={profile.publicBio || ''}
+                  onChange={handleInputChange}
+                  rows={3}
+                  placeholder="Cuéntales a los pacientes sobre tu experiencia, enfoque de atención y lo que pueden esperar de una consulta contigo..."
+                />
+              </div>
+              {profile.publicSlug && (
+                <div className="form-group full-width">
+                  <label>Tu enlace público</label>
+                  <input type="text" readOnly value={`${window.location.origin}/dr/${profile.publicSlug}`} onClick={(e) => (e.target as HTMLInputElement).select()} />
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* INTEGRACIÓN CON GOOGLE CALENDAR */}

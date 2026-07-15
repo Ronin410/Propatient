@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"propatient-api/internal/billing"
+	"propatient-api/internal/geocoding"
 	"propatient-api/internal/googlecalendar"
 	"propatient-api/internal/server"
 	"propatient-api/internal/testutil"
@@ -50,7 +51,7 @@ func doMultipartRequest(t *testing.T, router http.Handler, method, path, token s
 func TestStorage_AvatarUpload_ReturnsPresignedURLOnRead(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	mockStorage := newMockStorageClient()
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mockStorage, billing.Config{}, nil)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mockStorage, billing.Config{}, nil, geocoding.NewClient())
 
 	doc := testutil.CreateTestDoctor(t, db, "doctor_storage_avatar", "password123")
 	token := testutil.TokenFor(t, doc.ID, doc.Username)
@@ -75,7 +76,7 @@ func TestStorage_AvatarUpload_ReturnsPresignedURLOnRead(t *testing.T) {
 func TestStorage_DocumentUpload_PresignedOnAppointmentDetail(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	mockStorage := newMockStorageClient()
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mockStorage, billing.Config{}, nil)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mockStorage, billing.Config{}, nil, geocoding.NewClient())
 
 	doc := testutil.CreateTestDoctor(t, db, "doctor_storage_doc", "password123")
 	token := testutil.TokenFor(t, doc.ID, doc.Username)
@@ -111,7 +112,7 @@ func TestStorage_DocumentUpload_PresignedOnAppointmentDetail(t *testing.T) {
 func TestStorage_RecipePDF_PresignedOnAppointmentAndPatientHistory(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	mockStorage := newMockStorageClient()
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mockStorage, billing.Config{}, nil)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mockStorage, billing.Config{}, nil, geocoding.NewClient())
 
 	doc := testutil.CreateTestDoctor(t, db, "doctor_storage_recipe", "password123")
 	token := testutil.TokenFor(t, doc.ID, doc.Username)
