@@ -168,6 +168,113 @@ func TestPublicAppointment_RejectsDoctorNotListed(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
+// TestPublicAppointment_HiddenFromCalendarAndTodaySummaryBeforeConfirmation
+// cubre el bug reportado: una solicitud pública sin confirmar no debe verse
+// en la agenda general (sin filtro de status) ni en el resumen "hoy" del
+// dashboard, y no debe poder abrirse ni modificarse como si fuera una cita
+// real hasta que el consultorio la confirme.
+func TestPublicAppointment_HiddenFromCalendarAndTodaySummaryBeforeConfirmation(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient())
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_hidden_pending", "password123")
+	require.NoError(t, db.Model(&doc).Updates(map[string]any{"public_listed": true, "public_slug": "dr-hidden-1"}).Error)
+	docToken := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	todayNoon := time.Now().UTC().Truncate(24*time.Hour).Add(12 * time.Hour)
+	w := doRequest(t, router, http.MethodPost, "/api/public/appointments", "", map[string]any{
+		"doctorId":            doc.ID,
+		"appointmentDateTime": todayNoon.Format(time.RFC3339),
+		"reason":              "Chequeo",
+		"patientFirstName":    "Mario",
+		"patientLastName":     "Solís",
+		"patientPhone":        "5550001111",
+		"patientEmail":        "mario.hidden@test.local",
+	})
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+
+	// No debe verse en la agenda general (GetAppointments sin status).
+	w = doRequest(t, router, http.MethodGet, "/api/appointments", docToken, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	var all []map[string]any
+	decodeJSONList(t, w, &all)
+	assert.Empty(t, all, "una solicitud pública sin confirmar no debe verse en la agenda general")
+
+	// No debe contarse ni listarse en el resumen de "hoy", aunque su fecha
+	// sea hoy — así "Iniciar Atención" nunca aparece antes de aceptarla.
+	w = doRequest(t, router, http.MethodGet, "/api/dashboard/summary", docToken, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	summary := decodeJSON(t, w)
+	assert.Equal(t, float64(0), summary["todayCount"])
+	todayAppointments, ok := summary["todayAppointments"].([]any)
+	require.True(t, ok)
+	assert.Empty(t, todayAppointments)
+
+	// Tampoco se puede abrir como el detalle de una consulta...
+	w = doRequest(t, router, http.MethodGet, "/api/appointments", docToken, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	w = doRequest(t, router, http.MethodGet, "/api/appointments?status=PENDING_CONFIRMATION", docToken, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	var requests []map[string]any
+	decodeJSONList(t, w, &requests)
+	require.Len(t, requests, 1)
+	apptID := strconv.Itoa(int(requests[0]["id"].(float64)))
+
+	w = doRequest(t, router, http.MethodGet, "/api/appointments/"+apptID, docToken, nil)
+	assert.Equal(t, http.StatusConflict, w.Code)
+
+	// ...ni modificarse (reprogramar, guardar notas de consulta, etc.).
+	w = doRequest(t, router, http.MethodPut, "/api/appointments/"+apptID, docToken, map[string]any{
+		"appointmentDateTime": todayNoon.Add(time.Hour).Format(time.RFC3339),
+	})
+	assert.Equal(t, http.StatusConflict, w.Code)
+}
+
+// TestPublicAppointment_DedupesPatientByPhoneWhenAlreadyDoctorsPatient cubre
+// el otro caso pedido: si la persona que agenda ya es paciente de ESTE
+// doctor pero escribe un correo distinto al que tenía registrado, debe
+// reconocerse por teléfono y no crear un paciente duplicado.
+func TestPublicAppointment_DedupesPatientByPhoneWhenAlreadyDoctorsPatient(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient())
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_phone_dedupe", "password123")
+	require.NoError(t, db.Model(&doc).Updates(map[string]any{"public_listed": true, "public_slug": "dr-phone-dedupe-1"}).Error)
+	docToken := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doRequest(t, router, http.MethodPost, "/api/patients", docToken, map[string]any{
+		"firstName": "Lucía", "lastName": "Ramírez", "phone": "5557778888", "email": "lucia.original@test.local",
+	})
+	require.Equal(t, http.StatusCreated, w.Code)
+	existingPatientID := int(decodeJSON(t, w)["id"].(float64))
+
+	// Agenda en línea con OTRO correo pero el MISMO teléfono ya registrado
+	// para este doctor.
+	w = doRequest(t, router, http.MethodPost, "/api/public/appointments", "", map[string]any{
+		"doctorId":            doc.ID,
+		"appointmentDateTime": "2026-09-10T09:00:00Z",
+		"patientFirstName":    "Lucía",
+		"patientLastName":     "Ramírez",
+		"patientPhone":        "5557778888",
+		"patientEmail":        "lucia.nuevo-correo@test.local",
+	})
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+
+	var count int64
+	db.Model(&models.Patient{}).Where("phone = ?", "5557778888").Count(&count)
+	assert.Equal(t, int64(1), count, "no debe crear un paciente duplicado si el teléfono ya coincide con uno del doctor")
+
+	w = doRequest(t, router, http.MethodGet, "/api/appointments?status=PENDING_CONFIRMATION", docToken, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	var requests []map[string]any
+	decodeJSONList(t, w, &requests)
+	require.Len(t, requests, 1)
+	assert.Equal(t, float64(existingPatientID), requests[0]["patientId"], "la solicitud debe quedar ligada al paciente ya existente, no a uno nuevo")
+}
+
 // TestPublicAppointment_DedupesPatientByEmail confirma que dos solicitudes
 // con el mismo correo reutilizan el mismo paciente, sin duplicarlo.
 func TestPublicAppointment_DedupesPatientByEmail(t *testing.T) {

@@ -98,7 +98,8 @@ export const AppointmentTracking: React.FC = () => {
         (app: Appointment) =>
           app.status !== 'COMPLETED' &&
           app.status !== 'NOSHOW' &&
-          app.status !== 'CANCELLED'
+          app.status !== 'CANCELLED' &&
+          app.status !== 'PENDING_CONFIRMATION'
       );
 
       setSummary({

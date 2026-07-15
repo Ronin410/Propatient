@@ -136,29 +136,14 @@ func CreatePublicAppointment(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		email := strings.ToLower(strings.TrimSpace(req.PatientEmail))
-		var patient models.Patient
-		err := db.Where("LOWER(email) = ?", email).First(&patient).Error
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			patient = models.Patient{
-				FirstName: req.PatientFirstName,
-				LastName:  req.PatientLastName,
-				Phone:     req.PatientPhone,
-				Email:     email,
-			}
-			if err := db.Create(&patient).Error; err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo registrar tus datos"})
-				return
-			}
-		} else if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al validar tu correo"})
+		patient, alreadyLinked, err := findOrCreatePublicBookingPatient(db, doctor, req)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo registrar tus datos"})
 			return
 		}
 
-		var linkCount int64
-		db.Table("doctor_patients").Where("doctor_id = ? AND patient_id = ?", doctor.ID, patient.ID).Count(&linkCount)
-		if linkCount == 0 {
-			if err := db.Model(&doctor).Association("Patients").Append(&patient); err != nil {
+		if !alreadyLinked {
+			if err := db.Model(&doctor).Association("Patients").Append(patient); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo vincular tu solicitud con el consultorio"})
 				return
 			}
@@ -181,6 +166,56 @@ func CreatePublicAppointment(db *gorm.DB) gin.HandlerFunc {
 			"message": "Tu solicitud de cita fue enviada. El consultorio la confirmará pronto por teléfono o correo.",
 		})
 	}
+}
+
+// findOrCreatePublicBookingPatient decide a qué paciente pertenece una
+// solicitud pública, con dos niveles de coincidencia para evitar
+// duplicados:
+//
+//  1. Primero busca entre los pacientes YA vinculados a este doctor, por
+//     correo o por teléfono — es el caso más común de duplicidad: el
+//     paciente ya está en la agenda de este consultorio pero escribió el
+//     correo con mayúsculas distintas, o directamente puso otro correo
+//     pero el mismo teléfono que ya tenía registrado.
+//  2. Si no aparece ahí, busca globalmente por correo (puede existir por
+//     otro doctor, o por otra solicitud pública anterior) y lo reutiliza.
+//  3. Si tampoco existe, crea un paciente nuevo.
+//
+// El segundo booleano indica si el paciente ya estaba vinculado a este
+// doctor (para no volver a intentar vincularlo).
+func findOrCreatePublicBookingPatient(db *gorm.DB, doctor models.Doctor, req publicAppointmentRequest) (*models.Patient, bool, error) {
+	email := strings.ToLower(strings.TrimSpace(req.PatientEmail))
+	phone := strings.TrimSpace(req.PatientPhone)
+
+	var patient models.Patient
+	err := db.Joins("JOIN doctor_patients ON doctor_patients.patient_id = patients.id").
+		Where("doctor_patients.doctor_id = ? AND (LOWER(patients.email) = ? OR patients.phone = ?)", doctor.ID, email, phone).
+		First(&patient).Error
+	if err == nil {
+		return &patient, true, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, false, err
+	}
+
+	err = db.Where("LOWER(email) = ?", email).First(&patient).Error
+	if err == nil {
+		return &patient, false, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, false, err
+	}
+
+	patient = models.Patient{
+		FirstName: req.PatientFirstName,
+		LastName:  req.PatientLastName,
+		Phone:     phone,
+		Email:     email,
+	}
+	if err := db.Create(&patient).Error; err != nil {
+		return nil, false, err
+	}
+	return &patient, false, nil
 }
 
 var slugNonAlphanumeric = regexp.MustCompile(`[^a-z0-9]+`)

@@ -297,6 +297,12 @@ func GetAppointments(db *gorm.DB, storageClient storage.Client) gin.HandlerFunc 
 				return
 			}
 			query = query.Where("status = ?", status)
+		} else {
+			// Sin filtro explícito, las solicitudes públicas aún sin
+			// confirmar (PENDING_CONFIRMATION) no cuentan como cita real
+			// todavía — no deben aparecer en la agenda/calendario general,
+			// solo en la bandeja dedicada de solicitudes nuevas.
+			query = query.Where("status != ?", "PENDING_CONFIRMATION")
 		}
 
 		query.Order("appointment_date_time ASC").Find(&appointments)
@@ -321,6 +327,14 @@ func GetAppointmentDetail(db *gorm.DB, storageClient storage.Client) gin.Handler
 
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Cita no encontrada"})
+			return
+		}
+
+		// Defensa extra: aunque el frontend ya no debería ofrecer "Iniciar
+		// Atención" para una solicitud pública sin confirmar, esto bloquea
+		// también un acceso directo a la URL de consulta antes de aceptarla.
+		if appointment.Status == "PENDING_CONFIRMATION" {
+			c.JSON(http.StatusConflict, gin.H{"error": "Esta cita todavía no ha sido confirmada. Confírmala antes de iniciar la consulta."})
 			return
 		}
 
@@ -416,6 +430,15 @@ func UpdateAppointment(db *gorm.DB, calClient googlecalendar.Client) gin.Handler
 			c.JSON(http.StatusNotFound, gin.H{"error": "Cita no encontrada"})
 			return
 		}
+
+		// Una solicitud pública sin confirmar solo se modifica a través de
+		// /confirm o /cancel — no de este endpoint genérico (evita, por
+		// ejemplo, reprogramarla o guardarle notas de consulta antes de que
+		// el consultorio la haya aceptado).
+		if appointment.Status == "PENDING_CONFIRMATION" {
+			c.JSON(http.StatusConflict, gin.H{"error": "Esta cita todavía no ha sido confirmada. Confírmala o recházala antes de modificarla."})
+			return
+		}
 		previousDateTime := appointment.AppointmentDateTime
 
 		// Leemos los cambios del Body (JSON)
@@ -472,9 +495,11 @@ func GetTodaySummary(db *gorm.DB) gin.HandlerFunc {
 			NextPatient       *models.Appointment  `json:"nextPatient"`
 		}
 		clientDateStr := now.Format("2006-01-02")
-		// 1. Total de citas agendadas para hoy (independientemente del estado)
+		// 1. Total de citas agendadas para hoy (independientemente del estado,
+		// salvo las solicitudes públicas aún sin confirmar: esas no cuentan
+		// como cita real todavía — ver CreatePublicAppointment/ConfirmAppointment).
 		db.Model(&models.Appointment{}).
-			Where("doctor_id = ? AND DATE(appointment_date_time) = ?", doctorID, clientDateStr).
+			Where("doctor_id = ? AND DATE(appointment_date_time) = ? AND status != ?", doctorID, clientDateStr, "PENDING_CONFIRMATION").
 			Count(&stats.TodayCount)
 
 		// 2. Total de citas pendientes generales del doctor (su carga de trabajo total)
@@ -482,9 +507,12 @@ func GetTodaySummary(db *gorm.DB) gin.HandlerFunc {
 			Where("doctor_id = ? AND status = ?", doctorID, "PENDING").
 			Count(&stats.PendingCount)
 
-		// 3. Lista de citas de hoy para la tabla
+		// 3. Lista de citas de hoy para la tabla (mismo criterio que el conteo:
+		// sin las solicitudes pendientes de confirmar, para que "Iniciar
+		// Atención" nunca aparezca disponible antes de que el consultorio
+		// acepte la solicitud).
 		db.Preload("Patient").
-			Where("doctor_id = ? AND DATE(appointment_date_time) = ?", doctorID, clientDateStr).
+			Where("doctor_id = ? AND DATE(appointment_date_time) = ? AND status != ?", doctorID, clientDateStr, "PENDING_CONFIRMATION").
 			Order("appointment_date_time ASC").
 			Find(&stats.TodayAppointments)
 
