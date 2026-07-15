@@ -375,12 +375,12 @@ func CancelAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient wh
 
 		deleteAppointmentFromGoogleCalendar(c.Request.Context(), db, calClient, appointment)
 
-		// Solo avisamos por WhatsApp cuando se está rechazando una solicitud
-		// en línea todavía sin confirmar — una cancelación normal de una cita
-		// ya aceptada no dispara este aviso (fuera del alcance pedido). En
-		// segundo plano: ver el comentario largo en CreatePublicAppointment
-		// sobre por qué esto no debe bloquear la respuesta ni usar el
-		// contexto de la petición.
+		// Solo avisamos (correo + WhatsApp) cuando se está rechazando una
+		// solicitud en línea todavía sin confirmar — una cancelación normal
+		// de una cita ya aceptada no dispara este aviso (fuera del alcance
+		// pedido). En segundo plano: ver el comentario largo en
+		// CreatePublicAppointment sobre por qué esto no debe bloquear la
+		// respuesta ni usar el contexto de la petición.
 		if wasPendingConfirmation {
 			var doctor models.Doctor
 			var patient models.Patient
@@ -388,9 +388,10 @@ func CancelAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient wh
 				go func(doctor models.Doctor, patient models.Patient, appointment models.Appointment) {
 					defer func() {
 						if r := recover(); r != nil {
-							log.Printf("⚠️ Pánico recuperado al mandar el WhatsApp de rechazo de la cita %d: %v", appointment.ID, r)
+							log.Printf("⚠️ Pánico recuperado al mandar el aviso de rechazo de la cita %d: %v", appointment.ID, r)
 						}
 					}()
+					sendAppointmentDecisionEmail(doctor, patient, appointment, false)
 					sendAppointmentDecisionWhatsApp(context.Background(), waClient, doctor, patient, appointment, false)
 				}(doctor, patient, appointment)
 			}
@@ -436,9 +437,10 @@ func ConfirmAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient w
 			go func(doctor models.Doctor, patient models.Patient, appointment models.Appointment) {
 				defer func() {
 					if r := recover(); r != nil {
-						log.Printf("⚠️ Pánico recuperado al mandar el WhatsApp de confirmación de la cita %d: %v", appointment.ID, r)
+						log.Printf("⚠️ Pánico recuperado al mandar el aviso de confirmación de la cita %d: %v", appointment.ID, r)
 					}
 				}()
+				sendAppointmentDecisionEmail(doctor, patient, appointment, true)
 				sendAppointmentDecisionWhatsApp(context.Background(), waClient, doctor, patient, appointment, true)
 			}(doctor, patient, appointment)
 		}
@@ -471,6 +473,40 @@ func sendAppointmentDecisionWhatsApp(ctx context.Context, waClient whatsapp.Clie
 
 	if err := waClient.SendMessage(ctx, patient.Phone, body); err != nil {
 		log.Printf("⚠️ No se pudo enviar el WhatsApp de %s al paciente (cita %d): %v",
+			map[bool]string{true: "confirmación", false: "rechazo"}[confirmed], appointment.ID, err)
+	}
+}
+
+// sendAppointmentDecisionEmail es el equivalente por correo de
+// sendAppointmentDecisionWhatsApp.
+func sendAppointmentDecisionEmail(doctor models.Doctor, patient models.Patient, appointment models.Appointment, confirmed bool) {
+	if patient.Email == "" {
+		return
+	}
+
+	when := auth.FormatSpanishDateTime(appointment.AppointmentDateTime)
+	var subject, body string
+	if confirmed {
+		subject = "¡Tu cita con Dr(a). " + doctor.FullName + " quedó confirmada!"
+		body = fmt.Sprintf(
+			`<p>Hola %s,</p>
+			<p>Tu cita con <strong>Dr(a). %s</strong> quedó <strong>confirmada</strong> para el <strong>%s</strong>.</p>
+			<p>— ProPatient</p>`,
+			patient.FirstName, doctor.FullName, when,
+		)
+	} else {
+		subject = "No pudimos confirmar tu solicitud de cita"
+		body = fmt.Sprintf(
+			`<p>Hola %s,</p>
+			<p>El consultorio de <strong>Dr(a). %s</strong> no pudo aceptar tu solicitud de cita para el <strong>%s</strong>.</p>
+			<p>Puedes intentar con otro horario desde el directorio de ProPatient.</p>
+			<p>— ProPatient</p>`,
+			patient.FirstName, doctor.FullName, when,
+		)
+	}
+
+	if err := auth.SendEmail(patient.Email, subject, body); err != nil {
+		log.Printf("⚠️ No se pudo enviar el correo de %s al paciente (cita %d): %v",
 			map[bool]string{true: "confirmación", false: "rechazo"}[confirmed], appointment.ID, err)
 	}
 }
