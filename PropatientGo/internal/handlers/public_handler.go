@@ -2,12 +2,15 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
+	"log"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"propatient-api/internal/auth"
 	"propatient-api/internal/models"
 	"propatient-api/internal/storage"
 
@@ -162,9 +165,55 @@ func CreatePublicAppointment(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Correos de aviso: "mejor esfuerzo", igual que la sincronización con
+		// Google Calendar — la solicitud ya se guardó y no debe fallar por un
+		// problema de SMTP ajeno a la reserva en sí.
+		sendPublicBookingEmails(doctor, *patient, appointment)
+
 		c.JSON(http.StatusCreated, gin.H{
 			"message": "Tu solicitud de cita fue enviada. El consultorio la confirmará pronto por teléfono o correo.",
 		})
+	}
+}
+
+// sendPublicBookingEmails avisa por correo tanto al paciente (confirmación
+// de que su solicitud se recibió, todavía sin confirmar) como al doctor
+// (aviso de que tiene una solicitud nueva por revisar en su panel).
+func sendPublicBookingEmails(doctor models.Doctor, patient models.Patient, appointment models.Appointment) {
+	when := auth.FormatSpanishDateTime(appointment.AppointmentDateTime)
+
+	if patient.Email != "" {
+		subject := "Recibimos tu solicitud de cita con Dr(a). " + doctor.FullName
+		body := fmt.Sprintf(
+			`<p>Hola %s,</p>
+			<p>Recibimos tu solicitud de cita con <strong>Dr(a). %s</strong> para el <strong>%s</strong>.</p>
+			<p>El consultorio revisará tu solicitud y te confirmará pronto por correo o teléfono. Tu cita <strong>todavía no está agendada</strong> hasta que la confirmen.</p>
+			<p>— ProPatient</p>`,
+			patient.FirstName, doctor.FullName, when,
+		)
+		if err := auth.SendEmail(patient.Email, subject, body); err != nil {
+			log.Printf("⚠️ No se pudo enviar el correo de confirmación al paciente (cita %d): %v", appointment.ID, err)
+		}
+	}
+
+	if doctor.Email != "" {
+		reasonLine := ""
+		if appointment.Reason != "" {
+			reasonLine = "<br>Motivo: " + appointment.Reason
+		}
+		subject := "Nueva solicitud de cita por confirmar"
+		body := fmt.Sprintf(
+			`<p>Tienes una nueva solicitud de cita en línea:</p>
+			<p><strong>%s %s</strong><br>
+			Fecha solicitada: %s<br>
+			Teléfono: %s<br>
+			Correo: %s%s</p>
+			<p>Revísala y confírmala desde tu panel de ProPatient, en "Solicitudes de Cita Nuevas".</p>`,
+			patient.FirstName, patient.LastName, when, patient.Phone, patient.Email, reasonLine,
+		)
+		if err := auth.SendEmail(doctor.Email, subject, body); err != nil {
+			log.Printf("⚠️ No se pudo enviar el aviso de nueva solicitud al doctor %d: %v", doctor.ID, err)
+		}
 	}
 }
 

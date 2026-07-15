@@ -160,6 +160,12 @@ type Appointment struct {
 	// integración conectada). Uso interno para poder actualizarlo/borrarlo
 	// al reprogramar o cancelar la cita; nunca se expone al frontend.
 	GoogleEventID string `json:"-"`
+
+	// Marca cuándo se mandó el correo de recordatorio (~24h antes de la
+	// cita); nil = todavía no se envía. Ver
+	// workers.SendDueAppointmentReminders — evita reenviarlo en cada pasada
+	// del worker en segundo plano.
+	ReminderSentAt *time.Time `json:"-"`
 }
 
 type MedicalDocument struct {

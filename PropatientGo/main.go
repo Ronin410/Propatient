@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"propatient-api/internal/auth"
 	"propatient-api/internal/database"
 	"propatient-api/internal/models"
 	"propatient-api/internal/server"
@@ -68,6 +69,7 @@ func main() {
 	database.SeedDatabase(db)
 
 	workers.StartNightClosureWorker(db)
+	workers.StartAppointmentReminderWorker(db, auth.SendEmail)
 
 	// 4. Configuración del Router (rutas, CORS, health check en internal/server)
 	r := server.NewRouter(db)

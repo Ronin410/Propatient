@@ -62,10 +62,10 @@ services:
         sync: false
       - key: AWS_SECRET_ACCESS_KEY
         sync: false
-      # Envío de correos (validación de cédula, invitación de personal). Sin
-      # estas dos, la app funciona igual pero no se manda el correo (falla
-      # rápido, no bloquea la petición). Ver .env.example para cómo generar
-      # la contraseña de aplicación de Gmail.
+      # Envío de correos (invitación de personal, solicitud de cita pública,
+      # recordatorio de cita). Sin estas dos, la app funciona igual pero no
+      # se manda el correo (falla rápido, no bloquea la petición). Ver
+      # .env.example para cómo generar la contraseña de aplicación de Gmail.
       - key: SMTP_EMAIL
         sync: false
       - key: SMTP_PASSWORD
