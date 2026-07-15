@@ -89,11 +89,29 @@ var spanishMonths = [...]string{
 	"julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 }
 
+// AppTimeZone es la zona horaria del consultorio (Culiacán/Mazatlán,
+// UTC-7), la misma que el frontend ya usaba de forma fija para mostrar
+// horarios (ver propatient-frontend/src/utils/dateFormatter.ts). Todavía
+// no hay soporte para que cada doctor configure su propia zona horaria —
+// si eso se agrega, este valor debería salir del perfil del doctor en vez
+// de estar fijo aquí.
+const AppTimeZone = "America/Mazatlan"
+
 // FormatSpanishDateTime da una fecha/hora legible en español para el cuerpo
-// de los correos automáticos (confirmaciones, recordatorios), ej. "15 de
-// julio de 2026, 10:00 a.m.". Siempre en la hora tal cual está guardada
-// (UTC, mismo criterio que el resto del backend para AppointmentDateTime).
+// de los correos/WhatsApp automáticos (confirmaciones, recordatorios), ej.
+// "15 de julio de 2026, 10:00 a.m.".
+//
+// AppointmentDateTime se guarda siempre en UTC (mismo criterio que el
+// resto del backend); aquí se convierte a AppTimeZone antes de formatear
+// para que la hora que lee el paciente/doctor sea la hora real de su
+// consultorio, no la hora UTC cruda (ese fue exactamente el bug: una cita
+// de las 10:00 a.m. se guardaba como 17:00 UTC, y sin esta conversión el
+// correo mostraba "5:00 p.m.").
 func FormatSpanishDateTime(t time.Time) string {
+	if loc, err := time.LoadLocation(AppTimeZone); err == nil {
+		t = t.In(loc)
+	}
+
 	hour12, period := t.Hour(), "a.m."
 	switch {
 	case hour12 == 0:

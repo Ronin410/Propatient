@@ -633,11 +633,19 @@ func GetTodaySummary(db *gorm.DB) gin.HandlerFunc {
 			}
 		}
 
-		// 2. Definir el "Día" según el calendario del cliente
-		// Creamos el inicio y fin del día respetando la zona horaria donde está el doctor
-		//y, m, d := now.Date()
-		//startOfDay := time.Date(y, m, d, 0, 0, 0, 0, now.Location())
-		//endOfDay := startOfDay.Add(24 * time.Hour)
+		// 2. Definir el "Día" según el calendario del cliente: inicio y fin
+		// del día respetando la zona horaria de "now" (el offset del
+		// cliente si vino clientTime, UTC si no). Antes esto comparaba con
+		// DATE(appointment_date_time) = clientDateStr, pero DATE() calcula
+		// la fecha en la zona horaria de la SESIÓN DE POSTGRES (típicamente
+		// UTC), no la del cliente — una cita de las 6pm en un huso UTC-7 se
+		// guarda como la 1am UTC del día siguiente, así que DATE() la
+		// contaba en el día equivocado y desaparecía de "hoy". Comparar por
+		// rango en vez de por fecha calculada evita depender de la zona
+		// horaria configurada en la base de datos.
+		y, m, d := now.Date()
+		startOfDay := time.Date(y, m, d, 0, 0, 0, 0, now.Location())
+		endOfDay := startOfDay.Add(24 * time.Hour)
 
 		var stats struct {
 			TodayCount        int64                `json:"todayCount"`
@@ -645,12 +653,12 @@ func GetTodaySummary(db *gorm.DB) gin.HandlerFunc {
 			TodayAppointments []models.Appointment `json:"todayAppointments"`
 			NextPatient       *models.Appointment  `json:"nextPatient"`
 		}
-		clientDateStr := now.Format("2006-01-02")
 		// 1. Total de citas agendadas para hoy (independientemente del estado,
 		// salvo las solicitudes públicas aún sin confirmar: esas no cuentan
 		// como cita real todavía — ver CreatePublicAppointment/ConfirmAppointment).
 		db.Model(&models.Appointment{}).
-			Where("doctor_id = ? AND DATE(appointment_date_time) = ? AND status != ?", doctorID, clientDateStr, "PENDING_CONFIRMATION").
+			Where("doctor_id = ? AND appointment_date_time >= ? AND appointment_date_time < ? AND status != ?",
+				doctorID, startOfDay, endOfDay, "PENDING_CONFIRMATION").
 			Count(&stats.TodayCount)
 
 		// 2. Total de citas pendientes generales del doctor (su carga de trabajo total)
@@ -663,7 +671,8 @@ func GetTodaySummary(db *gorm.DB) gin.HandlerFunc {
 		// Atención" nunca aparezca disponible antes de que el consultorio
 		// acepte la solicitud).
 		db.Preload("Patient").
-			Where("doctor_id = ? AND DATE(appointment_date_time) = ? AND status != ?", doctorID, clientDateStr, "PENDING_CONFIRMATION").
+			Where("doctor_id = ? AND appointment_date_time >= ? AND appointment_date_time < ? AND status != ?",
+				doctorID, startOfDay, endOfDay, "PENDING_CONFIRMATION").
 			Order("appointment_date_time ASC").
 			Find(&stats.TodayAppointments)
 

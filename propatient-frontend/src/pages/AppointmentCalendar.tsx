@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
-import { formatToLocalTime, formatToLocalDate } from '../utils/dateFormatter';
+import { formatToLocalTime, formatToLocalDate, toLocalDateKey } from '../utils/dateFormatter';
 import type { Appointment } from '../types'; 
 import './AppointmentCalendar.scss';
 
@@ -121,9 +121,11 @@ export const AppointmentCalendar: React.FC = () => {
         const thisDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         
         const dayEvents = appointments.filter(app => {
-          // Extraemos la fecha resolviendo de manera segura las diferentes nomenclaturas posibles
+          // Fecha en la zona horaria del consultorio, no la fecha UTC cruda
+          // (una cita de las 6pm en UTC-7 se guarda como la 1am UTC del día
+          // siguiente; usar split('T')[0] la ponía en el día equivocado).
           const appDateRaw = app.appointmentDateTime;
-          const appDate = appDateRaw ? appDateRaw.split('T')[0] : '';
+          const appDate = appDateRaw ? toLocalDateKey(appDateRaw) : '';
           return appDate === thisDateStr;
         });
 
@@ -166,7 +168,7 @@ export const AppointmentCalendar: React.FC = () => {
 
         const dayEvents = appointments.filter(app => {
           const appDateRaw = app.appointmentDateTime;
-          const appDate = appDateRaw ? appDateRaw.split('T')[0] : '';
+          const appDate = appDateRaw ? toLocalDateKey(appDateRaw) : '';
           return appDate === thisDateStr;
         });
 

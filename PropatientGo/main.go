@@ -15,6 +15,15 @@ import (
 	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+
+	// Empaqueta la base de datos de husos horarios (IANA) directo en el
+	// binario, para que time.LoadLocation("America/Mazatlan") (ver
+	// auth.FormatSpanishDateTime) funcione sin depender de que la imagen
+	// Docker traiga el paquete "tzdata" del sistema operativo — Alpine (la
+	// imagen base de este proyecto) no lo trae por defecto, y sin esto
+	// LoadLocation fallaría en silencio y los correos/WhatsApp mostrarían
+	// la hora en UTC en vez de la hora local del consultorio.
+	_ "time/tzdata"
 )
 
 func main() {
