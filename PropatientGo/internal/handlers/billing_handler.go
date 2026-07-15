@@ -133,7 +133,18 @@ func StripeWebhook(db *gorm.DB, cfg billing.Config) gin.HandlerFunc {
 			return
 		}
 
-		event, err := webhook.ConstructEvent(payload, c.GetHeader("Stripe-Signature"), cfg.WebhookSecret)
+		// IgnoreAPIVersionMismatch: true — la cuenta de Stripe del doctor puede
+		// estar en una versión de API más nueva que la que stripe-go 81.4.0
+		// reconoce (stripe-go rechaza el evento por defecto ante cualquier
+		// desajuste, aunque sea solo de versión). Los campos que de verdad
+		// usamos del payload (client_reference_id, customer.id,
+		// subscription.id/status) son estables entre versiones de la API de
+		// Stripe, así que ignorar el desajuste es seguro aquí. La firma en sí
+		// SIEMPRE se sigue verificando — esto no relaja esa parte.
+		event, err := webhook.ConstructEventWithOptions(
+			payload, c.GetHeader("Stripe-Signature"), cfg.WebhookSecret,
+			webhook.ConstructEventOptions{IgnoreAPIVersionMismatch: true},
+		)
 		if err != nil {
 			log.Printf("⚠️ Webhook de Stripe: firma inválida (revisa STRIPE_WEBHOOK_SECRET): %v", err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Firma de Stripe inválida"})
