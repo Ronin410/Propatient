@@ -377,12 +377,22 @@ func CancelAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient wh
 
 		// Solo avisamos por WhatsApp cuando se está rechazando una solicitud
 		// en línea todavía sin confirmar — una cancelación normal de una cita
-		// ya aceptada no dispara este aviso (fuera del alcance pedido).
+		// ya aceptada no dispara este aviso (fuera del alcance pedido). En
+		// segundo plano: ver el comentario largo en CreatePublicAppointment
+		// sobre por qué esto no debe bloquear la respuesta ni usar el
+		// contexto de la petición.
 		if wasPendingConfirmation {
 			var doctor models.Doctor
 			var patient models.Patient
 			if db.First(&doctor, doctorID).Error == nil && db.First(&patient, appointment.PatientID).Error == nil {
-				sendAppointmentDecisionWhatsApp(c.Request.Context(), waClient, doctor, patient, appointment, false)
+				go func(doctor models.Doctor, patient models.Patient, appointment models.Appointment) {
+					defer func() {
+						if r := recover(); r != nil {
+							log.Printf("⚠️ Pánico recuperado al mandar el WhatsApp de rechazo de la cita %d: %v", appointment.ID, r)
+						}
+					}()
+					sendAppointmentDecisionWhatsApp(context.Background(), waClient, doctor, patient, appointment, false)
+				}(doctor, patient, appointment)
 			}
 		}
 
@@ -419,7 +429,18 @@ func ConfirmAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient w
 		if db.First(&doctor, doctorID).Error == nil && db.First(&patient, appointment.PatientID).Error == nil {
 			appointment.Status = "PENDING"
 			syncAppointmentToGoogleCalendar(c.Request.Context(), db, calClient, &appointment, patient)
-			sendAppointmentDecisionWhatsApp(c.Request.Context(), waClient, doctor, patient, appointment, true)
+
+			// En segundo plano: ver el comentario largo en
+			// CreatePublicAppointment sobre por qué esto no debe bloquear la
+			// respuesta ni usar el contexto de la petición.
+			go func(doctor models.Doctor, patient models.Patient, appointment models.Appointment) {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("⚠️ Pánico recuperado al mandar el WhatsApp de confirmación de la cita %d: %v", appointment.ID, r)
+					}
+				}()
+				sendAppointmentDecisionWhatsApp(context.Background(), waClient, doctor, patient, appointment, true)
+			}(doctor, patient, appointment)
 		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "Cita confirmada", "status": "PENDING"})
@@ -521,14 +542,24 @@ func UpdateAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient wh
 
 		// Aviso de seguimiento: solo cuando FollowUpDate pasa de "sin
 		// seguimiento" (o de otra fecha) a una fecha nueva — no en cada
-		// guardado si ya tenía la misma marcada.
+		// guardado si ya tenía la misma marcada. En segundo plano: ver el
+		// comentario largo en CreatePublicAppointment sobre por qué esto no
+		// debe bloquear la respuesta ni usar el contexto de la petición.
 		followUpChanged := appointment.FollowUpDate != nil &&
 			(previousFollowUpDate == nil || !previousFollowUpDate.Equal(*appointment.FollowUpDate))
 		if followUpChanged {
 			var doctor models.Doctor
 			var patient models.Patient
 			if db.First(&doctor, doctorID).Error == nil && db.First(&patient, appointment.PatientID).Error == nil {
-				sendFollowUpWhatsApp(c.Request.Context(), waClient, doctor, patient, *appointment.FollowUpDate)
+				followUpDate := *appointment.FollowUpDate
+				go func(doctor models.Doctor, patient models.Patient, followUpDate time.Time) {
+					defer func() {
+						if r := recover(); r != nil {
+							log.Printf("⚠️ Pánico recuperado al mandar el WhatsApp de seguimiento del paciente %d: %v", patient.ID, r)
+						}
+					}()
+					sendFollowUpWhatsApp(context.Background(), waClient, doctor, patient, followUpDate)
+				}(doctor, patient, followUpDate)
 			}
 		}
 

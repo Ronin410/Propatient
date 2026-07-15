@@ -42,8 +42,10 @@ func TestPublicAppointment_NotifiesPatientAndDoctorByWhatsApp(t *testing.T) {
 	})
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 
-	assert.Equal(t, 1, wa.callsTo("5551237890"), "el paciente debe recibir un WhatsApp de confirmación de solicitud")
-	assert.Equal(t, 1, wa.callsTo("5550009999"), "el doctor debe recibir un WhatsApp de aviso de solicitud nueva")
+	// El envío va en segundo plano (no bloquea la respuesta HTTP), así que
+	// hay que darle tiempo antes de verificar.
+	wa.waitForCallsTo(t, "5551237890", 1)
+	wa.waitForCallsTo(t, "5550009999", 1)
 }
 
 // TestConfirmAppointment_NotifiesPatientByWhatsApp confirma que al aceptar
@@ -77,15 +79,12 @@ func TestConfirmAppointment_NotifiesPatientByWhatsApp(t *testing.T) {
 
 	// La solicitud pública ya le mandó 1 WhatsApp de confirmación de
 	// solicitud a este mismo teléfono; confirmar debe sumarle uno más.
-	callsToPatientBefore := wa.callsTo("5559990000")
-	require.Equal(t, 1, callsToPatientBefore)
+	wa.waitForCallsTo(t, "5559990000", 1)
 
-	callsBefore := wa.callCount()
 	w = doRequest(t, router, http.MethodPut, "/api/appointments/"+apptID+"/confirm", docToken, nil)
 	require.Equal(t, http.StatusOK, w.Code)
 
-	assert.Equal(t, callsBefore+1, wa.callCount())
-	assert.Equal(t, callsToPatientBefore+1, wa.callsTo("5559990000"))
+	wa.waitForCallsTo(t, "5559990000", 2)
 }
 
 // TestCancelAppointment_NotifiesPatientOnlyWhenRejectingOnlineRequest cubre
@@ -120,10 +119,10 @@ func TestCancelAppointment_NotifiesPatientOnlyWhenRejectingOnlineRequest(t *test
 	require.Len(t, requests, 1)
 	rejectID := strconv.Itoa(int(requests[0]["id"].(float64)))
 
-	callsBefore := wa.callsTo("5551110001")
+	wa.waitForCallsTo(t, "5551110001", 1) // ya tenía 1 de la solicitud pública
 	w = doRequest(t, router, http.MethodPut, "/api/appointments/"+rejectID+"/cancel", docToken, nil)
 	require.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, callsBefore+1, wa.callsTo("5551110001"), "rechazar una solicitud en línea sí debe avisar por WhatsApp")
+	wa.waitForCallsTo(t, "5551110001", 2)
 
 	// Cita normal ya confirmada (creada directo, no como solicitud pública) que se cancela.
 	patient := models.Patient{FirstName: "Normal", LastName: "Prueba", Phone: "5552220002", Email: "normal.wa@test.local"}
@@ -134,6 +133,9 @@ func TestCancelAppointment_NotifiesPatientOnlyWhenRejectingOnlineRequest(t *test
 
 	w = doRequest(t, router, http.MethodPut, "/api/appointments/"+strconv.Itoa(int(appt.ID))+"/cancel", docToken, nil)
 	require.Equal(t, http.StatusOK, w.Code)
+	// No hay nada que "esperar" para un caso negativo: le damos un margen
+	// corto a una eventual goroutine errónea y confirmamos que sigue en 0.
+	time.Sleep(200 * time.Millisecond)
 	assert.Equal(t, 0, wa.callsTo("5552220002"), "cancelar una cita ya confirmada no debe mandar este aviso")
 }
 
@@ -160,12 +162,13 @@ func TestUpdateAppointment_NotifiesPatientWhenFollowUpDateSet(t *testing.T) {
 		"followUpDate": followUp,
 	})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	assert.Equal(t, 1, wa.callsTo("5553330003"))
+	wa.waitForCallsTo(t, "5553330003", 1)
 
 	// Guardar de nuevo con la MISMA fecha de seguimiento no debe repetir el aviso.
 	w = doRequest(t, router, http.MethodPut, "/api/appointments/"+strconv.Itoa(int(appt.ID)), docToken, map[string]any{
 		"followUpDate": followUp,
 	})
 	require.Equal(t, http.StatusOK, w.Code)
+	time.Sleep(200 * time.Millisecond)
 	assert.Equal(t, 1, wa.callsTo("5553330003"), "no debe repetirse si la fecha de seguimiento no cambió")
 }

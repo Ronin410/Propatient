@@ -182,7 +182,7 @@ func TestPublicAppointment_HiddenFromCalendarAndTodaySummaryBeforeConfirmation(t
 	require.NoError(t, db.Model(&doc).Updates(map[string]any{"public_listed": true, "public_slug": "dr-hidden-1"}).Error)
 	docToken := testutil.TokenFor(t, doc.ID, doc.Username)
 
-	todayNoon := time.Now().UTC().Truncate(24*time.Hour).Add(12 * time.Hour)
+	todayNoon := time.Now().UTC().Truncate(24 * time.Hour).Add(12 * time.Hour)
 	w := doRequest(t, router, http.MethodPost, "/api/public/appointments", "", map[string]any{
 		"doctorId":            doc.ID,
 		"appointmentDateTime": todayNoon.Format(time.RFC3339),

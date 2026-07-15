@@ -3,6 +3,8 @@ package server_test
 import (
 	"context"
 	"sync"
+	"testing"
+	"time"
 )
 
 // mockWhatsAppClient guarda cada mensaje mandado, sin tocar la API real de
@@ -45,4 +47,21 @@ func (m *mockWhatsAppClient) callsTo(phone string) int {
 		}
 	}
 	return count
+}
+
+// waitForCallsTo espera (con sondeo corto) a que "phone" tenga al menos
+// "want" llamadas registradas. Los avisos de WhatsApp se mandan en una
+// goroutine en segundo plano (para no bloquear la respuesta HTTP al
+// paciente — ver el comentario en CreatePublicAppointment), así que un
+// test no puede asumir que ya llegaron justo al recibir la respuesta.
+func (m *mockWhatsAppClient) waitForCallsTo(t *testing.T, phone string, want int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if m.callsTo(phone) >= want {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("tras 2s, %s solo tiene %d llamadas registradas, se esperaban al menos %d", phone, m.callsTo(phone), want)
 }

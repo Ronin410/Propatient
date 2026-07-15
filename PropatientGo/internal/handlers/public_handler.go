@@ -167,11 +167,28 @@ func CreatePublicAppointment(db *gorm.DB, waClient whatsapp.Client) gin.HandlerF
 			return
 		}
 
-		// Correos y WhatsApp de aviso: "mejor esfuerzo", igual que la
-		// sincronización con Google Calendar — la solicitud ya se guardó y no
-		// debe fallar por un problema de SMTP/Twilio ajeno a la reserva en sí.
-		sendPublicBookingEmails(doctor, *patient, appointment)
-		sendPublicBookingWhatsApp(c.Request.Context(), waClient, doctor, *patient, appointment)
+		// Correos y WhatsApp de aviso: en segundo plano, nunca deben poder
+		// retrasar ni tumbar la respuesta al paciente — la solicitud ya se
+		// guardó. Van en su propia goroutine (no en la petición HTTP) porque
+		// SMTP/Twilio pueden tardar varios segundos o quedarse colgados (ej.
+		// si el hosting bloquea el puerto SMTP saliente), y eso alargaría
+		// esta petición pública hasta el punto de que el navegador la dé por
+		// fallida aunque la cita sí se haya guardado. Se usa
+		// context.Background() en vez del contexto de la petición porque
+		// ese se cancela en cuanto el handler responde, lo que cortaría a
+		// medias la llamada a Twilio. El recover() evita que un pánico
+		// inesperado aquí tumbe todo el proceso (una goroutine sin
+		// recuperar sí puede hacerlo, a diferencia del resto del handler,
+		// que ya está protegido por el middleware Recovery de Gin).
+		go func(doctor models.Doctor, patient models.Patient, appointment models.Appointment) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("⚠️ Pánico recuperado al mandar avisos de la solicitud de cita %d: %v", appointment.ID, r)
+				}
+			}()
+			sendPublicBookingEmails(doctor, patient, appointment)
+			sendPublicBookingWhatsApp(context.Background(), waClient, doctor, patient, appointment)
+		}(doctor, *patient, appointment)
 
 		c.JSON(http.StatusCreated, gin.H{
 			"message": "Tu solicitud de cita fue enviada. El consultorio la confirmará pronto por teléfono o correo.",
