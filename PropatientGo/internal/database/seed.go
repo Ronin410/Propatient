@@ -3,7 +3,9 @@ package database
 import (
 	"fmt"
 	"log"
+	"propatient-api/internal/billing"
 	"propatient-api/internal/models"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -21,12 +23,15 @@ func SeedDatabase(db *gorm.DB) {
 			log.Fatal("Error al encriptar contraseña de semilla")
 		}
 
+		trialEndsAt := time.Now().UTC().Add(billing.TrialDuration)
 		medico := models.Doctor{
-			FullName:         "Dr. Alejandro ProPatient",
-			Username:         "medico",
-			PasswordHash:     string(hashedPassword),
-			Email:            "medico@propatient.com",
-			MedicalSpecialty: "Medicina General",
+			FullName:           "Dr. Alejandro ProPatient",
+			Username:           "medico",
+			PasswordHash:       string(hashedPassword),
+			Email:              "medico@propatient.com",
+			MedicalSpecialty:   "Medicina General",
+			SubscriptionStatus: "trialing",
+			TrialEndsAt:        &trialEndsAt,
 		}
 
 		if err := db.Create(&medico).Error; err != nil {

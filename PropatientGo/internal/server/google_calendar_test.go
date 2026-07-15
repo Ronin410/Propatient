@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"testing"
 
+	"propatient-api/internal/billing"
 	"propatient-api/internal/googlecalendar"
 	"propatient-api/internal/models"
 	"propatient-api/internal/server"
@@ -20,7 +21,7 @@ func TestGoogleCalendarSync_SkippedWhenNotConnected(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	mock := newMockCalendarClient()
 	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, mock, testStorage)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, mock, testStorage, billing.Config{}, nil)
 
 	doc := testutil.CreateTestDoctor(t, db, "doctor_cal_off", "password123")
 	token := testutil.TokenFor(t, doc.ID, doc.Username)
@@ -43,7 +44,7 @@ func TestGoogleCalendarSync_FullLifecycle(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	mock := newMockCalendarClient()
 	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, mock, testStorage)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, mock, testStorage, billing.Config{}, nil)
 
 	doc := testutil.CreateTestDoctor(t, db, "doctor_cal_on", "password123")
 	token := testutil.TokenFor(t, doc.ID, doc.Username)
@@ -94,7 +95,7 @@ func TestGoogleCalendarSync_FullLifecycle(t *testing.T) {
 func TestGetCurrentDoctor_GoogleCalendarConnectedField(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, newMockCalendarClient(), testStorage)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, newMockCalendarClient(), testStorage, billing.Config{}, nil)
 
 	doc := testutil.CreateTestDoctor(t, db, "doctor_cal_field", "password123")
 	token := testutil.TokenFor(t, doc.ID, doc.Username)
@@ -118,7 +119,7 @@ func TestConnectGoogleCalendar_NotConfigured(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	// Config vacía: simula un servidor sin GOOGLE_CLIENT_SECRET configurado.
 	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, newMockCalendarClient(), testStorage)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, newMockCalendarClient(), testStorage, billing.Config{}, nil)
 
 	doc := testutil.CreateTestDoctor(t, db, "doctor_cal_notconfigured", "password123")
 	token := testutil.TokenFor(t, doc.ID, doc.Username)

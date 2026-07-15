@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"propatient-api/internal/auth"
+	"propatient-api/internal/billing"
 	"propatient-api/internal/googlecalendar"
 	"propatient-api/internal/handlers"
 	"propatient-api/internal/storage"
@@ -41,13 +42,23 @@ func NewRouter(db *gorm.DB) *gin.Engine {
 		storageClient, _ = storage.NewClient(context.Background(), storage.Config{})
 	}
 
-	return NewRouterWithDeps(db, calendarConfig, googlecalendar.NewClient(calendarConfig), storageClient)
+	// Cliente de Stripe: solo se construye si STRIPE_SECRET_KEY y
+	// STRIPE_PRICE_ID están configuradas. Sin eso, las rutas de facturación
+	// devuelven 503 y el resto de la app funciona igual (RequireActiveSubscription
+	// solo bloquea si un doctor concreto ya no tiene prueba/suscripción vigente).
+	billingConfig := billing.LoadConfigFromEnv()
+	var billingClient billing.Client
+	if billingConfig.IsConfigured() {
+		billingClient = billing.NewClient(billingConfig)
+	}
+
+	return NewRouterWithDeps(db, calendarConfig, googlecalendar.NewClient(calendarConfig), storageClient, billingConfig, billingClient)
 }
 
 // NewRouterWithDeps es la variante inyectable de NewRouter: permite a los
 // tests de integración pasar un googlecalendar.Client y un storage.Client
 // simulados, sin hacer llamadas reales a Google ni a AWS.
-func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calendarClient googlecalendar.Client, storageClient storage.Client) *gin.Engine {
+func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calendarClient googlecalendar.Client, storageClient storage.Client, billingConfig billing.Config, billingClient billing.Client) *gin.Engine {
 	r := gin.Default()
 	r.MaxMultipartMemory = 8 << 20 // 8 MiB por request de carga de archivos
 
@@ -127,87 +138,111 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 			authRoutes.GET("/google-calendar/callback", handlers.GoogleCalendarCallback(db, calendarConfig))
 		}
 
+		// Webhook de Stripe: lo llama Stripe directamente (sin Authorization,
+		// sin sesión de usuario). La firma Stripe-Signature es lo único que
+		// autentica la petición, así que va fuera de /auth y del grupo protegido.
+		api.POST("/billing/webhook", handlers.StripeWebhook(db, billingConfig))
+
 		// --- RUTAS PROTEGIDAS ---
 		// Usamos un grupo vacío "" para que las rutas cuelguen de /api/ directamente
 		protected := api.Group("")
 		protected.Use(auth.AuthorizeJWT()) // Este middleware ya tiene el fix del IF OPTIONS
 		{
-			dashboard := protected.Group("/dashboard")
+			// Facturación: fuera de RequireActiveSubscription a propósito — un
+			// doctor con la prueba vencida tiene que poder llegar aquí para
+			// pagar. Solo el doctor la gestiona, nunca el personal.
+			billingRoutes := protected.Group("/billing")
+			billingRoutes.Use(auth.RequireDoctorRole())
 			{
-				dashboard.GET("/summary", handlers.GetTodaySummary(db))
-				dashboard.GET("/upcoming", handlers.GetUpcomingAppointments(db))
-				dashboard.GET("/stats", handlers.GetConsultorioStats(db))
-				dashboard.GET("/follow-ups", handlers.GetFollowUps(db))
+				billingRoutes.GET("/status", handlers.GetBillingStatus(db))
+				billingRoutes.POST("/checkout", handlers.CreateCheckoutSession(db, billingClient, billingConfig))
+				billingRoutes.POST("/portal", handlers.CreatePortalSession(db, billingClient))
 			}
 
-			// Datos de la propia cuenta del doctor (RFC/CURP/cédula/INE):
-			// nunca disponible para el personal.
-			users := protected.Group("/user")
-			users.Use(auth.RequireDoctorRole())
+			// Todo lo demás requiere prueba vigente o suscripción activa. El
+			// personal comparte el estado de suscripción del doctor que lo
+			// invitó (mismo doctorID en el token), así que si el doctor no
+			// paga, el personal también queda bloqueado.
+			gated := protected.Group("")
+			gated.Use(billing.RequireActiveSubscription(db))
 			{
-				users.POST("/update-profile", auth.UpdateProfileHandler(db))
-				users.POST("/update-license", auth.UpdateLicenseHandler(db))
-				users.POST("/update-license-full", auth.UpdateLicenseFullHandler(db, storageClient))
-			}
+				dashboard := gated.Group("/dashboard")
+				{
+					dashboard.GET("/summary", handlers.GetTodaySummary(db))
+					dashboard.GET("/upcoming", handlers.GetUpcomingAppointments(db))
+					dashboard.GET("/stats", handlers.GetConsultorioStats(db))
+					dashboard.GET("/follow-ups", handlers.GetFollowUps(db))
+				}
 
-			patients := protected.Group("/patients")
-			{
-				// Agenda y datos generales: disponible también para personal.
-				patients.GET("", handlers.GetPatients(db))
-				patients.POST("", handlers.CreatePatient(db))
-				patients.GET("/search", handlers.SearchPatients(db))
-				patients.GET("/:id", handlers.GetPatientById(db))
-				patients.GET("/:id/stats", handlers.GetPatientStats(db))
-				patients.PUT("/:id", handlers.UpdatePatient(db))
-				patients.DELETE("/:id", handlers.RemovePatientFromDoctor(db))
-				patients.POST("/:id/link", handlers.LinkExistingPatient(db))
-				// Historial clínico: solo el doctor.
-				patients.GET("/:id/history", auth.RequireDoctorRole(), handlers.GetPatientMedicalHistory(db, storageClient))
-				patients.PUT("/:id/medical-history", auth.RequireDoctorRole(), handlers.UpdateMedicalHistory(db))
-			}
+				// Datos de la propia cuenta del doctor (RFC/CURP/cédula/INE):
+				// nunca disponible para el personal.
+				users := gated.Group("/user")
+				users.Use(auth.RequireDoctorRole())
+				{
+					users.POST("/update-profile", auth.UpdateProfileHandler(db))
+					users.POST("/update-license", auth.UpdateLicenseHandler(db))
+					users.POST("/update-license-full", auth.UpdateLicenseFullHandler(db, storageClient))
+				}
 
-			appointments := protected.Group("/appointments")
-			{
-				// Importante: Usar "" en lugar de "/" para evitar redirecciones 301/307
-				// que el navegador a veces bloquea en CORS.
-				// Agenda: disponible también para personal (agendar/cancelar,
-				// sin ver el contenido clínico de la consulta).
-				appointments.GET("", handlers.GetAppointments(db, storageClient))
-				appointments.POST("", handlers.CreateAppointment(db, calendarClient))
-				appointments.PUT("/:id/cancel", handlers.CancelAppointment(db, calendarClient))
-				// Contenido clínico de la consulta: solo el doctor.
-				appointments.GET("/:id", auth.RequireDoctorRole(), handlers.GetAppointmentDetail(db, storageClient))
-				appointments.PUT("/:id", auth.RequireDoctorRole(), handlers.UpdateAppointment(db, calendarClient))
-				appointments.POST("/:id/upload-document", auth.RequireDoctorRole(), handlers.UploadDocuments(db, storageClient))
-				appointments.PUT("/:id/documents/:docId", auth.RequireDoctorRole(), handlers.UpdateAppointmentDocument(db))
-				appointments.POST("/:id/save-recipe-pdf", auth.RequireDoctorRole(), handlers.SaveRecipePDF(db, storageClient))
-			}
+				patients := gated.Group("/patients")
+				{
+					// Agenda y datos generales: disponible también para personal.
+					patients.GET("", handlers.GetPatients(db))
+					patients.POST("", handlers.CreatePatient(db))
+					patients.GET("/search", handlers.SearchPatients(db))
+					patients.GET("/:id", handlers.GetPatientById(db))
+					patients.GET("/:id/stats", handlers.GetPatientStats(db))
+					patients.PUT("/:id", handlers.UpdatePatient(db))
+					patients.DELETE("/:id", handlers.RemovePatientFromDoctor(db))
+					patients.POST("/:id/link", handlers.LinkExistingPatient(db))
+					// Historial clínico: solo el doctor.
+					patients.GET("/:id/history", auth.RequireDoctorRole(), handlers.GetPatientMedicalHistory(db, storageClient))
+					patients.PUT("/:id/medical-history", auth.RequireDoctorRole(), handlers.UpdateMedicalHistory(db))
+				}
 
-			// Perfil, plantillas y Google Calendar del doctor: nunca para el personal.
-			doctorRoutes := protected.Group("/doctor")
-			doctorRoutes.Use(auth.RequireDoctorRole())
-			{
-				doctorRoutes.GET("/me", handlers.GetCurrentDoctor(db, storageClient))
-				doctorRoutes.PUT("/me", handlers.UpdateCurrentDoctor(db, storageClient))
-				doctorRoutes.GET("/template", handlers.GetDoctorTemplate(db))
-				doctorRoutes.POST("/template", handlers.SaveDoctorTemplate(db))
-				doctorRoutes.GET("/google-calendar/connect", handlers.ConnectGoogleCalendar(calendarConfig))
-				doctorRoutes.POST("/google-calendar/disconnect", handlers.DisconnectGoogleCalendar(db))
-			}
+				appointments := gated.Group("/appointments")
+				{
+					// Importante: Usar "" en lugar de "/" para evitar redirecciones 301/307
+					// que el navegador a veces bloquea en CORS.
+					// Agenda: disponible también para personal (agendar/cancelar,
+					// sin ver el contenido clínico de la consulta).
+					appointments.GET("", handlers.GetAppointments(db, storageClient))
+					appointments.POST("", handlers.CreateAppointment(db, calendarClient))
+					appointments.PUT("/:id/cancel", handlers.CancelAppointment(db, calendarClient))
+					// Contenido clínico de la consulta: solo el doctor.
+					appointments.GET("/:id", auth.RequireDoctorRole(), handlers.GetAppointmentDetail(db, storageClient))
+					appointments.PUT("/:id", auth.RequireDoctorRole(), handlers.UpdateAppointment(db, calendarClient))
+					appointments.POST("/:id/upload-document", auth.RequireDoctorRole(), handlers.UploadDocuments(db, storageClient))
+					appointments.PUT("/:id/documents/:docId", auth.RequireDoctorRole(), handlers.UpdateAppointmentDocument(db))
+					appointments.POST("/:id/save-recipe-pdf", auth.RequireDoctorRole(), handlers.SaveRecipePDF(db, storageClient))
+				}
 
-			// Alta/gestión de cuentas de personal: solo el doctor.
-			staffRoutes := protected.Group("/staff")
-			staffRoutes.Use(auth.RequireDoctorRole())
-			{
-				staffRoutes.GET("", handlers.ListStaff(db))
-				staffRoutes.POST("", handlers.InviteStaff(db))
-				staffRoutes.PUT("/:id/active", handlers.ToggleStaffActive(db))
-				staffRoutes.DELETE("/:id", handlers.DeleteStaff(db))
-			}
+				// Perfil, plantillas y Google Calendar del doctor: nunca para el personal.
+				doctorRoutes := gated.Group("/doctor")
+				doctorRoutes.Use(auth.RequireDoctorRole())
+				{
+					doctorRoutes.GET("/me", handlers.GetCurrentDoctor(db, storageClient))
+					doctorRoutes.PUT("/me", handlers.UpdateCurrentDoctor(db, storageClient))
+					doctorRoutes.GET("/template", handlers.GetDoctorTemplate(db))
+					doctorRoutes.POST("/template", handlers.SaveDoctorTemplate(db))
+					doctorRoutes.GET("/google-calendar/connect", handlers.ConnectGoogleCalendar(calendarConfig))
+					doctorRoutes.POST("/google-calendar/disconnect", handlers.DisconnectGoogleCalendar(db))
+				}
 
-			utils := protected.Group("/utils")
-			{
-				utils.GET("/specialties", handlers.GetSpecialties)
+				// Alta/gestión de cuentas de personal: solo el doctor.
+				staffRoutes := gated.Group("/staff")
+				staffRoutes.Use(auth.RequireDoctorRole())
+				{
+					staffRoutes.GET("", handlers.ListStaff(db))
+					staffRoutes.POST("", handlers.InviteStaff(db))
+					staffRoutes.PUT("/:id/active", handlers.ToggleStaffActive(db))
+					staffRoutes.DELETE("/:id", handlers.DeleteStaff(db))
+				}
+
+				utils := gated.Group("/utils")
+				{
+					utils.GET("/specialties", handlers.GetSpecialties)
+				}
 			}
 		}
 	}

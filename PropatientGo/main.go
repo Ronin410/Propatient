@@ -52,6 +52,19 @@ func main() {
 		}
 	}
 
+	// Migración de compatibilidad para el cobro de suscripción: los doctores
+	// que ya existían antes de esta funcionalidad no tienen TrialEndsAt (el
+	// campo es nuevo). Sin este backfill, billing.RequireActiveSubscription
+	// los bloquearía con 402 en el primer request después de este deploy —
+	// a un doctor que ya estaba usando la app normalmente. Se les da un
+	// periodo de gracia de 30 días desde este deploy para que puedan
+	// suscribirse con tiempo de sobra.
+	if err := db.Exec(
+		"UPDATE doctors SET subscription_status = 'trialing', trial_ends_at = NOW() + INTERVAL '30 days' WHERE trial_ends_at IS NULL",
+	).Error; err != nil {
+		log.Println("Aviso: no se pudo aplicar el periodo de gracia de suscripción a doctores existentes:", err)
+	}
+
 	database.SeedDatabase(db)
 
 	workers.StartNightClosureWorker(db)

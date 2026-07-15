@@ -72,6 +72,14 @@ api.interceptors.response.use(
       }
     }
 
+    // 402: la prueba gratis terminó y no hay una suscripción activa (ver
+    // billing.RequireActiveSubscription en el backend). Mandamos a la
+    // pantalla de facturación en vez de dejar que cada página maneje este
+    // caso por su cuenta.
+    if (error.response?.status === 402 && !window.location.pathname.includes('/billing')) {
+      window.location.href = '/billing?locked=1';
+    }
+
     // Manejo de errores de red o servidor apagado
     if (!error.response) {
       console.error("Error de red: No se pudo conectar con el servidor Go en el puerto 8095");

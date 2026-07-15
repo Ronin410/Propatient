@@ -6,8 +6,10 @@ package testutil
 import (
 	"os"
 	"testing"
+	"time"
 
 	"propatient-api/internal/auth"
+	"propatient-api/internal/billing"
 	"propatient-api/internal/models"
 
 	"golang.org/x/crypto/bcrypt"
@@ -68,11 +70,19 @@ func CreateTestDoctor(t *testing.T, db *gorm.DB, username, password string) mode
 		t.Fatalf("Error al hashear password de prueba: %v", err)
 	}
 
+	// SubscriptionStatus/TrialEndsAt explícitos: reflejan lo que hace
+	// auth.RegisterDoctor/GoogleLoginHandler de verdad. Sin esto, los
+	// doctores de prueba quedan con TrialEndsAt nil y
+	// billing.RequireActiveSubscription los bloquea con 402 en cualquier
+	// test que use rutas protegidas (ver internal/billing/middleware.go).
+	trialEndsAt := time.Now().UTC().Add(billing.TrialDuration)
 	doctor := models.Doctor{
-		Username:     username,
-		PasswordHash: string(hashed),
-		FullName:     "Dr. Test " + username,
-		Email:        username + "@test.local",
+		Username:           username,
+		PasswordHash:       string(hashed),
+		FullName:           "Dr. Test " + username,
+		Email:              username + "@test.local",
+		SubscriptionStatus: "trialing",
+		TrialEndsAt:        &trialEndsAt,
 	}
 	if err := db.Create(&doctor).Error; err != nil {
 		t.Fatalf("Error al crear doctor de prueba: %v", err)

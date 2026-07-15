@@ -70,6 +70,15 @@ services:
         sync: false
       - key: SMTP_PASSWORD
         sync: false
+      # Cobro de suscripción con Stripe (ver .env.example para la guía).
+      # Sin estas tres, la app funciona igual, solo el botón "Suscribirse"
+      # queda deshabilitado (503).
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PRICE_ID
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
 
   # --- FRONTEND (React / Vite) ---
   - type: web

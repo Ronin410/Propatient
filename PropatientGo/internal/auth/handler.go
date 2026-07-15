@@ -7,6 +7,7 @@ import (
 	"net/smtp"
 	"os"
 	"path/filepath"
+	"propatient-api/internal/billing"
 	"propatient-api/internal/models"
 	"propatient-api/internal/storage"
 	"strings"
@@ -79,12 +80,15 @@ func GoogleLoginHandler(db *gorm.DB) gin.HandlerFunc {
 				// Usamos la primera parte del correo como username único por defecto
 				generatedUsername := strings.Split(claims.Email, "@")[0]
 
+				trialEndsAt := time.Now().UTC().Add(billing.TrialDuration)
 				doctor = models.Doctor{
-					Username:         generatedUsername,
-					Email:            claims.Email,
-					FullName:         claims.Name, // Nombre por defecto de Google
-					ProfileCompleted: false,
-					CedulaValidated:  "VACIO",
+					Username:           generatedUsername,
+					Email:              claims.Email,
+					FullName:           claims.Name, // Nombre por defecto de Google
+					ProfileCompleted:   false,
+					CedulaValidated:    "VACIO",
+					SubscriptionStatus: "trialing",
+					TrialEndsAt:        &trialEndsAt,
 				}
 
 				if err := db.Create(&doctor).Error; err != nil {
@@ -360,12 +364,15 @@ func RegisterDoctor(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		trialEndsAt := time.Now().UTC().Add(billing.TrialDuration)
 		doctor := models.Doctor{
-			Username:         req.Username,
-			PasswordHash:     string(hashedPassword),
-			FullName:         req.FullName,
-			Email:            req.Email,
-			MedicalSpecialty: req.Specialty,
+			Username:           req.Username,
+			PasswordHash:       string(hashedPassword),
+			FullName:           req.FullName,
+			Email:              req.Email,
+			MedicalSpecialty:   req.Specialty,
+			SubscriptionStatus: "trialing",
+			TrialEndsAt:        &trialEndsAt,
 		}
 
 		if err := db.Create(&doctor).Error; err != nil {

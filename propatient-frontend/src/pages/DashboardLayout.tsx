@@ -28,6 +28,7 @@ export const DashboardLayout = () => {
     { label: 'Citas', icon: 'calendar_month', route: '/calendar' },
     ...(!isStaff ? [
       { label: 'Personal', icon: 'badge', route: '/personal' },
+      { label: 'Facturación', icon: 'credit_card', route: '/billing' },
       { label: 'Perfil', icon: 'settings', route: '/profile' },
       { label: 'Ajustes Notas', icon: 'tune', route: '/ajustes-notas' }
     ] : [])

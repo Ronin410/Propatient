@@ -22,6 +22,7 @@ import { ValidateLicense } from './pages/ValidateLicense';
 import { DoctorProfile } from './pages/DoctorProfile';
 import { SettingsNotes } from './pages/SettingsNotes';
 import { StaffManagement } from './pages/StaffManagement';
+import { BillingPage } from './pages/BillingPage';
 // Componente para proteger rutas privadas básicas
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated } = useAuth();
@@ -86,6 +87,10 @@ function App() {
               <Route path="profile" element={<DoctorOnlyRoute><DoctorProfile /></DoctorOnlyRoute>} />
               <Route path="ajustes-notas" element={<DoctorOnlyRoute><SettingsNotes /></DoctorOnlyRoute>} />
               <Route path="personal" element={<DoctorOnlyRoute><StaffManagement /></DoctorOnlyRoute>} />
+              {/* Accesible también para personal: si el consultorio se queda
+                  sin prueba/suscripción, ambos roles terminan aquí (ver el
+                  interceptor de 402 en src/api/axios.ts). */}
+              <Route path="billing" element={<BillingPage />} />
             </Route>
           </Route>
 
