@@ -62,11 +62,17 @@ func NewRouter(db *gorm.DB) *gin.Engine {
 	// Cliente de WhatsApp (Twilio): solo se construye si las tres variables
 	// están configuradas. Sin eso, los avisos por WhatsApp simplemente no
 	// se mandan (mejor esfuerzo, igual que el correo) y el resto de la app
-	// funciona igual.
+	// funciona igual — pero como ese "no mandar nada" no deja ningún log
+	// por diseño (mismo criterio que googlecalendar.Client == nil), sin
+	// este aviso de arranque no había forma de distinguir "faltan
+	// credenciales" de "Twilio las rechazó" solo viendo los logs.
 	whatsappConfig := whatsapp.LoadConfigFromEnv()
 	var whatsappClient whatsapp.Client
 	if whatsappConfig.IsConfigured() {
 		whatsappClient = whatsapp.NewClient(whatsappConfig)
+		log.Println("✅ WhatsApp (Twilio) configurado — TWILIO_ACCOUNT_SID/AUTH_TOKEN/WHATSAPP_FROM presentes.")
+	} else {
+		log.Println("⚠️ WhatsApp (Twilio) NO configurado — faltan una o más de TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN/TWILIO_WHATSAPP_FROM. No se mandará ningún WhatsApp hasta que estén las tres.")
 	}
 
 	return NewRouterWithDeps(db, calendarConfig, googlecalendar.NewClient(calendarConfig), storageClient, billingConfig, billingClient, geoClient, whatsappClient)
