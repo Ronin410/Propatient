@@ -16,12 +16,20 @@ export const AppointmentCalendar: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [selectedApp, setSelectedApp] = useState<Appointment | null>(null);
+  // Fecha (YYYY-MM-DD) del día que se está viendo en detalle: la vista de
+  // mes solo pinta unas pocas citas por celda para no verse amontonada (ver
+  // MAX_VISIBLE_EVENTS abajo); al elegir el día se abre este panel con
+  // TODAS las citas de esa fecha.
+  const [dayViewDate, setDayViewDate] = useState<string | null>(null);
+
+  const MAX_VISIBLE_EVENTS = 3;
 
   // El personal nunca puede iniciar consultas (/consulta/:id ya está
   // protegida por DoctorOnlyRoute); para citas PENDING del doctor, en vez
   // de ir directo al expediente se pide confirmar antes de iniciar —
   // mismo criterio que el botón "Iniciar Atención" de AppointmentTracking.
   const handleEventClick = (ev: Appointment) => {
+    setDayViewDate(null);
     const statusStr = (ev.status || '').toLowerCase();
     if (!isStaff && statusStr === 'pending') {
       setSelectedApp(ev);
@@ -147,27 +155,41 @@ export const AppointmentCalendar: React.FC = () => {
         });
 
         const isToday = thisDateStr === todayStr;
+        const visibleEvents = dayEvents.slice(0, MAX_VISIBLE_EVENTS);
+        const hiddenCount = dayEvents.length - visibleEvents.length;
 
         days.push(
-          <div key={`day-${day}`} className={`calendar-day ${isToday ? 'today' : ''}`}>
+          <div
+            key={`day-${day}`}
+            className={`calendar-day ${isToday ? 'today' : ''} ${dayEvents.length > 0 ? 'clickable' : ''}`}
+            onClick={() => dayEvents.length > 0 && setDayViewDate(thisDateStr)}
+          >
             <span className="day-number">{day}</span>
             <div className="day-events">
-              {dayEvents.map(ev => {
+              {visibleEvents.map(ev => {
                 const evDateRaw = ev.appointmentDateTime;
                 const patientObj = ev.patient;
                 const statusStr = (ev.status || '').toLowerCase();
 
                 return (
-                  <div 
+                  <div
                     key={ev.id}
                     className={`event-tag ${statusStr === 'pending' ? 'pending' : statusStr === 'completed' ? 'completed' : ''}`}
-                    onClick={() => handleEventClick(ev)}
+                    onClick={(e) => { e.stopPropagation(); handleEventClick(ev); }}
                     title={`${formatToLocalTime(evDateRaw)} - ${patientObj?.firstName || 'Paciente'}`}
                   >
                     {formatToLocalTime(evDateRaw)} {patientObj?.firstName || 'Paciente'}
                   </div>
                 );
               })}
+              {hiddenCount > 0 && (
+                <div
+                  className="event-more"
+                  onClick={(e) => { e.stopPropagation(); setDayViewDate(thisDateStr); }}
+                >
+                  +{hiddenCount} más
+                </div>
+              )}
             </div>
           </div>
         );
@@ -219,6 +241,16 @@ export const AppointmentCalendar: React.FC = () => {
 
     return days;
   };
+
+  const dayViewEvents = dayViewDate
+    ? appointments
+        .filter(app => (app.appointmentDateTime ? toLocalDateKey(app.appointmentDateTime) : '') === dayViewDate)
+        .sort((a, b) => (a.appointmentDateTime || '').localeCompare(b.appointmentDateTime || ''))
+    : [];
+
+  const dayViewTitle = dayViewDate
+    ? new Date(`${dayViewDate}T00:00:00`).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })
+    : '';
 
   return (
     <div className="calendar-page-container">
@@ -300,6 +332,40 @@ export const AppointmentCalendar: React.FC = () => {
         }}
         onCancel={() => setSelectedApp(null)}
       />
+
+      {dayViewDate && (
+        <div className="day-view-overlay" onClick={() => setDayViewDate(null)}>
+          <div className="day-view-content" onClick={(e) => e.stopPropagation()}>
+            <div className="day-view-header">
+              <h3>{dayViewTitle}</h3>
+              <button className="btn-icon" onClick={() => setDayViewDate(null)} aria-label="Cerrar">
+                <span className="material-icons-outlined">close</span>
+              </button>
+            </div>
+            <div className="day-view-list">
+              {dayViewEvents.length === 0 ? (
+                <p className="day-view-empty">No hay citas este día.</p>
+              ) : (
+                dayViewEvents.map(ev => {
+                  const evDateRaw = ev.appointmentDateTime;
+                  const patientObj = ev.patient;
+                  const statusStr = (ev.status || '').toLowerCase();
+
+                  return (
+                    <div
+                      key={ev.id}
+                      className={`event-tag ${statusStr === 'pending' ? 'pending' : statusStr === 'completed' ? 'completed' : ''}`}
+                      onClick={() => handleEventClick(ev)}
+                    >
+                      <strong>{formatToLocalTime(evDateRaw)}</strong> — {patientObj?.firstName || 'Paciente'} {patientObj?.lastName || ''}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

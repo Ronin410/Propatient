@@ -215,6 +215,14 @@
       min-height: 320px;
     }
 
+    &.clickable {
+      cursor: pointer;
+
+      &:hover {
+        background-color: var(--bg-subtle);
+      }
+    }
+
     .day-number {
       font-size: 0.85rem;
       font-weight: 600;
@@ -268,6 +276,21 @@
         border-left-color: var(--color-success);
       }
     }
+
+    /* "+N más": indica que la celda tiene más citas de las que se
+       muestran (ver MAX_VISIBLE_EVENTS) — clic abre el detalle del día. */
+    .event-more {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--color-secondary);
+      padding: 3px 8px;
+      cursor: pointer;
+
+      &:hover {
+        color: var(--color-primary);
+        text-decoration: underline;
+      }
+    }
   }
 
   .loading-state {
@@ -276,5 +299,110 @@
     color: var(--color-secondary);
     font-size: 1.1rem;
     font-weight: 500;
+  }
+}
+
+/* Panel "todas las citas del día" — se abre al elegir un día en la vista
+   de mes (ver dayViewDate en AppointmentCalendar.tsx). Mismo patrón visual
+   de overlay que ConfirmDialog, pero con una lista en vez de un mensaje. */
+.day-view-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 900;
+  padding: 1rem;
+
+  .day-view-content {
+    background-color: var(--bg);
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    max-width: 420px;
+    width: 100%;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .day-view-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.2rem 1.4rem;
+    border-bottom: 1px solid var(--border);
+
+    h3 {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--color-heading);
+      text-transform: capitalize;
+    }
+
+    .btn-icon {
+      background: transparent;
+      border: none;
+      color: var(--color-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.3rem;
+      border-radius: 6px;
+
+      &:hover {
+        background: var(--bg-subtle);
+        color: var(--color-dark);
+      }
+    }
+  }
+
+  .day-view-list {
+    padding: 1rem 1.4rem 1.4rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    .day-view-empty {
+      color: var(--color-secondary);
+      text-align: center;
+      padding: 1rem 0;
+    }
+
+    .event-tag {
+      font-size: 0.85rem;
+      font-weight: 500;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: var(--accent-bg);
+      color: var(--accent);
+      border-left: 3px solid var(--accent);
+      cursor: pointer;
+      transition: transform 0.1s ease, box-shadow 0.15s ease;
+
+      &:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+      }
+
+      &.pending {
+        background: var(--color-warning-bg);
+        color: var(--color-warning);
+        border-left-color: var(--color-warning);
+      }
+
+      &.completed {
+        background: var(--color-success-bg);
+        color: var(--color-success);
+        border-left-color: var(--color-success);
+      }
+    }
   }
 }
