@@ -83,6 +83,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
           <span>© {year} ProPatient Medical System.</span>
           <div style={{ display: 'flex', gap: '20px' }}>
             <Link to="/privacidad" style={{ color: 'inherit', textDecoration: 'none' }}>Privacidad</Link>
+            <Link to="/terminos" style={{ color: 'inherit', textDecoration: 'none' }}>Términos</Link>
             <a
               href={`https://wa.me/${SUPPORT_WHATSAPP_NUMBER}`}
               target="_blank"

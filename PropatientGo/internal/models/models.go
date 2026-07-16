@@ -94,6 +94,19 @@ type Staff struct {
 	InviteTokenExpiresAt *time.Time `json:"-"`
 }
 
+// SuperAdmin es una cuenta interna de ProPatient (no de un consultorio),
+// separada por completo de Doctor/Staff: su JWT nunca lleva "userId" y no
+// puede tocar ninguna ruta de /api gated por doctor. Hoy solo se usa para
+// revisar y aprobar/rechazar la cédula profesional que un doctor sube
+// durante el onboarding (ver internal/handlers/admin_handler.go), en vez
+// de aprobarla a mano con SQL directo.
+type SuperAdmin struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	CreatedAt    time.Time `json:"created_at"`
+	Username     string    `gorm:"unique;not null" json:"username"`
+	PasswordHash string    `json:"-"`
+}
+
 // Patient representa la entidad Patient.java
 type Patient struct {
 	ID        uint           `gorm:"primaryKey" json:"id"`

@@ -1,19 +1,19 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import './PrivacyPolicy.scss';
+import './LegalPage.scss';
 
 // Cuerpo del aviso de privacidad, compartido entre la página pública
 // standalone (PrivacyPolicy.tsx) y la vista dentro del dashboard cuando
 // hay sesión iniciada (App.tsx), para no duplicar el contenido.
 export const PrivacyPolicyContent: React.FC = () => {
   return (
-    <div className="privacy-body">
-      <Link to="/" className="privacy-back-link">
+    <div className="legal-body">
+      <Link to="/" className="legal-back-link">
         <span className="material-icons-outlined">arrow_back</span>
         Volver al inicio
       </Link>
 
-      <div className="privacy-draft-banner">
+      <div className="legal-draft-banner">
         <span className="material-icons-outlined">warning</span>
         <p>
           <strong>Este es un borrador.</strong> Todavía no ha sido revisado por un abogado y no debe
@@ -24,7 +24,7 @@ export const PrivacyPolicyContent: React.FC = () => {
       </div>
 
       <h1>Aviso de Privacidad</h1>
-      <p className="privacy-updated">Última actualización: pendiente</p>
+      <p className="legal-updated">Última actualización: pendiente</p>
 
       <section>
         <h2>1. Responsable del tratamiento de datos</h2>

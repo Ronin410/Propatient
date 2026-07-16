@@ -426,3 +426,66 @@ func SendValidationEmail(toEmail string, doctorName string) error {
 
 	return sendViaResend(toEmail, subject, body)
 }
+
+// SendCedulaApprovedEmail avisa al doctor que un administrador validó su
+// cédula profesional y ya tiene acceso completo a la plataforma.
+func SendCedulaApprovedEmail(toEmail string, doctorName string) error {
+	subject := "ProPatient - Tu cuenta fue validada"
+
+	body := fmt.Sprintf(`
+		<html>
+		<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+			<div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+				<h2 style="color: #6a11cb; text-align: center;">¡Hola, Dr(a). %s!</h2>
+
+				<div style="background-color: #f0fdf4; padding: 15px; border-left: 4px solid #16a34a; margin: 20px 0;">
+					<p style="margin: 0; font-weight: bold;">Estado actual de tu cuenta: <span style="color: #16a34a;">VALIDADA</span></p>
+				</div>
+
+				<p>Verificamos tu cédula profesional y tu identidad. Ya tienes acceso completo a todas las herramientas de <strong>ProPatient Medical System</strong>.</p>
+
+				<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+				<p style="font-size: 12px; color: #888; text-align: center;">Este es un correo automático, por favor no respondas a este mensaje.</p>
+			</div>
+		</body>
+		</html>
+	`, doctorName)
+
+	return sendViaResend(toEmail, subject, body)
+}
+
+// SendCedulaRejectedEmail avisa al doctor que su cédula/documentación no
+// pudo validarse, con un motivo opcional, y lo invita a corregir y volver
+// a enviarla (queda de vuelta en "PENDIENTE" para que ValidateLicense.tsx
+// le permita reintentar).
+func SendCedulaRejectedEmail(toEmail string, doctorName string, reason string) error {
+	subject := "ProPatient - No pudimos validar tu documentación"
+
+	reasonHTML := ""
+	if reason != "" {
+		reasonHTML = fmt.Sprintf(`<p><strong>Motivo:</strong> %s</p>`, reason)
+	}
+
+	body := fmt.Sprintf(`
+		<html>
+		<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+			<div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+				<h2 style="color: #6a11cb; text-align: center;">Hola, Dr(a). %s</h2>
+
+				<div style="background-color: #fef2f2; padding: 15px; border-left: 4px solid #dc2626; margin: 20px 0;">
+					<p style="margin: 0; font-weight: bold;">Estado actual de tu cuenta: <span style="color: #dc2626;">DOCUMENTACIÓN RECHAZADA</span></p>
+				</div>
+
+				%s
+
+				<p>Por favor vuelve a iniciar sesión y sube de nuevo tu cédula profesional e identificación oficial.</p>
+
+				<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+				<p style="font-size: 12px; color: #888; text-align: center;">Este es un correo automático, por favor no respondas a este mensaje.</p>
+			</div>
+		</body>
+		</html>
+	`, doctorName, reasonHTML)
+
+	return sendViaResend(toEmail, subject, body)
+}

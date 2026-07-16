@@ -44,14 +44,14 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 	if err := db.AutoMigrate(
 		&models.Doctor{}, &models.Patient{}, &models.MedicalHistory{},
 		&models.Appointment{}, &models.MedicalDocument{}, &models.DoctorTemplate{},
-		&models.Staff{},
+		&models.Staff{}, &models.SuperAdmin{},
 	); err != nil {
 		t.Fatalf("Error en AutoMigrate de la DB de pruebas: %v", err)
 	}
 
 	// Limpieza total antes de cada test para que no arrastre datos de corridas anteriores.
 	if err := db.Exec(
-		"TRUNCATE TABLE doctor_patients, medical_documents, appointments, medical_histories, patients, doctor_templates, staffs, doctors RESTART IDENTITY CASCADE",
+		"TRUNCATE TABLE doctor_patients, medical_documents, appointments, medical_histories, patients, doctor_templates, staffs, doctors, super_admins RESTART IDENTITY CASCADE",
 	).Error; err != nil {
 		t.Fatalf("Error al limpiar la DB de pruebas: %v", err)
 	}
@@ -132,6 +132,34 @@ func TokenForStaff(t *testing.T, doctorID, staffID uint, email string) string {
 	token, err := auth.GenerateStaffToken(doctorID, staffID, email)
 	if err != nil {
 		t.Fatalf("Error al generar JWT de personal de prueba: %v", err)
+	}
+	return token
+}
+
+// CreateTestSuperAdmin inserta una cuenta de administrador de prueba con
+// contraseña conocida (ver models.SuperAdmin).
+func CreateTestSuperAdmin(t *testing.T, db *gorm.DB, username, password string) models.SuperAdmin {
+	t.Helper()
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("Error al hashear password de administrador de prueba: %v", err)
+	}
+
+	admin := models.SuperAdmin{Username: username, PasswordHash: string(hashed)}
+	if err := db.Create(&admin).Error; err != nil {
+		t.Fatalf("Error al crear administrador de prueba: %v", err)
+	}
+	return admin
+}
+
+// TokenForSuperAdmin genera un JWT real de administrador (mismo generador
+// que usa el login de verdad) para la cuenta indicada.
+func TokenForSuperAdmin(t *testing.T, adminID uint, username string) string {
+	t.Helper()
+	token, err := auth.GenerateSuperAdminToken(adminID, username)
+	if err != nil {
+		t.Fatalf("Error al generar JWT de administrador de prueba: %v", err)
 	}
 	return token
 }

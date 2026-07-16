@@ -1,14 +1,17 @@
-.privacy-page {
+// Estilos compartidos por las páginas legales placeholder (Aviso de
+// Privacidad, Términos y Condiciones): misma estructura visual, solo
+// cambia el contenido.
+.legal-page {
   background: var(--bg-main);
   min-height: 100vh;
 }
 
-.privacy-nav {
+.legal-nav {
   background: var(--bg);
   border-bottom: 1px solid var(--border);
   padding: 1rem 2rem;
 
-  .privacy-logo {
+  .legal-logo {
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -21,14 +24,14 @@
   }
 }
 
-.privacy-body {
+.legal-body {
   max-width: 760px;
   margin: 0 auto;
   padding: 2.5rem 2rem 3rem 2rem;
   color: var(--text);
   line-height: 1.7;
 
-  .privacy-back-link {
+  .legal-back-link {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
@@ -48,7 +51,7 @@
     margin: 0 0 0.3rem 0;
   }
 
-  .privacy-updated {
+  .legal-updated {
     color: var(--color-secondary);
     font-size: 0.85rem;
     margin: 0 0 2rem 0;
@@ -70,7 +73,7 @@
   }
 }
 
-.privacy-draft-banner {
+.legal-draft-banner {
   display: flex;
   gap: 0.8rem;
   align-items: flex-start;

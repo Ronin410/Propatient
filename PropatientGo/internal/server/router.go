@@ -6,12 +6,14 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"propatient-api/internal/auth"
 	"propatient-api/internal/billing"
 	"propatient-api/internal/geocoding"
 	"propatient-api/internal/googlecalendar"
 	"propatient-api/internal/handlers"
+	"propatient-api/internal/middleware"
 	"propatient-api/internal/storage"
 	"propatient-api/internal/whatsapp"
 
@@ -120,6 +122,14 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 	r.RedirectTrailingSlash = true
 	r.RedirectFixedPath = false
 
+	// Límites por IP en los endpoints más expuestos a abuso: login/registro
+	// (fuerza bruta o registros masivos) y agendar cita pública (spam de
+	// citas falsas, sin necesitar cuenta). authLimiter se comparte entre
+	// las cuatro rutas de /auth para que un atacante no pueda esquivarlo
+	// simplemente alternando entre ellas.
+	authLimiter := middleware.NewRateLimiter(10, 5*time.Minute)
+	publicBookingLimiter := middleware.NewRateLimiter(5, 15*time.Minute)
+
 	// Registrado DESPUÉS de cors.New(): si se registra antes, gin no incluye
 	// el middleware de CORS en la cadena de esta ruta y las imágenes servidas
 	// aquí (logo/avatar del doctor) quedan sin cabecera
@@ -148,10 +158,10 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 		// --- RUTAS PÚBLICAS ---
 		authRoutes := api.Group("/auth")
 		{
-			authRoutes.POST("/login", auth.LoginHandler(db))
-			authRoutes.POST("/register", auth.RegisterDoctor(db))
-			authRoutes.POST("/google-login", auth.GoogleLoginHandler(db))
-			authRoutes.POST("/staff-login", handlers.StaffLoginHandler(db))
+			authRoutes.POST("/login", authLimiter.Middleware(), auth.LoginHandler(db))
+			authRoutes.POST("/register", authLimiter.Middleware(), auth.RegisterDoctor(db))
+			authRoutes.POST("/google-login", authLimiter.Middleware(), auth.GoogleLoginHandler(db))
+			authRoutes.POST("/staff-login", authLimiter.Middleware(), handlers.StaffLoginHandler(db))
 			authRoutes.GET("/staff-invite/:token", handlers.GetStaffInvite(db))
 			authRoutes.POST("/staff-invite/:token", handlers.AcceptStaffInvite(db))
 			// Callback de Google Calendar: lo llama el navegador tras el
@@ -159,6 +169,22 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 			// así que va fuera del grupo protegido. La identidad del doctor
 			// viaja firmada en el parámetro "state".
 			authRoutes.GET("/google-calendar/callback", handlers.GoogleCalendarCallback(db, calendarConfig))
+		}
+
+		// Panel interno de administración (revisión de cédula profesional):
+		// cuentas de models.SuperAdmin, sin ninguna relación con
+		// Doctor/Staff. Login público (con el mismo límite por IP que el
+		// resto de /auth); las rutas de abajo exigen
+		// AuthorizeSuperAdminJWT(), que rechaza cualquier token que no sea
+		// explícitamente "SUPERADMIN" — un doctor logueado no puede entrar
+		// aquí ni por error.
+		api.POST("/admin/login", authLimiter.Middleware(), handlers.SuperAdminLoginHandler(db))
+		adminRoutes := api.Group("/admin")
+		adminRoutes.Use(auth.AuthorizeSuperAdminJWT())
+		{
+			adminRoutes.GET("/doctors/pending", handlers.ListPendingDoctors(db, storageClient))
+			adminRoutes.PUT("/doctors/:id/approve", handlers.ApproveDoctorCedula(db))
+			adminRoutes.PUT("/doctors/:id/reject", handlers.RejectDoctorCedula(db))
 		}
 
 		// Webhook de Stripe: lo llama Stripe directamente (sin Authorization,
@@ -173,7 +199,7 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 		{
 			public.GET("/doctors", handlers.GetPublicDoctors(db, storageClient))
 			public.GET("/doctors/:slug", handlers.GetPublicDoctorBySlug(db, storageClient))
-			public.POST("/appointments", handlers.CreatePublicAppointment(db, whatsappClient))
+			public.POST("/appointments", publicBookingLimiter.Middleware(), handlers.CreatePublicAppointment(db, whatsappClient))
 		}
 
 		// --- RUTAS PROTEGIDAS ---

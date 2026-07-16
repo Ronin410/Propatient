@@ -15,6 +15,14 @@ import { DoctorDirectory } from './pages/DoctorDirectory';
 import { PublicDoctorProfile } from './pages/PublicDoctorProfile';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
 import { PrivacyPolicyContent } from './pages/PrivacyPolicyContent';
+import { TermsOfService } from './pages/TermsOfService';
+import { TermsOfServiceContent } from './pages/TermsOfServiceContent';
+
+// Panel interno de administración (revisión de cédula profesional): sesión
+// totalmente separada de la del doctor (ver AdminProtectedRoute).
+import { AdminLogin } from './pages/AdminLogin';
+import { AdminPendingDoctors } from './pages/AdminPendingDoctors';
+import { AdminProtectedRoute } from './components/AdminProtectedRoute';
 
 // Nuevas Pantallas que estamos migrando
 import { AppointmentTracking } from './pages/AppointmentTracking';
@@ -48,9 +56,10 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 // "Ir a mi panel" en vez de "Iniciar sesión" para volver al dashboard.
 const RootRoute = () => <Landing />;
 
-// Con sesión iniciada, /privacidad se muestra dentro del DashboardLayout
-// (mismo menú lateral que el resto del panel) en vez de la página pública
-// standalone, para que el doctor nunca "salga" de la app al consultarla.
+// Con sesión iniciada, /privacidad y /terminos se muestran dentro del
+// DashboardLayout (mismo menú lateral que el resto del panel) en vez de la
+// página pública standalone, para que el doctor nunca "salga" de la app al
+// consultarlas.
 const PrivacyRoute = () => {
   const { isAuthenticated } = useAuth();
   if (isAuthenticated) {
@@ -63,6 +72,18 @@ const PrivacyRoute = () => {
   return <PrivacyPolicy />;
 };
 
+const TermsRoute = () => {
+  const { isAuthenticated } = useAuth();
+  if (isAuthenticated) {
+    return (
+      <DashboardLayout>
+        <TermsOfServiceContent />
+      </DashboardLayout>
+    );
+  }
+  return <TermsOfService />;
+};
+
 function App() {
   return (
     <AuthProvider>
@@ -73,9 +94,21 @@ function App() {
           <Route path="/doctores" element={<DoctorDirectory />} />
           <Route path="/dr/:slug" element={<PublicDoctorProfile />} />
           <Route path="/privacidad" element={<PrivacyRoute />} />
+          <Route path="/terminos" element={<TermsRoute />} />
           <Route path="/login" element={<Login />} />
           <Route path="/staff-login" element={<StaffLogin />} />
           <Route path="/personal/invitacion/:token" element={<AcceptStaffInvite />} />
+
+          {/* 🔐 PANEL INTERNO DE ADMINISTRACIÓN: sesión separada de la del doctor */}
+          <Route path="/admin/login" element={<AdminLogin />} />
+          <Route
+            path="/admin/pendientes"
+            element={
+              <AdminProtectedRoute>
+                <AdminPendingDoctors />
+              </AdminProtectedRoute>
+            }
+          />
 
           {/* 📑 SECCIÓN ONBOARDING: Totalmente independiente de la estructura del Dashboard */}
           <Route

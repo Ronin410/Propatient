@@ -9,7 +9,7 @@ const LOCAL_API_URL = 'http://localhost:8095/api';
 // como ruta relativa y terminaría pegándole al propio frontend en vez del
 // backend. Mejor fallar de forma ruidosa en consola que fallar en silencio.
 const rawApiUrl = import.meta.env.VITE_API_URL as string | undefined;
-const API_BASE_URL = (() => {
+export const API_BASE_URL = (() => {
   if (!rawApiUrl) return LOCAL_API_URL;
   if (/^https?:\/\//.test(rawApiUrl)) return rawApiUrl;
   console.error(

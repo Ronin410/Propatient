@@ -87,6 +87,12 @@ services:
         sync: false
       - key: TWILIO_WHATSAPP_FROM
         sync: false
+      # Panel interno de administración (revisión de cédula profesional,
+      # ver .env.example). Sin estas dos, /admin/login queda inaccesible.
+      - key: SUPERADMIN_USERNAME
+        sync: false
+      - key: SUPERADMIN_PASSWORD
+        sync: false
 
   # --- FRONTEND (React / Vite) ---
   - type: web

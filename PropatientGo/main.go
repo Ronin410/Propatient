@@ -49,7 +49,7 @@ func main() {
 	}
 
 	// 3. Automigración y Seed
-	db.AutoMigrate(&models.Doctor{}, &models.Patient{}, &models.MedicalHistory{}, &models.Appointment{}, &models.MedicalDocument{}, &models.DoctorTemplate{}, &models.Staff{})
+	db.AutoMigrate(&models.Doctor{}, &models.Patient{}, &models.MedicalHistory{}, &models.Appointment{}, &models.MedicalDocument{}, &models.DoctorTemplate{}, &models.Staff{}, &models.SuperAdmin{})
 
 	// Limpieza de compatibilidad: patients.email ya no debe ser único a nivel
 	// de base de datos (un mismo paciente puede estar vinculado a varios
@@ -77,6 +77,7 @@ func main() {
 	}
 
 	database.SeedDatabase(db)
+	database.SeedSuperAdmin(db)
 
 	// Cliente de WhatsApp (Twilio): solo se construye si las tres
 	// variables están configuradas. Sin eso, los workers de recordatorio

@@ -46,6 +46,26 @@ func GenerateStaffToken(doctorID, staffID uint, email string) (string, error) {
 	return token.SignedString([]byte(secret))
 }
 
+// GenerateSuperAdminToken firma el JWT de una cuenta interna de ProPatient
+// (ver models.SuperAdmin). A propósito NO lleva "userId": estas cuentas no
+// pertenecen a ningún consultorio y no deben poder colarse en ninguna ruta
+// gated por doctorID. Se valida con AuthorizeSuperAdminJWT, no con
+// AuthorizeJWT.
+func GenerateSuperAdminToken(adminID uint, username string) (string, error) {
+	secret := os.Getenv("JWT_SECRET")
+
+	claims := jwt.MapClaims{
+		"adminId": adminID,
+		"sub":     username,
+		"role":    "SUPERADMIN",
+		"exp":     time.Now().Add(time.Hour * 12).Unix(),
+		"iat":     time.Now().Unix(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(secret))
+}
+
 // ValidateToken se mantiene igual, es una función de apoyo para el Middleware
 func ValidateToken(tokenString string) (*jwt.Token, error) {
 	secret := os.Getenv("JWT_SECRET")

@@ -14,6 +14,7 @@ export const Footer: React.FC = () => {
       <p className="app-footer-copyright">© {year} ProPatient Medical System.</p>
       <nav className="app-footer-links">
         <Link to="/privacidad">Aviso de Privacidad</Link>
+        <Link to="/terminos">Términos y Condiciones</Link>
         <a href={`https://wa.me/${SUPPORT_WHATSAPP_NUMBER}`} target="_blank" rel="noopener noreferrer">
           Soporte
         </a>

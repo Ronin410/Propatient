@@ -85,6 +85,60 @@ func AuthorizeJWT() gin.HandlerFunc {
 	}
 }
 
+// AuthorizeSuperAdminJWT protege las rutas internas de administración
+// (/api/admin/*). Deliberadamente separado de AuthorizeJWT: un token de
+// SuperAdmin nunca lleva "userId" (no pertenece a ningún consultorio), así
+// que reusar AuthorizeJWT lo rechazaría igual, pero por la razón
+// equivocada — esto lo rechaza explícitamente si el rol no es
+// "SUPERADMIN", sin importar si el token es técnicamente válido.
+func AuthorizeSuperAdminJWT() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		const BearerSchema = "Bearer "
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" || !strings.HasPrefix(authHeader, BearerSchema) {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "Acceso denegado. Token no proporcionado.",
+			})
+			return
+		}
+
+		tokenString := authHeader[len(BearerSchema):]
+		token, err := ValidateToken(tokenString)
+		if err != nil || !token.Valid {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "Sesión inválida o expirada. Por favor, inicie sesión de nuevo.",
+			})
+			return
+		}
+
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Token inválido"})
+			return
+		}
+
+		role, _ := claims["role"].(string)
+		if role != "SUPERADMIN" {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Esta acción requiere una cuenta de administrador."})
+			return
+		}
+
+		adminIDFloat, ok := claims["adminId"].(float64)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Token mal formado: falta ID"})
+			return
+		}
+		c.Set("superAdminId", uint(adminIDFloat))
+
+		c.Next()
+	}
+}
+
 // RequireDoctorRole bloquea con 403 cualquier ruta a la que una cuenta de
 // personal ("STAFF") intente acceder. Debe montarse DESPUÉS de
 // AuthorizeJWT() (necesita que "role" ya esté en el contexto). Se usa en
