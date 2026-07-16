@@ -44,14 +44,29 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 	if err := db.AutoMigrate(
 		&models.Doctor{}, &models.Patient{}, &models.MedicalHistory{},
 		&models.Appointment{}, &models.MedicalDocument{}, &models.DoctorTemplate{},
-		&models.Staff{}, &models.SuperAdmin{},
+		&models.Staff{}, &models.DoctorStaff{}, &models.SuperAdmin{},
 	); err != nil {
 		t.Fatalf("Error en AutoMigrate de la DB de pruebas: %v", err)
 	}
 
+	// Mismo saneamiento de compatibilidad que main.go: una DB de pruebas
+	// creada antes del cambio a Staff<->Doctor many-to-many puede traer
+	// todavía las columnas viejas staffs.doctor_id (NOT NULL) y
+	// staffs.active, que rompen cualquier INSERT hecho por CreateTestStaff.
+	if db.Migrator().HasColumn(&models.Staff{}, "doctor_id") {
+		if err := db.Migrator().DropColumn(&models.Staff{}, "doctor_id"); err != nil {
+			t.Fatalf("Error al eliminar la columna vieja staffs.doctor_id: %v", err)
+		}
+	}
+	if db.Migrator().HasColumn(&models.Staff{}, "active") {
+		if err := db.Migrator().DropColumn(&models.Staff{}, "active"); err != nil {
+			t.Fatalf("Error al eliminar la columna vieja staffs.active: %v", err)
+		}
+	}
+
 	// Limpieza total antes de cada test para que no arrastre datos de corridas anteriores.
 	if err := db.Exec(
-		"TRUNCATE TABLE doctor_patients, medical_documents, appointments, medical_histories, patients, doctor_templates, staffs, doctors, super_admins RESTART IDENTITY CASCADE",
+		"TRUNCATE TABLE doctor_patients, medical_documents, appointments, medical_histories, patients, doctor_templates, doctor_staff, staffs, doctors, super_admins RESTART IDENTITY CASCADE",
 	).Error; err != nil {
 		t.Fatalf("Error al limpiar la DB de pruebas: %v", err)
 	}
@@ -102,7 +117,10 @@ func TokenFor(t *testing.T, doctorID uint, username string) string {
 }
 
 // CreateTestStaff inserta una cuenta de personal de prueba con contraseña
-// conocida, vinculada al doctor indicado.
+// conocida, vinculada (vía doctor_staff) al doctor indicado. Para probar el
+// caso de un mismo Staff vinculado a varios doctores, llamar de nuevo con el
+// mismo email y otro doctorID no funciona (esta función siempre crea un
+// registro de Staff nuevo) — usar LinkTestStaffToDoctor en su lugar.
 func CreateTestStaff(t *testing.T, db *gorm.DB, doctorID uint, email, password string) models.Staff {
 	t.Helper()
 
@@ -112,17 +130,29 @@ func CreateTestStaff(t *testing.T, db *gorm.DB, doctorID uint, email, password s
 	}
 
 	staff := models.Staff{
-		DoctorID:     doctorID,
 		FullName:     "Personal de prueba",
 		Email:        email,
 		PasswordHash: string(hashed),
-		Active:       true,
 		PasswordSet:  true,
 	}
 	if err := db.Create(&staff).Error; err != nil {
 		t.Fatalf("Error al crear personal de prueba: %v", err)
 	}
+	LinkTestStaffToDoctor(t, db, doctorID, staff.ID)
 	return staff
+}
+
+// LinkTestStaffToDoctor crea el vínculo doctor_staff activo entre un Staff
+// ya existente y otro doctor — para probar el escenario de una cuenta de
+// personal compartida entre varios consultorios.
+func LinkTestStaffToDoctor(t *testing.T, db *gorm.DB, doctorID, staffID uint) models.DoctorStaff {
+	t.Helper()
+
+	link := models.DoctorStaff{DoctorID: doctorID, StaffID: staffID, Active: true}
+	if err := db.Create(&link).Error; err != nil {
+		t.Fatalf("Error al vincular personal de prueba al doctor: %v", err)
+	}
+	return link
 }
 
 // TokenForStaff genera un JWT real de personal (mismo doctorID del dueño

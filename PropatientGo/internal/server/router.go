@@ -162,6 +162,7 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 			authRoutes.POST("/register", authLimiter.Middleware(), auth.RegisterDoctor(db))
 			authRoutes.POST("/google-login", authLimiter.Middleware(), auth.GoogleLoginHandler(db))
 			authRoutes.POST("/staff-login", authLimiter.Middleware(), handlers.StaffLoginHandler(db))
+			authRoutes.POST("/staff-login/select-doctor", authLimiter.Middleware(), handlers.SelectStaffDoctorHandler(db))
 			authRoutes.GET("/staff-invite/:token", handlers.GetStaffInvite(db))
 			authRoutes.POST("/staff-invite/:token", handlers.AcceptStaffInvite(db))
 			authRoutes.POST("/staff-password-reset/request", authLimiter.Middleware(), handlers.RequestStaffPasswordReset(db))

@@ -70,9 +70,12 @@ type Doctor struct {
 	Patients []Patient `gorm:"many2many:doctor_patients;" json:"-"`
 }
 
-// Staff representa a un miembro del personal (secretaria/asistente) de un
-// consultorio. Su token de sesión lleva el doctorID del dueño del
-// consultorio (para que toda la app siga filtrando por doctorID sin
+// Staff representa a un miembro del personal (secretaria/asistente) — una
+// sola identidad (correo/contraseña) que puede estar vinculada a VARIOS
+// consultorios a la vez (ver DoctorStaff), para el caso de una clínica
+// donde la misma persona administra la agenda de varios doctores. Su
+// token de sesión lleva el doctorID del consultorio con el que entró en
+// ese momento (para que toda la app siga filtrando por doctorID sin
 // cambios), más el claim "role": "STAFF" que el middleware usa para negar
 // el acceso a historial clínico, contenido de consultas y configuración
 // del perfil/facturación del doctor (ver auth.RequireDoctorRole).
@@ -81,12 +84,10 @@ type Staff struct {
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
-	DoctorID  uint           `gorm:"not null;index" json:"doctorId"`
 	FullName  string         `json:"fullName"`
 	Email     string         `gorm:"uniqueIndex;not null" json:"email"`
 	// Nunca se envía al frontend.
 	PasswordHash string `json:"-"`
-	Active       bool   `gorm:"default:true" json:"active"`
 	// PasswordSet distingue una invitación pendiente (aún sin contraseña)
 	// de una cuenta ya activada.
 	PasswordSet          bool       `gorm:"default:false" json:"passwordSet"`
@@ -97,6 +98,29 @@ type Staff struct {
 	// que InviteToken pero con vigencia mucho más corta.
 	PasswordResetToken          string     `json:"-"`
 	PasswordResetTokenExpiresAt *time.Time `json:"-"`
+}
+
+// DoctorStaff vincula un Staff con UN consultorio. Reemplaza el antiguo
+// Staff.DoctorID de uno-a-uno: la misma persona puede tener un vínculo
+// activo con varios doctores (ej. una recepcionista compartida entre
+// varios consultorios de una misma clínica), cada uno con su propio
+// Active — desactivar el acceso desde un consultorio no debe afectar el
+// acceso a los demás. Es una tabla de unión explícita (no el many2many
+// implícito de GORM) porque necesita esta columna extra.
+type DoctorStaff struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	DoctorID  uint      `gorm:"not null;index;uniqueIndex:idx_doctor_staff_pair" json:"doctorId"`
+	StaffID   uint      `gorm:"not null;index;uniqueIndex:idx_doctor_staff_pair" json:"staffId"`
+	Active    bool      `gorm:"default:true" json:"active"`
+}
+
+// TableName fija el nombre real de la tabla: el pluralizador de GORM
+// convertiría "DoctorStaff" en "doctor_staffs", pero el resto del código
+// (handlers, migración de compatibilidad en main.go) usa "doctor_staff" en
+// SQL crudo, así que se fija explícitamente para que coincida.
+func (DoctorStaff) TableName() string {
+	return "doctor_staff"
 }
 
 // SuperAdmin es una cuenta interna de ProPatient (no de un consultorio),

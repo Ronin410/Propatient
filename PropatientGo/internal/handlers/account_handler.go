@@ -36,8 +36,13 @@ func ExportMyData(db *gorm.DB) gin.HandlerFunc {
 		var appointments []models.Appointment
 		db.Where("doctor_id = ?", doctorID).Preload("MedicalDocuments").Find(&appointments)
 
+		// Todo el personal con un vínculo (activo o no) a ESTE doctor,
+		// vía doctor_staff — Staff ya no tiene una columna doctor_id
+		// propia (ver models.DoctorStaff).
 		var staff []models.Staff
-		db.Where("doctor_id = ?", doctorID).Find(&staff)
+		db.Joins("JOIN doctor_staff ON doctor_staff.staff_id = staffs.id").
+			Where("doctor_staff.doctor_id = ?", doctorID).
+			Find(&staff)
 
 		c.Header("Content-Disposition", `attachment; filename="propatient-mis-datos.json"`)
 		c.JSON(http.StatusOK, gin.H{

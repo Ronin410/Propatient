@@ -21,6 +21,14 @@ export interface Staff {
   created_at?: string;
 }
 
+// Un consultorio al que una cuenta de personal tiene acceso activo, tal
+// como lo devuelve StaffLoginHandler cuando hay más de uno (ver
+// StaffLogin.tsx: pantalla "¿Con cuál consultorio quieres entrar?").
+export interface StaffDoctorOption {
+  doctorId: number;
+  doctorName: string;
+}
+
 export interface MedicalHistory {
   allergies: string;
   pathological_history: string;

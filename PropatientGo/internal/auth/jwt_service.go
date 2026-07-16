@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"os"
 	"time"
 
@@ -44,6 +45,46 @@ func GenerateStaffToken(doctorID, staffID uint, email string) (string, error) {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(secret))
+}
+
+// GenerateStaffSelectionToken firma un JWT de muy corta vida (5 min) que
+// prueba que el correo/contraseña de una cuenta de personal ya se
+// validaron, para el caso de alguien con acceso activo a más de un
+// consultorio (ver StaffLoginHandler/SelectStaffDoctorHandler). No da
+// acceso a ninguna ruta protegida por sí solo — AuthorizeJWT lo
+// rechazaría (no lleva "userId") — solo sirve para el segundo paso de
+// "elige con cuál consultorio quieres entrar".
+func GenerateStaffSelectionToken(staffID uint, email string) (string, error) {
+	secret := os.Getenv("JWT_SECRET")
+
+	claims := jwt.MapClaims{
+		"staffId": staffID,
+		"sub":     email,
+		"role":    "STAFF_SELECT_DOCTOR",
+		"exp":     time.Now().Add(5 * time.Minute).Unix(),
+		"iat":     time.Now().Unix(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(secret))
+}
+
+// ValidateStaffSelectionToken valida un token emitido por
+// GenerateStaffSelectionToken y devuelve el staffID que prueba.
+func ValidateStaffSelectionToken(tokenString string) (uint, error) {
+	token, err := ValidateToken(tokenString)
+	if err != nil || !token.Valid {
+		return 0, errors.New("token de selección inválido o vencido")
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok || claims["role"] != "STAFF_SELECT_DOCTOR" {
+		return 0, errors.New("el token no es de selección de consultorio")
+	}
+	staffIDFloat, ok := claims["staffId"].(float64)
+	if !ok {
+		return 0, errors.New("token de selección mal formado")
+	}
+	return uint(staffIDFloat), nil
 }
 
 // GenerateSuperAdminToken firma el JWT de una cuenta interna de ProPatient

@@ -49,7 +49,33 @@ func main() {
 	}
 
 	// 3. Automigración y Seed
-	db.AutoMigrate(&models.Doctor{}, &models.Patient{}, &models.MedicalHistory{}, &models.Appointment{}, &models.MedicalDocument{}, &models.DoctorTemplate{}, &models.Staff{}, &models.SuperAdmin{})
+	db.AutoMigrate(&models.Doctor{}, &models.Patient{}, &models.MedicalHistory{}, &models.Appointment{}, &models.MedicalDocument{}, &models.DoctorTemplate{}, &models.Staff{}, &models.DoctorStaff{}, &models.SuperAdmin{})
+
+	// Migración de compatibilidad: Staff dejó de pertenecer a un solo
+	// doctor (columnas doctor_id/active) y ahora se vincula a uno o más
+	// doctores por medio de doctor_staff (ver models.DoctorStaff), para
+	// soportar que una misma cuenta de personal administre varios
+	// consultorios/doctores con un solo login. Si el despliegue anterior
+	// todavía tiene la columna vieja, se respalda el vínculo existente en
+	// doctor_staff antes de eliminarla — así el personal ya invitado no
+	// pierde acceso a su doctor actual.
+	if db.Migrator().HasColumn(&models.Staff{}, "doctor_id") {
+		if err := db.Exec(`
+			INSERT INTO doctor_staff (created_at, doctor_id, staff_id, active)
+			SELECT NOW(), doctor_id, id, COALESCE(active, true) FROM staffs WHERE doctor_id IS NOT NULL
+			ON CONFLICT DO NOTHING
+		`).Error; err != nil {
+			log.Println("Aviso: no se pudo respaldar staffs.doctor_id en doctor_staff:", err)
+		}
+		if err := db.Migrator().DropColumn(&models.Staff{}, "doctor_id"); err != nil {
+			log.Println("Aviso: no se pudo eliminar la columna vieja staffs.doctor_id:", err)
+		}
+	}
+	if db.Migrator().HasColumn(&models.Staff{}, "active") {
+		if err := db.Migrator().DropColumn(&models.Staff{}, "active"); err != nil {
+			log.Println("Aviso: no se pudo eliminar la columna vieja staffs.active:", err)
+		}
+	}
 
 	// Limpieza de compatibilidad: patients.email ya no debe ser único a nivel
 	// de base de datos (un mismo paciente puede estar vinculado a varios
