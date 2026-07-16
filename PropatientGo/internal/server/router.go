@@ -220,6 +220,17 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 				billingRoutes.POST("/portal", handlers.CreatePortalSession(db, billingClient))
 			}
 
+			// Exportar/eliminar mi cuenta (derechos ARCO): también fuera de
+			// RequireActiveSubscription a propósito — un doctor con la
+			// prueba vencida tiene que poder ejercer estos derechos igual,
+			// sin depender de tener una suscripción activa.
+			accountRoutes := protected.Group("/user")
+			accountRoutes.Use(auth.RequireDoctorRole())
+			{
+				accountRoutes.GET("/export-data", handlers.ExportMyData(db))
+				accountRoutes.DELETE("/account", handlers.DeleteMyAccount(db))
+			}
+
 			// Todo lo demás requiere prueba vigente o suscripción activa. El
 			// personal comparte el estado de suscripción del doctor que lo
 			// invitó (mismo doctorID en el token), así que si el doctor no

@@ -2,9 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import api from '../api/axios';
 import './DoctorProfile.scss';
 import { Popup } from '../components/Popup';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { getErrorMessage } from '../utils/errorMessage';
 import { toAbsoluteFileUrl } from '../utils/fileUrl';
 import { LocationPicker } from '../components/LocationPicker';
+import { useAuth } from '../context/AuthContext';
 
 interface ProfileData {
   rfc: string;
@@ -70,6 +72,11 @@ export const DoctorProfile = () => {
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   const [connectingCalendar, setConnectingCalendar] = useState(false);
+
+  const [exportingData, setExportingData] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const { logout } = useAuth();
 
   const calculateCompletion = () => {
     const fieldsToValidate = [
@@ -188,6 +195,55 @@ export const DoctorProfile = () => {
       });
     } finally {
       setConnectingCalendar(false);
+    }
+  };
+
+  // Descarga un volcado en JSON de todo lo asociado a la cuenta (perfil,
+  // pacientes, citas, personal) — derecho de Acceso de las garantías ARCO.
+  const handleExportData = async () => {
+    setExportingData(true);
+    try {
+      const res = await api.get('/user/export-data');
+      const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'propatient-mis-datos.json';
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err: unknown) {
+      setPopupConfig({
+        isOpen: true,
+        type: 'error',
+        title: 'Error',
+        message: getErrorMessage(err, 'No se pudieron exportar tus datos.')
+      });
+    } finally {
+      setExportingData(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setShowDeleteConfirm(false);
+    setDeletingAccount(true);
+    try {
+      await api.delete('/user/account');
+      logout();
+      // Recarga completa (no navigate() de react-router): /profile está
+      // envuelta por OnboardingGuard, que redirige a /login en cuanto
+      // isAuthenticated se vuelve false — esa redirección le gana la
+      // carrera a un navigate('/') hecho en el mismo tick. Una recarga
+      // completa evita el problema por completo (mismo patrón que ya usa
+      // el interceptor de 401 en api/axios.ts).
+      window.location.href = '/';
+    } catch (err: unknown) {
+      setPopupConfig({
+        isOpen: true,
+        type: 'error',
+        title: 'No se pudo eliminar tu cuenta',
+        message: getErrorMessage(err, 'Intenta de nuevo.')
+      });
+      setDeletingAccount(false);
     }
   };
 
@@ -566,12 +622,46 @@ export const DoctorProfile = () => {
         </div>
 
       </form>
+
+      {/* Fuera del <form>: son acciones propias, no parte del guardado del perfil. */}
+      <div className="profile-form-section">
+        <div className="section-title">
+          <span className="material-icons-outlined">privacy_tip</span>
+          Privacidad y datos
+        </div>
+        <p style={{ color: 'var(--color-secondary)', fontSize: '13px', marginTop: '-8px', marginBottom: '16px' }}>
+          Puedes descargar una copia de todo lo asociado a tu cuenta, o eliminarla por completo.
+        </p>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <button type="button" className="btn-outline-sm" onClick={handleExportData} disabled={exportingData}>
+            {exportingData ? 'Descargando...' : 'Descargar mis datos'}
+          </button>
+          <button
+            type="button"
+            className="btn-outline-danger"
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={deletingAccount}
+          >
+            {deletingAccount ? 'Eliminando...' : 'Eliminar mi cuenta'}
+          </button>
+        </div>
+      </div>
+
     <Popup
         isOpen={popupConfig.isOpen}
         type={popupConfig.type}
         title={popupConfig.title}
         message={popupConfig.message}
         onClose={() => setPopupConfig(prev => ({ ...prev, isOpen: false }))}
+      />
+    <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        title="Eliminar mi cuenta"
+        message="Tu cuenta se desactivará y ya no podrás iniciar sesión. Los expedientes clínicos se conservan por obligación legal; contáctanos si necesitas su eliminación completa. Si tienes una suscripción activa, cancélala primero desde Facturación."
+        confirmText="Eliminar mi cuenta"
+        variant="danger"
+        onConfirm={handleDeleteAccount}
+        onCancel={() => setShowDeleteConfirm(false)}
       />
     </div>
   );
