@@ -127,11 +127,31 @@ solo para desarrollo local (docker-compose ya la activa ahí por defecto).
   Google, y todos los demás ven una advertencia de "app no verificada".
   Para producción real, hay que pasar el proyecto a "In production"
   (Google puede pedir una revisión si usas scopes sensibles).
-- **Dominio propio**: hoy el sitio sigue en `*.onrender.com`. Le resta
-  mucha confianza a un sistema que maneja expedientes médicos. Si compras
-  un dominio, actualiza `FRONTEND_URL`, `VITE_API_URL`,
-  `GOOGLE_CALENDAR_REDIRECT_URI`, y los orígenes autorizados en Google
-  Cloud Console.
+- **Dominio propio**: se compró **`propatient.pro`** en Porkbun. Falta
+  conectarlo:
+  1. En Render → cada servicio (`propatient-frontend` y, si quieres un
+     subdominio para la API, también `propatient-api`) → **Settings →
+     Custom Domains** → agrega `propatient.pro` (y `www.propatient.pro` si
+     lo quieres) al frontend, y algo como `api.propatient.pro` al backend.
+  2. Render te da los registros DNS exactos a crear (normalmente un `A`/`ALIAS`
+     para el dominio raíz y un `CNAME` para subdominios). Cópialos.
+  3. En Porkbun → tu dominio → **DNS Records** → agrega esos registros
+     exactamente como Render los pide.
+  4. Espera a que el DNS propague (minutos a un par de horas) y a que
+     Render marque el dominio como verificado con SSL emitido automáticamente.
+  5. Actualiza `FRONTEND_URL` (en `propatient-api`) y `VITE_API_URL` (en
+     `propatient-frontend`) para que usen `propatient.pro`/`api.propatient.pro`
+     en vez de las URLs `*.onrender.com`, y vuelve a desplegar ambos.
+  6. Agrega `https://propatient.pro` a los "Authorized JavaScript origins"
+     del OAuth Client ID en Google Cloud Console (si no lo agregas, el login
+     con Google se rompe en el dominio nuevo).
+  7. Si usas Google Calendar, actualiza también `GOOGLE_CALENDAR_REDIRECT_URI`
+     al nuevo dominio, tanto en Render como en el "Authorized redirect URIs"
+     de ESE Client ID en Google Cloud Console.
+
+  El código del frontend (`sitemap.xml`, `robots.txt`, `og:url`) ya está
+  actualizado con `propatient.pro` — no necesita más cambios de tu parte,
+  solo la conexión de DNS de los pasos de arriba.
 - **Confirma que la base de datos no siga en el plan "free" de Render** si
   vas a depender de estos datos en serio: el plan free de Postgres en
   Render tiene almacenamiento limitado y (verifica en tu dashboard) puede
@@ -187,9 +207,8 @@ frontend reales, con tests automatizados):
   bugs en producción si el usuario te manda una captura del log de Render.
 - **reCAPTCHA/hCaptcha** en el formulario de cita pública, además del rate
   limiting ya implementado, si empiezas a ver spam de citas falsas.
-- **Reemplazar el dominio placeholder** (`TU-DOMINIO-AQUI`) en
-  `propatient-frontend/public/sitemap.xml` una vez tengas dominio propio, y
-  enviar el sitemap a Google Search Console.
+- Una vez conectado `propatient.pro` (ver sección 2), enviar el sitemap
+  (`https://propatient.pro/sitemap.xml`) a Google Search Console.
 - **Confirmar que la contraseña de Gmail filtrada** siga revocada (ya lo
   hiciste) y considerar reescribir el historial de git si en algún momento
   el repo se vuelve público.
@@ -205,7 +224,8 @@ frontend reales, con tests automatizados):
 - [ ] `STRIPE_*` en modo Live (no Test)
 - [ ] Verificar `JWT_SECRET`, `FRONTEND_URL`, `VITE_API_URL`
 - [ ] Google OAuth fuera de modo "Testing"
-- [ ] Dominio propio (opcional pero recomendado)
+- [ ] Conectar `propatient.pro` en Render (DNS en Porkbun) y actualizar
+      `FRONTEND_URL`/`VITE_API_URL`/Google OAuth con el dominio nuevo
 - [ ] Base de datos y backend fuera del plan free de Render
 - [ ] Revisión legal de Privacidad/Términos
 - [ ] CFDI/facturación fiscal (si aplica)

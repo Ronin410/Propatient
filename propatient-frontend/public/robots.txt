@@ -4,6 +4,4 @@
 User-agent: *
 Allow: /
 
-# TODO: reemplazar por el dominio propio definitivo cuando se configure
-# (hoy el sitio sigue sirviéndose desde *.onrender.com).
-Sitemap: /sitemap.xml
+Sitemap: https://propatient.pro/sitemap.xml
