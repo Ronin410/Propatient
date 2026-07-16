@@ -96,7 +96,7 @@ _Utilidades_
 ### 3.4 Procesos automáticos
 
 - **Worker nocturno** (`internal/workers/night_cron.go`): corre en goroutine, calcula el tiempo hasta medianoche y ejecuta `repository.ExecNightClosure`, que marca como `NOSHOW` las citas `PENDING` cuya fecha ya pasó.
-- **Seed inicial** (`internal/database/seed.go`): crea un doctor de prueba (`medico` / `12345`) si no existe.
+- **Seed inicial** (`internal/database/seed.go`): crea un doctor de prueba (`medico` / `12345`) si no existe, solo cuando `ENABLE_TEST_SEED=true` (docker-compose lo activa por defecto en local; nunca se define en Render/producción).
 
 ### 3.5 Seguridad
 

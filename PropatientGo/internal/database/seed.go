@@ -12,8 +12,19 @@ import (
 	"gorm.io/gorm"
 )
 
-// SeedDatabase replica la lógica de DataInitializer.java
+// SeedDatabase crea el doctor de prueba "medico"/"12345" (ver PROJECT_SPECS.md),
+// pero SOLO si ENABLE_TEST_SEED="true" — nunca por defecto. Antes se creaba
+// en cada arranque sin condición, incluido producción: una cuenta con
+// contraseña conocida públicamente (está documentada en este mismo repo)
+// viviendo en la base de datos real es una puerta trasera real. En local,
+// docker-compose.yml ya define ENABLE_TEST_SEED=true por defecto, así que
+// el flujo de desarrollo de siempre sigue funcionando sin que el
+// desarrollador tenga que hacer nada distinto.
 func SeedDatabase(db *gorm.DB) {
+	if os.Getenv("ENABLE_TEST_SEED") != "true" {
+		return
+	}
+
 	var count int64
 	db.Model(&models.Doctor{}).Where("username = ?", "medico").Count(&count)
 
