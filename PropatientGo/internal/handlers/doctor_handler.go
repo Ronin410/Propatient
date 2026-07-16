@@ -57,6 +57,11 @@ func UpdateCurrentDoctor(db *gorm.DB, storageClient storage.Client, geoClient ge
 		// 1. Procesar y guardar el AVATAR (Foto de perfil) si viene en la petición
 		avatarFile, err := c.FormFile("avatar")
 		if err == nil && avatarFile != nil {
+			if err := storage.ValidateUploadedFile(avatarFile, storage.UploadKindAvatarOrLogo); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+
 			ext := filepath.Ext(avatarFile.Filename)
 			key := fmt.Sprintf("profiles/doc_%d_avatar_%d%s", doctorID, time.Now().Unix(), ext)
 
@@ -71,6 +76,11 @@ func UpdateCurrentDoctor(db *gorm.DB, storageClient storage.Client, geoClient ge
 		// 2. Procesar y guardar el LOGO de la clínica si viene en la petición
 		logoFile, err := c.FormFile("logo")
 		if err == nil && logoFile != nil {
+			if err := storage.ValidateUploadedFile(logoFile, storage.UploadKindAvatarOrLogo); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+
 			ext := filepath.Ext(logoFile.Filename)
 			key := fmt.Sprintf("profiles/doc_%d_logo_%d%s", doctorID, time.Now().Unix(), ext)
 

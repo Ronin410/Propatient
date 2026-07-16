@@ -164,6 +164,8 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 			authRoutes.POST("/staff-login", authLimiter.Middleware(), handlers.StaffLoginHandler(db))
 			authRoutes.GET("/staff-invite/:token", handlers.GetStaffInvite(db))
 			authRoutes.POST("/staff-invite/:token", handlers.AcceptStaffInvite(db))
+			authRoutes.POST("/staff-password-reset/request", authLimiter.Middleware(), handlers.RequestStaffPasswordReset(db))
+			authRoutes.POST("/staff-password-reset/:token", authLimiter.Middleware(), handlers.ResetStaffPassword(db))
 			// Callback de Google Calendar: lo llama el navegador tras el
 			// consentimiento (redirect de Google), sin header Authorization,
 			// así que va fuera del grupo protegido. La identidad del doctor

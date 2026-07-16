@@ -309,3 +309,125 @@ func StaffLoginHandler(db *gorm.DB) gin.HandlerFunc {
 		})
 	}
 }
+
+const staffPasswordResetValidity = 1 * time.Hour
+
+// requestStaffPasswordResetGenericResponse es la MISMA respuesta sin
+// importar si el correo existe, está activo o ya tiene contraseña —
+// responder distinto en cada caso permitiría a cualquiera usar este
+// endpoint para averiguar qué correos están registrados como personal.
+const requestStaffPasswordResetGenericResponse = "Si el correo está registrado, te enviamos instrucciones para restablecer tu contraseña."
+
+type requestStaffPasswordResetRequest struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+// RequestStaffPasswordReset genera un token de reseteo y lo manda por
+// correo si el email corresponde a una cuenta de personal activa con
+// contraseña ya creada. Público (sin JWT). Siempre responde 200 con el
+// mismo mensaje genérico, exista o no la cuenta.
+func RequestStaffPasswordReset(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req requestStaffPasswordResetRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		email := strings.ToLower(strings.TrimSpace(req.Email))
+
+		var staff models.Staff
+		err := db.Where("LOWER(email) = ?", email).First(&staff).Error
+		if err != nil || !staff.Active || !staff.PasswordSet {
+			// No revelamos cuál de estas condiciones falló.
+			c.JSON(http.StatusOK, gin.H{"message": requestStaffPasswordResetGenericResponse})
+			return
+		}
+
+		token, err := generateInviteToken()
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{"message": requestStaffPasswordResetGenericResponse})
+			return
+		}
+		expires := time.Now().UTC().Add(staffPasswordResetValidity)
+		db.Model(&staff).Updates(map[string]interface{}{
+			"password_reset_token":            token,
+			"password_reset_token_expires_at": expires,
+		})
+
+		resetURL := fmt.Sprintf("%s/personal/restablecer/%s", frontendRedirectBase(), token)
+		subject := "ProPatient - Restablece tu contraseña"
+		body := fmt.Sprintf(`
+			<html>
+			<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+				<div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+					<h2 style="color: #002d42; text-align: center;">Restablece tu contraseña</h2>
+					<p>Recibimos una solicitud para restablecer la contraseña de tu cuenta de personal en <strong>ProPatient</strong>.</p>
+					<p style="text-align: center; margin: 28px 0;">
+						<a href="%s" style="background-color: #005073; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600;">Restablecer contraseña</a>
+					</p>
+					<p style="font-size: 12px; color: #888;">Este link vence en 1 hora. Si no lo solicitaste, puedes ignorar este correo — tu contraseña actual sigue funcionando.</p>
+				</div>
+			</body>
+			</html>
+		`, resetURL)
+
+		// Best-effort en segundo plano: la respuesta ya es genérica sin
+		// importar si el correo se manda o no, así que no hay razón para
+		// bloquear al usuario esperando al proveedor de correo.
+		go func(toEmail, htmlBody string) {
+			defer func() { recover() }()
+			if err := auth.SendEmail(toEmail, subject, htmlBody); err != nil {
+				fmt.Printf("❌ Fallo al enviar correo de reseteo de contraseña a [%s]: %v\n", toEmail, err)
+			}
+		}(staff.Email, body)
+
+		c.JSON(http.StatusOK, gin.H{"message": requestStaffPasswordResetGenericResponse})
+	}
+}
+
+type resetStaffPasswordRequest struct {
+	Password string `json:"password" binding:"required,min=6"`
+}
+
+// ResetStaffPassword consume el token de reseteo y establece la nueva
+// contraseña. Público (sin JWT).
+func ResetStaffPassword(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		token := c.Param("token")
+
+		var req resetStaffPasswordRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		var staff models.Staff
+		err := db.Where("password_reset_token = ? AND password_reset_token != ?", token, "").First(&staff).Error
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Este link de reseteo no es válido."})
+			return
+		}
+		if staff.PasswordResetTokenExpiresAt == nil || staff.PasswordResetTokenExpiresAt.Before(time.Now().UTC()) {
+			c.JSON(http.StatusGone, gin.H{"error": "Este link de reseteo ya venció. Solicita uno nuevo."})
+			return
+		}
+
+		hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo procesar la contraseña"})
+			return
+		}
+
+		err = db.Model(&staff).Updates(map[string]interface{}{
+			"password_hash":                   string(hashed),
+			"password_reset_token":            "",
+			"password_reset_token_expires_at": nil,
+		}).Error
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo restablecer la contraseña"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Contraseña actualizada. Ya puedes iniciar sesión."})
+	}
+}

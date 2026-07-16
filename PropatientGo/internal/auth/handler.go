@@ -228,6 +228,11 @@ func UpdateLicenseFullHandler(db *gorm.DB, storageClient storage.Client) gin.Han
 			return
 		}
 
+		if err := storage.ValidateUploadedFile(file, storage.UploadKindIneDocument); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
 		// 4. CREAR NOMBRE ÚNICO E INMUTABLE PARA EL ARCHIVO LIGADO AL DOCTOR
 		ext := filepath.Ext(file.Filename)
 		key := fmt.Sprintf("identidad/ine_doctor_%d_%d%s", doctorID, time.Now().Unix(), ext)

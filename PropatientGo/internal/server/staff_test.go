@@ -249,3 +249,93 @@ func TestStaffInvite_ExpiredTokenRejected(t *testing.T) {
 	})
 	assert.Equal(t, http.StatusGone, w.Code)
 }
+
+// TestStaffPasswordReset_UnknownEmail_ReturnsGenericMessage confirma que el
+// endpoint no revela si un correo existe o no como cuenta de personal.
+func TestStaffPasswordReset_UnknownEmail_ReturnsGenericMessage(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	w := doRequest(t, router, http.MethodPost, "/api/auth/staff-password-reset/request", "", map[string]any{
+		"email": "no_existe@consultorio.test",
+	})
+	require.Equal(t, http.StatusOK, w.Code)
+	body := decodeJSON(t, w)
+	assert.Contains(t, body["message"], "Si el correo está registrado")
+}
+
+// TestStaffPasswordReset_FullLifecycle cubre el flujo completo: se solicita
+// el reseteo, se genera un token en la cuenta, se usa para poner una
+// contraseña nueva, y la contraseña vieja deja de servir.
+func TestStaffPasswordReset_FullLifecycle(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_staff_reset", "password123")
+	staff := testutil.CreateTestStaff(t, db, doc.ID, "reset@consultorio.test", "claveVieja123")
+
+	w := doRequest(t, router, http.MethodPost, "/api/auth/staff-password-reset/request", "", map[string]any{
+		"email": staff.Email,
+	})
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var reloaded models.Staff
+	require.NoError(t, db.First(&reloaded, staff.ID).Error)
+	require.NotEmpty(t, reloaded.PasswordResetToken, "debe haberse generado un token de reseteo")
+
+	w = doRequest(t, router, http.MethodPost, "/api/auth/staff-password-reset/"+reloaded.PasswordResetToken, "", map[string]any{
+		"password": "claveNueva456",
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	// El token ya se consumió: no debe poder reutilizarse.
+	w = doRequest(t, router, http.MethodPost, "/api/auth/staff-password-reset/"+reloaded.PasswordResetToken, "", map[string]any{
+		"password": "otraClave789",
+	})
+	assert.Equal(t, http.StatusNotFound, w.Code)
+
+	// La contraseña vieja ya no funciona.
+	w = doRequest(t, router, http.MethodPost, "/api/auth/staff-login", "", map[string]any{
+		"email": staff.Email, "password": "claveVieja123",
+	})
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+
+	// La contraseña nueva sí funciona.
+	w = doRequest(t, router, http.MethodPost, "/api/auth/staff-login", "", map[string]any{
+		"email": staff.Email, "password": "claveNueva456",
+	})
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestStaffPasswordReset_ExpiredTokenRejected asegura que un link de
+// reseteo vencido no se pueda usar.
+func TestStaffPasswordReset_ExpiredTokenRejected(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_staff_reset_expired", "password123")
+	staff := testutil.CreateTestStaff(t, db, doc.ID, "reset_expired@consultorio.test", "claveVieja123")
+
+	expired := time.Now().UTC().Add(-time.Hour)
+	require.NoError(t, db.Model(&staff).Updates(map[string]interface{}{
+		"password_reset_token":            "token-de-prueba-vencido",
+		"password_reset_token_expires_at": expired,
+	}).Error)
+
+	w := doRequest(t, router, http.MethodPost, "/api/auth/staff-password-reset/token-de-prueba-vencido", "", map[string]any{
+		"password": "claveNueva456",
+	})
+	assert.Equal(t, http.StatusGone, w.Code)
+}
+
+// TestStaffPasswordReset_InvalidTokenRejected confirma que un token
+// inventado (nunca emitido) se rechaza.
+func TestStaffPasswordReset_InvalidTokenRejected(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	w := doRequest(t, router, http.MethodPost, "/api/auth/staff-password-reset/token-que-nunca-existio", "", map[string]any{
+		"password": "claveNueva456",
+	})
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}

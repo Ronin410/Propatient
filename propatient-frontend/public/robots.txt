@@ -1,0 +1,9 @@
+# Todo el sitio público es indexable; el dashboard vive detrás de sesión
+# (/inicio, /pacientes, /calendar, etc.) y Google nunca podría entrar ahí de
+# todas formas, así que no hace falta bloquearlo explícitamente aquí.
+User-agent: *
+Allow: /
+
+# TODO: reemplazar por el dominio propio definitivo cuando se configure
+# (hoy el sitio sigue sirviéndose desde *.onrender.com).
+Sitemap: /sitemap.xml

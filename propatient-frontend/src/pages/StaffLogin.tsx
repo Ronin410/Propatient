@@ -106,6 +106,10 @@ export const StaffLogin: React.FC = () => {
             {isLoading ? 'Ingresando...' : 'Iniciar sesión'}
           </button>
 
+          <p style={{ fontSize: '13px', color: 'var(--color-secondary)', textAlign: 'center', marginTop: '4px' }}>
+            <Link to="/personal/recuperar" style={{ color: 'var(--color-primary)', fontWeight: 600 }}>¿Olvidaste tu contraseña?</Link>
+          </p>
+
           <p style={{ fontSize: '13px', color: 'var(--color-secondary)', textAlign: 'center', marginTop: '8px' }}>
             ¿Eres el doctor dueño del consultorio? <Link to="/login" style={{ color: 'var(--color-primary)', fontWeight: 600 }}>Inicia sesión aquí</Link>
           </p>

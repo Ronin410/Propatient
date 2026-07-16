@@ -92,6 +92,11 @@ type Staff struct {
 	PasswordSet          bool       `gorm:"default:false" json:"passwordSet"`
 	InviteToken          string     `json:"-"`
 	InviteTokenExpiresAt *time.Time `json:"-"`
+	// Token de un solo uso para "olvidé mi contraseña" (ver
+	// handlers.RequestStaffPasswordReset/ResetStaffPassword), mismo patrón
+	// que InviteToken pero con vigencia mucho más corta.
+	PasswordResetToken          string     `json:"-"`
+	PasswordResetTokenExpiresAt *time.Time `json:"-"`
 }
 
 // SuperAdmin es una cuenta interna de ProPatient (no de un consultorio),

@@ -7,6 +7,8 @@ import { DoctorOnlyRoute } from './components/DoctorOnlyRoute';
 import { Login } from './pages/Login';
 import { StaffLogin } from './pages/StaffLogin';
 import { AcceptStaffInvite } from './pages/AcceptStaffInvite';
+import { ForgotStaffPassword } from './pages/ForgotStaffPassword';
+import { ResetStaffPassword } from './pages/ResetStaffPassword';
 import { DashboardLayout } from './pages/DashboardLayout';
 
 // Landing pública, directorio de doctores y agendamiento sin cuenta
@@ -98,6 +100,8 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/staff-login" element={<StaffLogin />} />
           <Route path="/personal/invitacion/:token" element={<AcceptStaffInvite />} />
+          <Route path="/personal/recuperar" element={<ForgotStaffPassword />} />
+          <Route path="/personal/restablecer/:token" element={<ResetStaffPassword />} />
 
           {/* 🔐 PANEL INTERNO DE ADMINISTRACIÓN: sesión separada de la del doctor */}
           <Route path="/admin/login" element={<AdminLogin />} />

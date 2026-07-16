@@ -18,6 +18,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Contenido mínimo pero real (con la firma de bytes correcta) para que
+// storage.ValidateUploadedFile (basada en http.DetectContentType, no en el
+// nombre del archivo) acepte estos archivos de prueba como PNG/PDF de verdad.
+var (
+	minimalPNGBytes = []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0}
+	minimalPDFBytes = []byte("%PDF-1.4\n%fake-test-content\n")
+)
+
 // doMultipartRequest arma y ejecuta una petición multipart/form-data (subida
 // de archivos), a diferencia de doRequest que solo maneja JSON.
 func doMultipartRequest(t *testing.T, router http.Handler, method, path, token string, fields map[string]string, fileField, fileName string, fileContent []byte) *httptest.ResponseRecorder {
@@ -57,7 +65,7 @@ func TestStorage_AvatarUpload_ReturnsPresignedURLOnRead(t *testing.T) {
 	token := testutil.TokenFor(t, doc.ID, doc.Username)
 
 	w := doMultipartRequest(t, router, http.MethodPut, "/api/doctor/me", token,
-		map[string]string{"fullName": "Dr. Avatar"}, "avatar", "foto.png", []byte("fake-png-bytes"))
+		map[string]string{"fullName": "Dr. Avatar"}, "avatar", "foto.png", minimalPNGBytes)
 	require.Equal(t, http.StatusOK, w.Code)
 	body := decodeJSON(t, w)
 
@@ -94,7 +102,7 @@ func TestStorage_DocumentUpload_PresignedOnAppointmentDetail(t *testing.T) {
 	apptID := int(decodeJSON(t, w)["id"].(float64))
 
 	w = doMultipartRequest(t, router, http.MethodPost, "/api/appointments/"+strconv.Itoa(apptID)+"/upload-document", token,
-		map[string]string{"isPrescription": "false"}, "files", "estudio.pdf", []byte("fake-pdf-bytes"))
+		map[string]string{"isPrescription": "false"}, "files", "estudio.pdf", minimalPDFBytes)
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, 1, mockStorage.savedKeyCount())
 
@@ -130,7 +138,7 @@ func TestStorage_RecipePDF_PresignedOnAppointmentAndPatientHistory(t *testing.T)
 	apptID := int(decodeJSON(t, w)["id"].(float64))
 
 	w = doMultipartRequest(t, router, http.MethodPost, "/api/appointments/"+strconv.Itoa(apptID)+"/save-recipe-pdf", token,
-		nil, "recipe_pdf", "receta.pdf", []byte("fake-recipe-bytes"))
+		nil, "recipe_pdf", "receta.pdf", minimalPDFBytes)
 	require.Equal(t, http.StatusOK, w.Code)
 
 	w = doRequest(t, router, http.MethodGet, "/api/appointments/"+strconv.Itoa(apptID), token, nil)

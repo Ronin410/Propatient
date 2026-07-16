@@ -216,6 +216,11 @@ func UploadDocuments(db *gorm.DB, storageClient storage.Client) gin.HandlerFunc 
 		isPrescription := c.PostForm("isPrescription") == "true"
 
 		for _, fileHeader := range files {
+			if err := storage.ValidateUploadedFile(fileHeader, storage.UploadKindMedicalDocument); err != nil {
+				log.Printf("⚠️ Documento %s rechazado: %v", fileHeader.Filename, err)
+				continue
+			}
+
 			// Generamos un nombre de archivo propio a partir de la extensión únicamente.
 			// Nunca usamos el nombre que manda el cliente para construir la key:
 			// eso permitiría path traversal (ej. "../../main.go") o sobrescribir archivos.
@@ -877,6 +882,11 @@ func SaveRecipePDF(db *gorm.DB, storageClient storage.Client) gin.HandlerFunc {
 		file, err := c.FormFile("recipe_pdf")
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "No se recibió ningún archivo PDF"})
+			return
+		}
+
+		if err := storage.ValidateUploadedFile(file, storage.UploadKindRecipePDF); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
