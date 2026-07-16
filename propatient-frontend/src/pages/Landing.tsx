@@ -4,6 +4,7 @@ import api from '../api/axios';
 import { toAbsoluteFileUrl } from '../utils/fileUrl';
 import type { PublicDoctor } from '../types';
 import { Footer } from '../components/Footer';
+import { useAuth } from '../context/AuthContext';
 import './Landing.scss';
 
 const ROTATION_MS = 5000;
@@ -21,6 +22,7 @@ function pickNextIndex(length: number, current: number): number {
 }
 
 export const Landing: React.FC = () => {
+  const { isAuthenticated } = useAuth();
   const [doctors, setDoctors] = useState<PublicDoctor[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -50,8 +52,14 @@ export const Landing: React.FC = () => {
           </div>
           <nav>
             <Link to="/doctores" className="nav-link">Buscar doctor</Link>
-            <Link to="/login" className="nav-link">Soy doctor</Link>
-            <Link to="/login" className="btn-nav-cta">Iniciar sesión</Link>
+            {isAuthenticated ? (
+              <Link to="/inicio" className="btn-nav-cta">Ir a mi panel</Link>
+            ) : (
+              <>
+                <Link to="/login" className="nav-link">Soy doctor</Link>
+                <Link to="/login" className="btn-nav-cta">Iniciar sesión</Link>
+              </>
+            )}
           </nav>
         </div>
       </header>
@@ -66,7 +74,11 @@ export const Landing: React.FC = () => {
           </p>
           <div className="hero-actions">
             <Link to="/doctores" className="btn-primary-lg">Ver directorio de doctores</Link>
-            <Link to="/login" className="btn-outline-lg">Soy doctor, quiero unirme</Link>
+            {isAuthenticated ? (
+              <Link to="/inicio" className="btn-outline-lg">Ir a mi panel</Link>
+            ) : (
+              <Link to="/login" className="btn-outline-lg">Soy doctor, quiero unirme</Link>
+            )}
           </div>
         </div>
 
@@ -121,7 +133,11 @@ export const Landing: React.FC = () => {
           Gestiona tu agenda, tus pacientes y tu expediente clínico digital, y aparece
           en el directorio para que nuevos pacientes te encuentren.
         </p>
-        <Link to="/login" className="btn-primary-lg">Crear mi cuenta</Link>
+        {isAuthenticated ? (
+          <Link to="/inicio" className="btn-primary-lg">Ir a mi panel</Link>
+        ) : (
+          <Link to="/login" className="btn-primary-lg">Crear mi cuenta</Link>
+        )}
       </section>
 
       <Footer />

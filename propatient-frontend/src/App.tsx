@@ -41,13 +41,12 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
-// "/" es pública (landing) para quien no tiene sesión; quien ya inició
-// sesión pasa directo a su panel. No es un "index" del dashboard: por eso
-// vive fuera de la sección protegida, como su propia ruta con path="/".
-const RootRoute = () => {
-  const { isAuthenticated } = useAuth();
-  return isAuthenticated ? <Navigate to="/inicio" replace /> : <Landing />;
-};
+// "/" es la landing pública y siempre se muestra ahí, tenga o no sesión
+// iniciada — así el logo/marca "ProPatient" siempre lleva al inicio
+// público real, en vez de que el login se sienta como la pantalla
+// principal del sitio. Con sesión iniciada, Landing muestra un botón
+// "Ir a mi panel" en vez de "Iniciar sesión" para volver al dashboard.
+const RootRoute = () => <Landing />;
 
 // Con sesión iniciada, /privacidad se muestra dentro del DashboardLayout
 // (mismo menú lateral que el resto del panel) en vez de la página pública

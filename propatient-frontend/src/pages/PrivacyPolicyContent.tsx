@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import './PrivacyPolicy.scss';
 
 // Cuerpo del aviso de privacidad, compartido entre la página pública
@@ -7,6 +8,11 @@ import './PrivacyPolicy.scss';
 export const PrivacyPolicyContent: React.FC = () => {
   return (
     <div className="privacy-body">
+      <Link to="/" className="privacy-back-link">
+        <span className="material-icons-outlined">arrow_back</span>
+        Volver al inicio
+      </Link>
+
       <div className="privacy-draft-banner">
         <span className="material-icons-outlined">warning</span>
         <p>

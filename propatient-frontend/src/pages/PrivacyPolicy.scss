@@ -28,6 +28,21 @@
   color: var(--text);
   line-height: 1.7;
 
+  .privacy-back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--color-secondary);
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+
+    .material-icons-outlined { font-size: 18px; }
+
+    &:hover { color: var(--color-primary); }
+  }
+
   h1 {
     color: var(--color-heading);
     margin: 0 0 0.3rem 0;
