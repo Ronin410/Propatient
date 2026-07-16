@@ -2,16 +2,33 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { formatToLocalTime, formatToLocalDate, toLocalDateKey } from '../utils/dateFormatter';
-import type { Appointment } from '../types'; 
+import type { Appointment } from '../types';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { useAuth } from '../context/AuthContext';
 import './AppointmentCalendar.scss';
 
 export const AppointmentCalendar: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const navigate = useNavigate();
+  const { isStaff } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [viewMode, setViewMode] = useState<'month' | 'week'>('month');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [selectedApp, setSelectedApp] = useState<Appointment | null>(null);
+
+  // El personal nunca puede iniciar consultas (/consulta/:id ya está
+  // protegida por DoctorOnlyRoute); para citas PENDING del doctor, en vez
+  // de ir directo al expediente se pide confirmar antes de iniciar —
+  // mismo criterio que el botón "Iniciar Atención" de AppointmentTracking.
+  const handleEventClick = (ev: Appointment) => {
+    const statusStr = (ev.status || '').toLowerCase();
+    if (!isStaff && statusStr === 'pending') {
+      setSelectedApp(ev);
+    } else {
+      navigate(`/pacientes/${ev.patientId}`);
+    }
+  };
 
   const toISODate = (date: Date) => {
     const y = date.getFullYear();
@@ -144,7 +161,7 @@ export const AppointmentCalendar: React.FC = () => {
                   <div 
                     key={ev.id}
                     className={`event-tag ${statusStr === 'pending' ? 'pending' : statusStr === 'completed' ? 'completed' : ''}`}
-                    onClick={() => navigate(`/pacientes/${ev.patientId}`)}
+                    onClick={() => handleEventClick(ev)}
                     title={`${formatToLocalTime(evDateRaw)} - ${patientObj?.firstName || 'Paciente'}`}
                   >
                     {formatToLocalTime(evDateRaw)} {patientObj?.firstName || 'Paciente'}
@@ -187,7 +204,7 @@ export const AppointmentCalendar: React.FC = () => {
                   <div 
                     key={ev.id}
                     className={`event-tag ${statusStr === 'pending' ? 'pending' : statusStr === 'completed' ? 'completed' : ''}`}
-                    onClick={() => navigate(`/pacientes/${ev.patientId}`)}
+                    onClick={() => handleEventClick(ev)}
                     title={`${formatToLocalTime(evDateRaw)} - ${patientObj?.firstName || 'Paciente'}`}
                   >
                     {formatToLocalTime(evDateRaw)} - {patientObj?.firstName || 'Paciente'}
@@ -270,6 +287,19 @@ export const AppointmentCalendar: React.FC = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={!!selectedApp}
+        title="¿Deseas iniciar la consulta?"
+        message={`Estás por iniciar la consulta médica y registrar la evolución para: ${selectedApp?.patient?.firstName || ''} ${selectedApp?.patient?.lastName || ''}`}
+        confirmText="Confirmar e Iniciar"
+        cancelText="Regresar"
+        onConfirm={() => {
+          if (selectedApp) navigate(`/consulta/${selectedApp.id}`);
+          setSelectedApp(null);
+        }}
+        onCancel={() => setSelectedApp(null)}
+      />
     </div>
   );
 };
