@@ -42,6 +42,12 @@ func main() {
 	observability.InitSentry()
 	defer sentrygo.Flush(2 * time.Second)
 
+	// TEMPORAL: manda un evento de prueba a Sentry en cada arranque, para
+	// confirmar que SENTRY_DSN quedó bien configurada en Render. Quitar
+	// esta línea en cuanto se confirme que llegó (ver LANZAMIENTO.md).
+	sentrygo.CaptureMessage("🧪 Prueba de Sentry — ProPatient backend arrancó correctamente")
+	sentrygo.Flush(2 * time.Second)
+
 	// 2. Conexión a DB
 	dsn := os.Getenv("DATABASE_URL")
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
