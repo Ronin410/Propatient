@@ -10,6 +10,7 @@ import api from '../api/axios';
 import { toAbsoluteFileUrl } from '../utils/fileUrl';
 import { getErrorMessage } from '../utils/errorMessage';
 import { sanitizePhoneInput } from '../utils/phoneInput';
+import { preloadRecaptcha, getRecaptchaToken } from '../utils/recaptcha';
 import type { PublicDoctor, WeekSchedule } from '../types';
 import { Footer } from '../components/Footer';
 import './PublicDoctorProfile.scss';
@@ -109,6 +110,10 @@ export const PublicDoctorProfile: React.FC = () => {
       .finally(() => setLoading(false));
   }, [slug]);
 
+  useEffect(() => {
+    preloadRecaptcha();
+  }, []);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: name === 'patientPhone' ? sanitizePhoneInput(value) : value }));
@@ -128,6 +133,7 @@ export const PublicDoctorProfile: React.FC = () => {
     setSubmitting(true);
     setSubmitError(null);
     try {
+      const recaptchaToken = await getRecaptchaToken('public_appointment');
       await api.post('/public/appointments', {
         doctorId: doctor.id,
         appointmentDateTime: new Date(form.appointmentDateTime).toISOString(),
@@ -137,6 +143,7 @@ export const PublicDoctorProfile: React.FC = () => {
         patientPhone: form.patientPhone,
         patientEmail: form.patientEmail,
         dataConsent: form.dataConsent,
+        recaptchaToken,
       });
       setSubmitted(true);
     } catch (err) {

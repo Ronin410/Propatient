@@ -14,6 +14,7 @@ import (
 
 	"propatient-api/internal/auth"
 	"propatient-api/internal/models"
+	"propatient-api/internal/recaptcha"
 	"propatient-api/internal/storage"
 	"propatient-api/internal/whatsapp"
 
@@ -215,6 +216,10 @@ type publicAppointmentRequest struct {
 	// poder devolver un mensaje en español en vez del error genérico de
 	// validación de Gin.
 	DataConsent bool `json:"dataConsent"`
+	// Token de reCAPTCHA v3 generado por el frontend. Opcional a nivel de
+	// request: si el backend no tiene RECAPTCHA_SECRET_KEY configurada,
+	// recaptcha.Verify no exige nada (ver ese paquete).
+	RecaptchaToken string `json:"recaptchaToken"`
 }
 
 // CreatePublicAppointment permite a cualquier persona (sin cuenta) solicitar
@@ -231,6 +236,10 @@ func CreatePublicAppointment(db *gorm.DB, waClient whatsapp.Client) gin.HandlerF
 		}
 		if !req.DataConsent {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Debes aceptar el tratamiento de tus datos de salud para poder agendar la cita."})
+			return
+		}
+		if err := recaptcha.Verify(c.Request.Context(), req.RecaptchaToken, "public_appointment"); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 

@@ -100,7 +100,20 @@ mueve dinero real, pero tampoco factura a nadie). En el dashboard de
 Stripe, el switch "Test mode" debe estar apagado al generar estas tres
 llaves.
 
-### 1.6 Resto de variables (ya deberías tenerlas, pero verifica)
+### 1.6 reCAPTCHA en el booking público (opcional, recomendado)
+
+| Variable | Qué es |
+|---|---|
+| `RECAPTCHA_SECRET_KEY` (backend) | Secret key de un sitio reCAPTCHA v3 en [google.com/recaptcha/admin](https://www.google.com/recaptcha/admin) |
+| `VITE_RECAPTCHA_SITE_KEY` (frontend) | Site key del mismo registro |
+
+Sin estas dos, el formulario de agendar cita pública sigue funcionando
+exactamente igual — solo se pierde esta capa extra de protección contra
+spam, encima del rate limiting por IP que ya está activo siempre. Al
+registrar el sitio en la consola de Google, usa **reCAPTCHA v3** (no v2) y
+agrega tu dominio (`propatient.pro`).
+
+### 1.7 Resto de variables (ya deberías tenerlas, pero verifica)
 
 | Variable | Verificar |
 |---|---|
@@ -199,13 +212,16 @@ frontend reales, con tests automatizados):
 - **Consentimiento explícito de datos de salud — ✅ resuelto**: checkbox
   obligatorio (con link al Aviso de Privacidad) en el formulario de
   agendar cita pública, validado también en el backend.
-- **CI automatizado** (ej. GitHub Actions corriendo `go test` y
-  `npx vitest run` en cada push) — hoy depende de que alguien los corra a
-  mano antes de subir cambios.
+- **CI automatizado — ✅ resuelto**: GitHub Actions corre `gofmt`/`vet`/
+  `go test` (backend) y `vite build`/`vitest` (frontend) en cada push y
+  pull request (`.github/workflows/ci.yml`).
 - **Monitoreo de errores** (Sentry o similar) — hoy solo te enteras de
   bugs en producción si el usuario te manda una captura del log de Render.
-- **reCAPTCHA/hCaptcha** en el formulario de cita pública, además del rate
-  limiting ya implementado, si empiezas a ver spam de citas falsas.
+- **reCAPTCHA v3 — ✅ resuelto en código**: agregado al formulario de cita
+  pública, además del rate limiting ya implementado. Solo falta configurar
+  `RECAPTCHA_SECRET_KEY`/`VITE_RECAPTCHA_SITE_KEY` (ver sección 1.6) — sin
+  esas dos variables, sigue funcionando igual que antes, sin esta capa
+  extra.
 - Enviar el sitemap (`https://propatient.pro/sitemap.xml`) a Google Search
   Console — el dominio ya está conectado, solo falta darlo de alta ahí.
 - **Confirmar que la contraseña de Gmail filtrada** siga revocada (ya lo
@@ -256,7 +272,8 @@ dejarlo aquí porque varias piezas técnicas ya están listas para soportarla:
 - [ ] Revisión legal de Privacidad/Términos
 - [ ] CFDI/facturación fiscal (si aplica)
 - [x] Consentimiento explícito de datos de salud en el booking público ✅
-- [ ] CI automatizado
+- [x] CI automatizado ✅
+- [ ] `RECAPTCHA_SECRET_KEY` / `VITE_RECAPTCHA_SITE_KEY` (código ya listo, ver sección 1.6)
 - [ ] Monitoreo de errores (Sentry)
 - [ ] Sitemap dado de alta en Google Search Console
 - [ ] Google Business Profile del/los consultorio(s) piloto
