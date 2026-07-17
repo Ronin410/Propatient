@@ -101,6 +101,17 @@ func UpdateCurrentDoctor(db *gorm.DB, storageClient storage.Client, geoClient ge
 		doctor.RecipeLegend = c.PostForm("recipeLegend")
 		doctor.Resume = c.PostForm("resume")
 
+		// Redes sociales / sitio propio: todos opcionales, se guardan tal
+		// cual (vacío borra el que ya tenía guardado, igual que el resto de
+		// los campos de texto de este formulario).
+		doctor.FacebookUrl = c.PostForm("facebookUrl")
+		doctor.InstagramUrl = c.PostForm("instagramUrl")
+		doctor.LinkedinUrl = c.PostForm("linkedinUrl")
+		doctor.TwitterUrl = c.PostForm("twitterUrl")
+		doctor.TiktokUrl = c.PostForm("tiktokUrl")
+		doctor.YoutubeUrl = c.PostForm("youtubeUrl")
+		doctor.WebsiteUrl = c.PostForm("websiteUrl")
+
 		// Campos opcionales si también los mandas
 		if rfc := c.PostForm("rfc"); rfc != "" {
 			doctor.RFC = rfc
@@ -160,6 +171,13 @@ func UpdateCurrentDoctor(db *gorm.DB, storageClient storage.Client, geoClient ge
 			"publicSlug":       doctor.PublicSlug,
 			"latitude":         doctor.Latitude,
 			"longitude":        doctor.Longitude,
+			"facebookUrl":      doctor.FacebookUrl,
+			"instagramUrl":     doctor.InstagramUrl,
+			"linkedinUrl":      doctor.LinkedinUrl,
+			"twitterUrl":       doctor.TwitterUrl,
+			"tiktokUrl":        doctor.TiktokUrl,
+			"youtubeUrl":       doctor.YoutubeUrl,
+			"websiteUrl":       doctor.WebsiteUrl,
 		})
 	}
 }

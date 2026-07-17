@@ -39,6 +39,18 @@ function formatScheduleLines(schedule: WeekSchedule | null | undefined): string[
     });
 }
 
+// Redes sociales / landing page configuradas por el doctor, en el orden
+// en que se muestran — solo se listan las que de verdad llenó.
+const SOCIAL_LINKS: { key: keyof PublicDoctor; label: string }[] = [
+  { key: 'facebookUrl', label: 'Facebook' },
+  { key: 'instagramUrl', label: 'Instagram' },
+  { key: 'linkedinUrl', label: 'LinkedIn' },
+  { key: 'twitterUrl', label: 'X / Twitter' },
+  { key: 'tiktokUrl', label: 'TikTok' },
+  { key: 'youtubeUrl', label: 'YouTube' },
+  { key: 'websiteUrl', label: 'Sitio web' },
+];
+
 const defaultIcon = L.icon({
   iconUrl: markerIcon,
   iconRetinaUrl: markerIcon2x,
@@ -185,6 +197,23 @@ export const PublicDoctorProfile: React.FC = () => {
             )}
           </div>
 
+          {SOCIAL_LINKS.some(({ key }) => doctor[key]) && (
+            <div className="public-profile-social">
+              {SOCIAL_LINKS.filter(({ key }) => doctor[key]).map(({ key, label }) => (
+                <a
+                  key={key}
+                  href={doctor[key] as string}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="social-link"
+                >
+                  <span className="material-icons-outlined">link</span>
+                  {label}
+                </a>
+              ))}
+            </div>
+          )}
+
           {formatScheduleLines(doctor.schedule).length > 0 && (
             <div className="public-profile-schedule">
               <h3>
@@ -283,6 +312,48 @@ export const PublicDoctorProfile: React.FC = () => {
           )}
         </section>
       </div>
+
+      {doctor.galleryImages && doctor.galleryImages.length > 0 && (
+        <section className="public-profile-gallery">
+          <h2>Galería</h2>
+          <div className="gallery-grid">
+            {doctor.galleryImages.map((img) => (
+              <div className="gallery-thumb" key={img.id}>
+                <img src={toAbsoluteFileUrl(img.imagePath)} alt={`Foto de Dr(a). ${doctor.fullName}`} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {doctor.reviews && doctor.reviews.length > 0 && (
+        <section className="public-profile-reviews">
+          <div className="reviews-heading">
+            <h2>Opiniones de pacientes</h2>
+            {doctor.reviewsAverage != null && (
+              <div className="reviews-average">
+                <span className="material-icons-outlined">star</span>
+                {doctor.reviewsAverage.toFixed(1)} de 5 ({doctor.reviews.length} {doctor.reviews.length === 1 ? 'reseña' : 'reseñas'})
+              </div>
+            )}
+          </div>
+          <div className="reviews-list">
+            {doctor.reviews.map((r, idx) => (
+              <div className="review-card" key={idx}>
+                <div className="review-card-header">
+                  <strong>{r.patientFirstName}</strong>
+                  <span className="review-stars">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <span key={n} className={`material-icons-outlined ${n <= r.rating ? 'filled' : ''}`}>star</span>
+                    ))}
+                  </span>
+                </div>
+                {r.comment && <p className="review-comment">"{r.comment}"</p>}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <Footer />
     </div>

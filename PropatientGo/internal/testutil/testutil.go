@@ -45,6 +45,7 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 		&models.Doctor{}, &models.Patient{}, &models.MedicalHistory{},
 		&models.Appointment{}, &models.MedicalDocument{}, &models.DoctorTemplate{},
 		&models.Staff{}, &models.DoctorStaff{}, &models.SuperAdmin{}, &models.DoctorSchedule{},
+		&models.DoctorGalleryImage{}, &models.Review{},
 	); err != nil {
 		t.Fatalf("Error en AutoMigrate de la DB de pruebas: %v", err)
 	}
@@ -66,7 +67,7 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 
 	// Limpieza total antes de cada test para que no arrastre datos de corridas anteriores.
 	if err := db.Exec(
-		"TRUNCATE TABLE doctor_patients, medical_documents, appointments, medical_histories, patients, doctor_templates, doctor_schedules, doctor_staff, staffs, doctors, super_admins RESTART IDENTITY CASCADE",
+		"TRUNCATE TABLE doctor_patients, medical_documents, appointments, medical_histories, patients, doctor_templates, doctor_schedules, doctor_gallery_images, reviews, doctor_staff, staffs, doctors, super_admins RESTART IDENTITY CASCADE",
 	).Error; err != nil {
 		t.Fatalf("Error al limpiar la DB de pruebas: %v", err)
 	}

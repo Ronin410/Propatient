@@ -41,6 +41,8 @@ import { SettingsNotes } from './pages/SettingsNotes';
 import { StaffManagement } from './pages/StaffManagement';
 import { BillingPage } from './pages/BillingPage';
 import { WorkingHours } from './pages/WorkingHours';
+import { Reviews } from './pages/Reviews';
+import { SubmitReview } from './pages/SubmitReview';
 // Componente para proteger rutas privadas básicas
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated } = useAuth();
@@ -103,6 +105,7 @@ function App() {
           <Route path="/personal/invitacion/:token" element={<AcceptStaffInvite />} />
           <Route path="/personal/recuperar" element={<ForgotStaffPassword />} />
           <Route path="/personal/restablecer/:token" element={<ResetStaffPassword />} />
+          <Route path="/resena/:token" element={<SubmitReview />} />
 
           {/* 🔐 PANEL INTERNO DE ADMINISTRACIÓN: sesión separada de la del doctor */}
           <Route path="/admin/login" element={<AdminLogin />} />
@@ -161,6 +164,7 @@ function App() {
               <Route path="profile" element={<DoctorOnlyRoute><DoctorProfile /></DoctorOnlyRoute>} />
               <Route path="ajustes-notas" element={<DoctorOnlyRoute><SettingsNotes /></DoctorOnlyRoute>} />
               <Route path="personal" element={<DoctorOnlyRoute><StaffManagement /></DoctorOnlyRoute>} />
+              <Route path="resenas" element={<DoctorOnlyRoute><Reviews /></DoctorOnlyRoute>} />
               {/* Accesible también para personal: si el consultorio se queda
                   sin prueba/suscripción, ambos roles terminan aquí (ver el
                   interceptor de 402 en src/api/axios.ts). */}

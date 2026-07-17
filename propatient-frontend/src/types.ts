@@ -12,6 +12,50 @@ export interface PublicDoctor {
   // Horario laboral configurado (ver WeekSchedule) — null si el doctor
   // nunca lo configuró, en cuyo caso no hay ninguna restricción al agendar.
   schedule?: WeekSchedule | null;
+  // Redes sociales / sitio propio — solo vienen si el doctor las llenó.
+  facebookUrl?: string;
+  instagramUrl?: string;
+  linkedinUrl?: string;
+  twitterUrl?: string;
+  tiktokUrl?: string;
+  youtubeUrl?: string;
+  websiteUrl?: string;
+  // Galería de fotos y reseñas aprobadas — solo vienen en el perfil
+  // individual (/dr/:slug), no en el listado del directorio.
+  galleryImages?: GalleryImage[];
+  reviews?: PublicReview[];
+  reviewsAverage?: number;
+}
+
+// Una foto de la galería del perfil público del doctor.
+export interface GalleryImage {
+  id: number;
+  imagePath: string;
+  created_at: string;
+}
+
+// Una reseña ya aprobada, tal como la ve un visitante del perfil público
+// (sin datos del paciente más allá de su primer nombre).
+export interface PublicReview {
+  patientFirstName: string;
+  rating: number;
+  comment: string;
+  submittedAt: string;
+}
+
+// Una reseña tal como la ve el doctor en su panel de gestión — incluye el
+// estado de aprobación y el nombre completo del paciente.
+export interface Review {
+  id: number;
+  doctorId: number;
+  patientId: number;
+  appointmentId: number;
+  rating: number;
+  comment: string;
+  approved: boolean;
+  submittedAt: string | null;
+  patientFirstName: string;
+  patientLastName: string;
 }
 
 // Un bloque de horas en formato "HH:MM" (24h) — la ventana laboral de un

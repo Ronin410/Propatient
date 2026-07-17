@@ -262,4 +262,3 @@ func TestGetPublicDoctorBySlug_IncludesSchedule(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "06:00", monday["start"])
 }
-

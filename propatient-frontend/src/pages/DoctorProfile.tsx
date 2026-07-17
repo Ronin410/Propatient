@@ -7,6 +7,7 @@ import { getErrorMessage } from '../utils/errorMessage';
 import { toAbsoluteFileUrl } from '../utils/fileUrl';
 import { sanitizePhoneInput } from '../utils/phoneInput';
 import { LocationPicker } from '../components/LocationPicker';
+import { DoctorGallery } from '../components/DoctorGallery';
 import { useAuth } from '../context/AuthContext';
 
 interface ProfileData {
@@ -29,6 +30,13 @@ interface ProfileData {
   publicSlug?: string;
   latitude?: number | null;
   longitude?: number | null;
+  facebookUrl?: string;
+  instagramUrl?: string;
+  linkedinUrl?: string;
+  twitterUrl?: string;
+  tiktokUrl?: string;
+  youtubeUrl?: string;
+  websiteUrl?: string;
 }
 
 export const DoctorProfile = () => {
@@ -47,7 +55,14 @@ export const DoctorProfile = () => {
     publicListed: false,
     publicBio: '',
     latitude: null,
-    longitude: null
+    longitude: null,
+    facebookUrl: '',
+    instagramUrl: '',
+    linkedinUrl: '',
+    twitterUrl: '',
+    tiktokUrl: '',
+    youtubeUrl: '',
+    websiteUrl: ''
   });
   // Estado único para controlar la configuración del popup genérico
   const [popupConfig, setPopupConfig] = useState({
@@ -298,6 +313,13 @@ export const DoctorProfile = () => {
       formData.append('resume', profile.resume);
       formData.append('publicListed', profile.publicListed ? 'true' : 'false');
       formData.append('publicBio', profile.publicBio || '');
+      formData.append('facebookUrl', profile.facebookUrl || '');
+      formData.append('instagramUrl', profile.instagramUrl || '');
+      formData.append('linkedinUrl', profile.linkedinUrl || '');
+      formData.append('twitterUrl', profile.twitterUrl || '');
+      formData.append('tiktokUrl', profile.tiktokUrl || '');
+      formData.append('youtubeUrl', profile.youtubeUrl || '');
+      formData.append('websiteUrl', profile.websiteUrl || '');
       if (profile.latitude != null && profile.longitude != null) {
         formData.append('latitude', String(profile.latitude));
         formData.append('longitude', String(profile.longitude));
@@ -584,8 +606,39 @@ export const DoctorProfile = () => {
                   <input type="text" readOnly value={`${window.location.origin}/dr/${profile.publicSlug}`} onClick={(e) => (e.target as HTMLInputElement).select()} />
                 </div>
               )}
+
+              <div className="form-group">
+                <label>Facebook</label>
+                <input type="url" name="facebookUrl" placeholder="https://facebook.com/tu-página" value={profile.facebookUrl || ''} onChange={handleInputChange} />
+              </div>
+              <div className="form-group">
+                <label>Instagram</label>
+                <input type="url" name="instagramUrl" placeholder="https://instagram.com/tu-usuario" value={profile.instagramUrl || ''} onChange={handleInputChange} />
+              </div>
+              <div className="form-group">
+                <label>LinkedIn</label>
+                <input type="url" name="linkedinUrl" placeholder="https://linkedin.com/in/tu-perfil" value={profile.linkedinUrl || ''} onChange={handleInputChange} />
+              </div>
+              <div className="form-group">
+                <label>X (Twitter)</label>
+                <input type="url" name="twitterUrl" placeholder="https://x.com/tu-usuario" value={profile.twitterUrl || ''} onChange={handleInputChange} />
+              </div>
+              <div className="form-group">
+                <label>TikTok</label>
+                <input type="url" name="tiktokUrl" placeholder="https://tiktok.com/@tu-usuario" value={profile.tiktokUrl || ''} onChange={handleInputChange} />
+              </div>
+              <div className="form-group">
+                <label>YouTube</label>
+                <input type="url" name="youtubeUrl" placeholder="https://youtube.com/@tu-canal" value={profile.youtubeUrl || ''} onChange={handleInputChange} />
+              </div>
+              <div className="form-group full-width">
+                <label>Sitio web / landing page profesional</label>
+                <input type="url" name="websiteUrl" placeholder="https://tu-sitio.com" value={profile.websiteUrl || ''} onChange={handleInputChange} />
+              </div>
             </div>
           )}
+
+          {profile.publicListed && <DoctorGallery />}
         </div>
 
         {/* INTEGRACIÓN CON GOOGLE CALENDAR */}

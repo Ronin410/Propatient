@@ -53,3 +53,20 @@ func presignAppointmentsFiles(ctx context.Context, storageClient storage.Client,
 		presignAppointmentFiles(ctx, storageClient, &appts[i])
 	}
 }
+
+// presignGalleryImages reemplaza ImagePath por una URL lista para usar en
+// cada foto de la galería del perfil público, mismo criterio que
+// presignDoctorFiles.
+func presignGalleryImages(ctx context.Context, storageClient storage.Client, images []models.DoctorGalleryImage) {
+	if storageClient == nil {
+		return
+	}
+	for i := range images {
+		if images[i].ImagePath == "" {
+			continue
+		}
+		if url, err := storageClient.URL(ctx, images[i].ImagePath); err == nil {
+			images[i].ImagePath = url
+		}
+	}
+}

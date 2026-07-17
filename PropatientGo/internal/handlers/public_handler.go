@@ -27,20 +27,48 @@ import (
 // que un campo nuevo se filtre por accidente el día que alguien lo agregue
 // al modelo).
 type PublicDoctorSummary struct {
-	ID               uint          `json:"id"`
-	FullName         string        `json:"fullName"`
-	MedicalSpecialty string        `json:"medicalSpecialty"`
-	PublicBio        string        `json:"publicBio"`
-	AvatarUrl        string        `json:"avatarUrl"`
-	Address          string        `json:"address"`
-	Phone            string        `json:"phone"`
-	Latitude         *float64      `json:"latitude"`
-	Longitude        *float64      `json:"longitude"`
-	PublicSlug       string        `json:"publicSlug"`
+	ID               uint     `json:"id"`
+	FullName         string   `json:"fullName"`
+	MedicalSpecialty string   `json:"medicalSpecialty"`
+	PublicBio        string   `json:"publicBio"`
+	AvatarUrl        string   `json:"avatarUrl"`
+	Address          string   `json:"address"`
+	Phone            string   `json:"phone"`
+	Latitude         *float64 `json:"latitude"`
+	Longitude        *float64 `json:"longitude"`
+	PublicSlug       string   `json:"publicSlug"`
 	// Horario laboral configurado (ver DoctorSchedule) — nil si el doctor
 	// nunca lo configuró, para que el frontend sepa que no hay ninguna
 	// restricción que mostrarle al paciente antes de agendar.
 	Schedule *weekSchedule `json:"schedule"`
+
+	// Redes sociales / sitio propio, solo si el doctor las llenó.
+	FacebookUrl  string `json:"facebookUrl,omitempty"`
+	InstagramUrl string `json:"instagramUrl,omitempty"`
+	LinkedinUrl  string `json:"linkedinUrl,omitempty"`
+	TwitterUrl   string `json:"twitterUrl,omitempty"`
+	TiktokUrl    string `json:"tiktokUrl,omitempty"`
+	YoutubeUrl   string `json:"youtubeUrl,omitempty"`
+	WebsiteUrl   string `json:"websiteUrl,omitempty"`
+
+	// Galería de fotos y reseñas aprobadas: solo se llenan en el perfil
+	// individual (ver GetPublicDoctorBySlug), no en el listado del
+	// directorio — evitan consultas extra por doctor en un listado que
+	// puede tener muchos.
+	GalleryImages []models.DoctorGalleryImage `json:"galleryImages,omitempty"`
+	Reviews       []publicReviewSummary       `json:"reviews,omitempty"`
+	ReviewsAvg    *float64                    `json:"reviewsAverage,omitempty"`
+}
+
+// publicReviewSummary es lo único de una reseña que se expone en el
+// perfil público — nunca el ID/token/datos del paciente que dejó la
+// reseña, solo su primer nombre para que se sienta real sin identificarlo
+// del todo.
+type publicReviewSummary struct {
+	PatientFirstName string    `json:"patientFirstName"`
+	Rating           int       `json:"rating"`
+	Comment          string    `json:"comment"`
+	SubmittedAt      time.Time `json:"submittedAt"`
 }
 
 func toPublicDoctorSummary(d models.Doctor) PublicDoctorSummary {
@@ -55,6 +83,13 @@ func toPublicDoctorSummary(d models.Doctor) PublicDoctorSummary {
 		Latitude:         d.Latitude,
 		Longitude:        d.Longitude,
 		PublicSlug:       d.PublicSlug,
+		FacebookUrl:      d.FacebookUrl,
+		InstagramUrl:     d.InstagramUrl,
+		LinkedinUrl:      d.LinkedinUrl,
+		TwitterUrl:       d.TwitterUrl,
+		TiktokUrl:        d.TiktokUrl,
+		YoutubeUrl:       d.YoutubeUrl,
+		WebsiteUrl:       d.WebsiteUrl,
 	}
 }
 
@@ -120,6 +155,46 @@ func GetPublicDoctorBySlug(db *gorm.DB, storageClient storage.Client) gin.Handle
 			if json.Unmarshal(schedule.Days, &week) == nil {
 				summary.Schedule = &week
 			}
+		}
+
+		// Galería de fotos, igual que el horario: solo en el perfil individual.
+		var images []models.DoctorGalleryImage
+		if err := db.Where("doctor_id = ?", doctor.ID).Order("created_at ASC").Find(&images).Error; err == nil {
+			presignGalleryImages(c.Request.Context(), storageClient, images)
+			summary.GalleryImages = images
+		}
+
+		// Reseñas aprobadas por el doctor, más recientes primero, con su
+		// promedio — un paciente nunca ve las que siguen pendientes de
+		// revisión.
+		var reviews []struct {
+			models.Review
+			PatientFirstName string `json:"patientFirstName"`
+		}
+		if err := db.Table("reviews").
+			Select("reviews.*, patients.first_name AS patient_first_name").
+			Joins("JOIN patients ON patients.id = reviews.patient_id").
+			Where("reviews.doctor_id = ? AND reviews.approved = ?", doctor.ID, true).
+			Order("reviews.submitted_at DESC").
+			Scan(&reviews).Error; err == nil && len(reviews) > 0 {
+			ratingSum := 0
+			publicReviews := make([]publicReviewSummary, 0, len(reviews))
+			for _, r := range reviews {
+				ratingSum += r.Rating
+				submittedAt := time.Time{}
+				if r.SubmittedAt != nil {
+					submittedAt = *r.SubmittedAt
+				}
+				publicReviews = append(publicReviews, publicReviewSummary{
+					PatientFirstName: r.PatientFirstName,
+					Rating:           r.Rating,
+					Comment:          r.Comment,
+					SubmittedAt:      submittedAt,
+				})
+			}
+			summary.Reviews = publicReviews
+			avg := float64(ratingSum) / float64(len(reviews))
+			summary.ReviewsAvg = &avg
 		}
 
 		c.JSON(http.StatusOK, summary)

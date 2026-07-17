@@ -66,6 +66,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
     { label: 'Horario', icon: 'schedule', route: '/horario' },
     ...(!isStaff ? [
       { label: 'Personal', icon: 'badge', route: '/personal' },
+      { label: 'Reseñas', icon: 'reviews', route: '/resenas' },
       { label: 'Facturación', icon: 'credit_card', route: '/billing' },
       { label: 'Perfil', icon: 'settings', route: '/profile' },
       { label: 'Ajustes Notas', icon: 'tune', route: '/ajustes-notas' }

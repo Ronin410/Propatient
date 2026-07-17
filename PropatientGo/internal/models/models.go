@@ -67,7 +67,61 @@ type Doctor struct {
 	Latitude     *float64 `json:"latitude"`
 	Longitude    *float64 `json:"longitude"`
 
+	// Redes sociales / sitio propio: enlaces opcionales que se muestran en
+	// el perfil público (ver toPublicDoctorSummary). Nunca se validan como
+	// URLs "reales" contra un servicio externo — solo se muestran tal cual
+	// si no vienen vacías.
+	FacebookUrl  string `json:"facebookUrl"`
+	InstagramUrl string `json:"instagramUrl"`
+	LinkedinUrl  string `json:"linkedinUrl"`
+	TwitterUrl   string `json:"twitterUrl"`
+	TiktokUrl    string `json:"tiktokUrl"`
+	YoutubeUrl   string `json:"youtubeUrl"`
+	WebsiteUrl   string `json:"websiteUrl"`
+
 	Patients []Patient `gorm:"many2many:doctor_patients;" json:"-"`
+}
+
+// DoctorGalleryImage es una foto adicional (consultorio, equipo, el propio
+// doctor) para el perfil público — distinta del AvatarUrl/LogoUrl, que son
+// una sola imagen fija cada uno. Sin límite de filas a nivel de base de
+// datos; el límite de cuántas puede subir un doctor vive en el handler
+// (ver internal/handlers/gallery_handler.go), no aquí.
+type DoctorGalleryImage struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	DoctorID  uint      `gorm:"not null;index" json:"doctorId"`
+	ImagePath string    `json:"imagePath"`
+}
+
+// Review es la reseña que un paciente deja de un doctor después de una
+// consulta ya completada. La fila nace en cuanto la cita pasa a
+// COMPLETED (ver UpdateAppointment), con Token pero sin calificación
+// todavía — el paciente la completa desde el link que le llega por
+// WhatsApp (ver review_handler.go), el mismo patrón de invitación de un
+// solo uso que Staff.InviteToken. AppointmentID es único: una cita solo
+// genera una invitación a reseña una vez, sin importar cuántas veces se
+// vuelva a guardar ya completada.
+//
+// Approved empieza en false a propósito: una reseña recién enviada NO
+// aparece de inmediato en el perfil público — el doctor la revisa y la
+// aprueba primero, para evitar publicar sin filtro algo negativo, spam, o
+// con datos de salud sensibles que el paciente haya escrito por error.
+type Review struct {
+	ID            uint      `gorm:"primaryKey" json:"id"`
+	CreatedAt     time.Time `json:"created_at"`
+	DoctorID      uint      `gorm:"not null;index" json:"doctorId"`
+	PatientID     uint      `gorm:"not null" json:"patientId"`
+	AppointmentID uint      `gorm:"not null;uniqueIndex" json:"appointmentId"`
+
+	Rating  int    `json:"rating"` // 1-5, 0 mientras no se haya enviado
+	Comment string `gorm:"type:text" json:"comment"`
+
+	Approved bool `gorm:"default:false" json:"approved"`
+
+	Token          string     `json:"-"`
+	TokenExpiresAt *time.Time `json:"-"`
+	SubmittedAt    *time.Time `json:"submittedAt"`
 }
 
 // Staff representa a un miembro del personal (secretaria/asistente) — una

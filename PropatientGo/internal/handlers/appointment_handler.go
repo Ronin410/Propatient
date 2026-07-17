@@ -551,6 +551,7 @@ func UpdateAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient wh
 			return
 		}
 		previousDateTime := appointment.AppointmentDateTime
+		previousStatus := appointment.Status
 		// Copia POR VALOR, no el puntero: json.Unmarshal reutiliza el
 		// time.Time ya apuntado por un puntero no-nil existente en vez de
 		// asignar uno nuevo, así que una copia de puntero aquí apuntaría al
@@ -616,6 +617,32 @@ func UpdateAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient wh
 					}()
 					sendFollowUpWhatsApp(context.Background(), waClient, doctor, patient, followUpDate)
 				}(doctor, patient, followUpDate)
+			}
+		}
+
+		// Invitación a reseña: solo la primera vez que la cita pasa a
+		// COMPLETED (createReviewInviteIfMissing ya es idempotente por su
+		// cuenta gracias al índice único en AppointmentID, pero evitamos la
+		// consulta de más si el status no cambió). Se crea la invitación de
+		// forma síncrona (es solo un INSERT) y el WhatsApp se manda en
+		// segundo plano, mismo criterio que el resto de los avisos.
+		if previousStatus != "COMPLETED" && appointment.Status == "COMPLETED" {
+			review, err := createReviewInviteIfMissing(db, doctorID, appointment.PatientID, appointment.ID)
+			if err != nil {
+				log.Printf("⚠️ No se pudo crear la invitación a reseña de la cita %d: %v", appointment.ID, err)
+			} else if review != nil {
+				var doctor models.Doctor
+				var patient models.Patient
+				if db.First(&doctor, doctorID).Error == nil && db.First(&patient, appointment.PatientID).Error == nil {
+					go func(doctor models.Doctor, patient models.Patient, token string) {
+						defer func() {
+							if r := recover(); r != nil {
+								log.Printf("⚠️ Pánico recuperado al mandar el WhatsApp de solicitud de reseña del paciente %d: %v", patient.ID, r)
+							}
+						}()
+						sendReviewRequestWhatsApp(context.Background(), waClient, doctor, patient, token)
+					}(doctor, patient, review.Token)
+				}
 			}
 		}
 

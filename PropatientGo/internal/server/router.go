@@ -207,6 +207,11 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 			public.GET("/doctors", handlers.GetPublicDoctors(db, storageClient))
 			public.GET("/doctors/:slug", handlers.GetPublicDoctorBySlug(db, storageClient))
 			public.POST("/appointments", publicBookingLimiter.Middleware(), handlers.CreatePublicAppointment(db, whatsappClient))
+			// Reseña de una consulta: el link llega por WhatsApp al terminar
+			// la cita (ver UpdateAppointment). Mismo límite que agendar
+			// público — evita que alguien intente adivinar tokens a fuerza bruta.
+			public.GET("/reviews/:token", handlers.GetReviewInvite(db))
+			public.POST("/reviews/:token", publicBookingLimiter.Middleware(), handlers.SubmitReview(db))
 		}
 
 		// --- RUTAS PROTEGIDAS ---
@@ -308,6 +313,21 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 					doctorRoutes.POST("/template", handlers.SaveDoctorTemplate(db))
 					doctorRoutes.GET("/google-calendar/connect", handlers.ConnectGoogleCalendar(calendarConfig))
 					doctorRoutes.POST("/google-calendar/disconnect", handlers.DisconnectGoogleCalendar(db))
+					// Galería de fotos del perfil público: solo el doctor
+					// decide su imagen de marca, igual que el avatar/logo.
+					doctorRoutes.GET("/gallery", handlers.ListGalleryImages(db, storageClient))
+					doctorRoutes.POST("/gallery", handlers.AddGalleryImage(db, storageClient))
+					doctorRoutes.DELETE("/gallery/:id", handlers.DeleteGalleryImage(db, storageClient))
+				}
+
+				// Reseñas de pacientes: solo el doctor las revisa/aprueba —
+				// es una herramienta de reputación/marketing del consultorio,
+				// no algo operativo del día a día como el horario.
+				reviewRoutes := gated.Group("/reviews")
+				reviewRoutes.Use(auth.RequireDoctorRole())
+				{
+					reviewRoutes.GET("", handlers.ListReviews(db))
+					reviewRoutes.PUT("/:id/approve", handlers.SetReviewApproval(db))
 				}
 
 				// Horario laboral del consultorio: a propósito FUERA de
