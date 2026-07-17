@@ -113,7 +113,25 @@ spam, encima del rate limiting por IP que ya está activo siempre. Al
 registrar el sitio en la consola de Google, usa **reCAPTCHA v3** (no v2) y
 agrega tu dominio (`propatient.pro`).
 
-### 1.7 Resto de variables (ya deberías tenerlas, pero verifica)
+### 1.7 Monitoreo de errores (Sentry, opcional, recomendado)
+
+| Variable | Qué es |
+|---|---|
+| `SENTRY_DSN` (backend) | DSN de tu proyecto de Sentry para **Go** |
+| `VITE_SENTRY_DSN` (frontend) | DSN de tu proyecto de Sentry para **React/JavaScript** |
+
+Sentry necesita un proyecto separado por plataforma (uno para el backend en
+Go, otro para el frontend en React) — cada uno tiene su propio DSN, aunque
+vivan en la misma cuenta/organización. Los encuentras en tu cuenta de
+Sentry en **Settings → Projects → [tu proyecto] → Client Keys (DSN)**; si
+todavía no creaste el segundo proyecto, hazlo con "Create Project" y elige
+la plataforma correspondiente (Go / React).
+
+Sin estas dos variables, la app funciona exactamente igual — solo no se
+reportan los errores a Sentry. El nivel gratuito de Sentry (5,000
+errores/mes) alcanza sin problema para el tamaño de un piloto.
+
+### 1.8 Resto de variables (ya deberías tenerlas, pero verifica)
 
 | Variable | Verificar |
 |---|---|
@@ -215,8 +233,12 @@ frontend reales, con tests automatizados):
 - **CI automatizado — ✅ resuelto**: GitHub Actions corre `gofmt`/`vet`/
   `go test` (backend) y `vite build`/`vitest` (frontend) en cada push y
   pull request (`.github/workflows/ci.yml`).
-- **Monitoreo de errores** (Sentry o similar) — hoy solo te enteras de
-  bugs en producción si el usuario te manda una captura del log de Render.
+- **Monitoreo de errores (Sentry) — ✅ resuelto en código**: backend (Go,
+  captura panics/errores por request vía middleware de Gin) y frontend
+  (React, `ErrorBoundary` + captura de excepciones no manejadas). Solo
+  falta configurar `SENTRY_DSN` (backend) y `VITE_SENTRY_DSN` (frontend)
+  con los DSN de tus dos proyectos de Sentry (uno para Go, uno para
+  React/JavaScript) — ver sección 1.7.
 - **reCAPTCHA v3 — ✅ resuelto en código**: agregado al formulario de cita
   pública, además del rate limiting ya implementado. Solo falta configurar
   `RECAPTCHA_SECRET_KEY`/`VITE_RECAPTCHA_SITE_KEY` (ver sección 1.6) — sin
@@ -274,7 +296,7 @@ dejarlo aquí porque varias piezas técnicas ya están listas para soportarla:
 - [x] Consentimiento explícito de datos de salud en el booking público ✅
 - [x] CI automatizado ✅
 - [ ] `RECAPTCHA_SECRET_KEY` / `VITE_RECAPTCHA_SITE_KEY` (código ya listo, ver sección 1.6)
-- [ ] Monitoreo de errores (Sentry)
+- [ ] `SENTRY_DSN` / `VITE_SENTRY_DSN` (código ya listo, ver sección 1.7)
 - [ ] Sitemap dado de alta en Google Search Console
 - [ ] Google Business Profile del/los consultorio(s) piloto
 - [ ] Canal de adquisición inicial decidido (Ads / redes / alianzas)

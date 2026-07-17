@@ -17,6 +17,7 @@ import (
 	"propatient-api/internal/storage"
 	"propatient-api/internal/whatsapp"
 
+	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -90,6 +91,15 @@ func NewRouter(db *gorm.DB) *gin.Engine {
 func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calendarClient googlecalendar.Client, storageClient storage.Client, billingConfig billing.Config, billingClient billing.Client, geoClient geocoding.Client, whatsappClient whatsapp.Client) *gin.Engine {
 	r := gin.Default()
 	r.MaxMultipartMemory = 8 << 20 // 8 MiB por request de carga de archivos
+
+	// Reporta panics/errores de cada request a Sentry. Repanic:true para
+	// que, tras capturarlo, el panic se vuelva a lanzar y lo atrape el
+	// Recovery() que gin.Default() ya registró (responde 500 igual que
+	// antes) — sentrygin solo se encarga de reportar, no reemplaza esa
+	// recuperación. Sin SENTRY_DSN configurada (observability.InitSentry
+	// no corrió sentrygo.Init), este middleware no hace nada: el SDK de
+	// Sentry es un no-op seguro sin inicializar.
+	r.Use(sentrygin.New(sentrygin.Options{Repanic: true}))
 
 	// El origen del frontend se toma de FRONTEND_URL (soporta varios separados
 	// por coma, útil para tener local + producción a la vez). Si no está

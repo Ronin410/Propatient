@@ -8,10 +8,12 @@ import (
 	"propatient-api/internal/auth"
 	"propatient-api/internal/database"
 	"propatient-api/internal/models"
+	"propatient-api/internal/observability"
 	"propatient-api/internal/server"
 	"propatient-api/internal/whatsapp"
 	"propatient-api/internal/workers"
 
+	sentrygo "github.com/getsentry/sentry-go"
 	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -36,6 +38,9 @@ func main() {
 	if os.Getenv("JWT_SECRET") == "" {
 		log.Fatal("Error crítico: la variable de entorno JWT_SECRET no está definida")
 	}
+
+	observability.InitSentry()
+	defer sentrygo.Flush(2 * time.Second)
 
 	// 2. Conexión a DB
 	dsn := os.Getenv("DATABASE_URL")
