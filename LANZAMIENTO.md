@@ -196,9 +196,9 @@ frontend reales, con tests automatizados):
 - **Facturación fiscal (CFDI)** si vas a cobrarle formalmente a
   consultorios en México — Stripe no la genera, necesitarías un PAC
   (proveedor autorizado de certificación) aparte.
-- **Consentimiento explícito** en el formulario de agendar cita pública
-  para el tratamiento de datos de salud (checkbox de consentimiento) —
-  vale la pena revisar si el formulario actual lo pide.
+- **Consentimiento explícito de datos de salud — ✅ resuelto**: checkbox
+  obligatorio (con link al Aviso de Privacidad) en el formulario de
+  agendar cita pública, validado también en el backend.
 - **CI automatizado** (ej. GitHub Actions corriendo `go test` y
   `npx vitest run` en cada push) — hoy depende de que alguien los corra a
   mano antes de subir cambios.
@@ -255,7 +255,7 @@ dejarlo aquí porque varias piezas técnicas ya están listas para soportarla:
 - [ ] Base de datos y backend fuera del plan free de Render
 - [ ] Revisión legal de Privacidad/Términos
 - [ ] CFDI/facturación fiscal (si aplica)
-- [ ] Consentimiento explícito de datos de salud en el booking público
+- [x] Consentimiento explícito de datos de salud en el booking público ✅
 - [ ] CI automatizado
 - [ ] Monitoreo de errores (Sentry)
 - [ ] Sitemap dado de alta en Google Search Console
