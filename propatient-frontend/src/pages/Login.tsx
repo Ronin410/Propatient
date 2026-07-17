@@ -68,16 +68,16 @@ export const Login = () => {
       }
 
       if (!perfilCompletado) {
-        login(res.data.token, { profileCompleted: perfilCompletado, cedulaValidated: cedulaValidada });
+        login(res.data.token, { profileCompleted: perfilCompletado, cedulaValidated: cedulaValidada }, res.data.fullName);
         navigate('/registro/perfil');
       } else if (cedulaValidada === 'PENDIENTE') {
-        login(res.data.token, { profileCompleted: perfilCompletado, cedulaValidated: cedulaValidada });
+        login(res.data.token, { profileCompleted: perfilCompletado, cedulaValidated: cedulaValidada }, res.data.fullName);
         navigate('/registro/validar-cedula');
       } else if (cedulaValidada === 'CAPTURADA') {
         alert("Tu cuenta y cédula profesional están siendo validadas por nuestro equipo técnico. Te notificaremos por correo una vez concluido el proceso.");
-        setIsLoading(false); 
+        setIsLoading(false);
       } else if (cedulaValidada === 'VALIDADA') {
-        login(res.data.token, { profileCompleted: perfilCompletado, cedulaValidated: cedulaValidada });
+        login(res.data.token, { profileCompleted: perfilCompletado, cedulaValidated: cedulaValidada }, res.data.fullName);
         navigate('/inicio');
       }
 

@@ -5,6 +5,7 @@ import { AuthLayout } from './AuthLayout';
 import { getErrorMessage } from '../utils/errorMessage';
 import { sanitizePhoneInput } from '../utils/phoneInput';
 import { LocationPicker } from '../components/LocationPicker';
+import { useAuth } from '../context/AuthContext';
 
 export const CompleteProfile = () => {
   const [formData, setFormData] = useState({
@@ -23,6 +24,7 @@ export const CompleteProfile = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { setDoctorName } = useAuth();
 
   useEffect(() => {
     const googleName = localStorage.getItem('suggested_fullname');
@@ -71,6 +73,7 @@ export const CompleteProfile = () => {
         latitude: location.latitude != null ? String(location.latitude) : '',
         longitude: location.longitude != null ? String(location.longitude) : ''
       });
+      setDoctorName(formData.fullName);
       navigate('/registro/validar-cedula');
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Ocurrió un error al guardar tu perfil.'));

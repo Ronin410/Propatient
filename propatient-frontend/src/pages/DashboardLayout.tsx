@@ -14,14 +14,20 @@ interface DashboardLayoutProps {
 }
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
-  const { logout, isStaff } = useAuth();
+  const { logout, isStaff, doctorName: sessionDoctorName } = useAuth();
   const { resolvedTheme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // Obtenemos el nombre dinámico si existe en la sesión
-  const doctorName = localStorage.getItem('doctor_name') || 'Dr. Alejandro Bueno';
+  // Nombre dinámico del contexto (login/loginStaff/Perfil lo actualizan ahí,
+  // ver AuthContext) — usar el contexto en vez de leer localStorage directo
+  // aquí es lo que hace que un cambio de nombre en el Perfil se refleje de
+  // inmediato en el sidebar sin recargar la página. El genérico de abajo
+  // solo se ve en el instante entre iniciar sesión y que la respuesta se
+  // procese, o si algo quedó sin guardarse — nunca debe mostrar el nombre
+  // de una persona real como si fuera un valor por defecto del sistema.
+  const doctorName = sessionDoctorName || 'Doctor';
   const initialLetter = doctorName.replace('Dr. ', '').charAt(0).toUpperCase();
 
   // Cierra el menú al navegar a otra pantalla (relevante en móvil/tablet).

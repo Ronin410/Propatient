@@ -77,7 +77,7 @@ export const DoctorProfile = () => {
   const [exportingData, setExportingData] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const { logout } = useAuth();
+  const { logout, setDoctorName } = useAuth();
 
   const calculateCompletion = () => {
     const fieldsToValidate = [
@@ -321,8 +321,10 @@ export const DoctorProfile = () => {
       if (response.data) {
         setMessage({ type: 'success', text: '¡Cambios e imágenes guardados con éxito!' });
 
-
         const data = response.data;
+        if (data.fullName) {
+          setDoctorName(data.fullName);
+        }
         // 5. Mapear las URLs que te regresa Go y limpiar la memoria intermedia
         setProfile(prev => ({
           ...prev,
