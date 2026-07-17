@@ -117,13 +117,18 @@ solo para desarrollo local (docker-compose ya la activa ahí por defecto).
 
 ## 🔴 2. Fuera de Render (paneles externos)
 
-- **Google OAuth — pantalla de consentimiento**: en
-  [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
-  revisa si el proyecto sigue en modo "Testing". En ese modo, solo ~100
-  correos que agregues manualmente como "test users" pueden loguearse con
-  Google, y todos los demás ven una advertencia de "app no verificada".
-  Para producción real, hay que pasar el proyecto a "In production"
-  (Google puede pedir una revisión si usas scopes sensibles).
+- **Google OAuth — pantalla de consentimiento — ✅ resuelto para el login**:
+  publicada en "En producción" desde Google Auth Platform → Público. El
+  login normal del doctor (correo/perfil, scope no sensible) ya funciona
+  para cualquier usuario, sin límite.
+  **Pendiente aparte, no bloquea el lanzamiento**: el scope de Google
+  Calendar (`calendar.events`, sensible) todavía necesita pasar por la
+  verificación de Google para no mostrar la pantalla de "app no
+  verificada" al conectar — ver la guía completa en
+  [`GOOGLE-CALENDAR-VERIFICACION.md`](./GOOGLE-CALENDAR-VERIFICACION.md)
+  (checklist + guion del video de demostración). La política de privacidad
+  ya tiene la sección específica de uso de Calendar que Google exige para
+  esa revisión.
 - **Dominio propio — ✅ resuelto**: `propatient.pro` conectado en Render
   (frontend en la raíz + `www`, backend en `api.propatient.pro`), DNS en
   Porkbun, SSL emitido, `FRONTEND_URL`/`VITE_API_URL` actualizados, y
@@ -243,7 +248,8 @@ dejarlo aquí porque varias piezas técnicas ya están listas para soportarla:
 - [ ] `TWILIO_*` con número de WhatsApp Business real (no sandbox)
 - [ ] `STRIPE_*` en modo Live (no Test)
 - [ ] Verificar `JWT_SECRET`, `FRONTEND_URL`, `VITE_API_URL`
-- [ ] Google OAuth fuera de modo "Testing"
+- [x] Google OAuth fuera de modo "Testing" (login) ✅
+- [ ] Verificación de Google del scope de Calendar (ver `GOOGLE-CALENDAR-VERIFICACION.md`)
 - [x] Conectar `propatient.pro` en Render (DNS en Porkbun) y actualizar
       `FRONTEND_URL`/`VITE_API_URL`/Google OAuth con el dominio nuevo ✅
 - [ ] Base de datos y backend fuera del plan free de Render

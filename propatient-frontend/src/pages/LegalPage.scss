@@ -68,7 +68,21 @@
 
     p {
       color: var(--text);
-      margin: 0;
+      margin: 0 0 0.8rem 0;
+
+      &:last-child { margin-bottom: 0; }
+    }
+
+    code {
+      background: var(--bg-subtle);
+      border-radius: 4px;
+      padding: 0.1rem 0.4rem;
+      font-size: 0.85em;
+    }
+
+    a {
+      color: var(--color-primary);
+      text-decoration: underline;
     }
   }
 }

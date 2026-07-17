@@ -69,17 +69,50 @@ export const PrivacyPolicyContent: React.FC = () => {
       </section>
 
       <section>
-        <h2>6. Transferencia de datos</h2>
+        <h2>6. Uso de la API de Google Calendar</h2>
+        <p>
+          Si el doctor elige conectar su cuenta de Google Calendar desde su Perfil (función opcional,
+          desactivada por defecto), ProPatient solicita permiso de Google mediante el alcance
+          (scope) <code>https://www.googleapis.com/auth/calendar.events</code> — acceso limitado a la
+          creación, edición y eliminación de eventos de calendario, sin acceso a ningún otro dato de
+          la cuenta de Google del doctor (correo, contactos, archivos, etc.).
+        </p>
+        <p>
+          Este permiso se usa exclusivamente para crear un evento "espejo" en el Google Calendar del
+          doctor por cada cita registrada en ProPatient, y mantenerlo sincronizado (actualizarlo si la
+          cita se reprograma, eliminarlo si se cancela). ProPatient no lee, exporta ni almacena el
+          contenido de otros eventos que ya existieran en el calendario del doctor antes de conectar
+          la cuenta — únicamente gestiona los eventos que él mismo crea a partir de esta integración.
+        </p>
+        <p>
+          El doctor puede revocar este acceso en cualquier momento desde su Perfil ("Desconectar
+          Google Calendar") o directamente desde la configuración de su cuenta de Google
+          (<a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">myaccount.google.com/permissions</a>).
+          Al desconectarlo, ProPatient deja de crear o modificar eventos, y no conserva ningún dato
+          proveniente de Google Calendar más allá de lo estrictamente necesario mientras la conexión
+          estuvo activa.
+        </p>
+        <p>
+          El uso y la transferencia a cualquier otra aplicación de la información recibida de las API
+          de Google se adhieren a la
+          {' '}<a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer">
+            Política de Datos de Usuario de los Servicios de API de Google
+          </a>, incluidos los requisitos de Uso Limitado (Limited Use).
+        </p>
+      </section>
+
+      <section>
+        <h2>7. Transferencia de datos</h2>
         <p>[Completar: si se comparten datos con terceros — proveedores de correo, WhatsApp, pagos — y bajo qué condiciones.]</p>
       </section>
 
       <section>
-        <h2>7. Cambios a este aviso</h2>
+        <h2>8. Cambios a este aviso</h2>
         <p>[Completar el procedimiento para notificar cambios a este aviso de privacidad.]</p>
       </section>
 
       <section>
-        <h2>8. Contacto</h2>
+        <h2>9. Contacto</h2>
         <p>[Completar: correo o medio de contacto para dudas sobre privacidad.]</p>
       </section>
     </div>
