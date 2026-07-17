@@ -57,7 +57,15 @@ jobs:
         env:
           TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/propatient_test?sslmode=disable
           JWT_SECRET: ci-test-secret-not-for-production
-        run: go test ./...
+        # -p 1: corre los paquetes de prueba de uno en uno, no en paralelo.
+        # internal/repository, internal/server e internal/workers comparten
+        # la misma base de datos de pruebas (un solo Postgres real, no uno
+        # por paquete) y cada uno corre su propio AutoMigrate al arrancar
+        # (ver testutil.SetupTestDB) — en paralelo, dos paquetes migrando
+        # el esquema al mismo tiempo pueden chocar creando la misma tabla
+        # dos veces ("duplicate key value violates unique constraint
+        # pg_type_typname_nsp_index"), como pasó en un run real de CI.
+        run: go test -p 1 ./...
 
   frontend:
     name: Frontend (React)
