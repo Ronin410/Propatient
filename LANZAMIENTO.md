@@ -38,13 +38,14 @@ la primera vez que el backend arranca con estas dos variables definidas.
 | `AWS_SECRET_ACCESS_KEY` | Idem |
 
 **Por qué es crítico:** sin estas cuatro, los documentos clínicos, recetas
-en PDF, INE de validación, avatar y logo se guardan en el disco local del
-contenedor. **El filesystem de un servicio web de Render NO es
-persistente** — cada vez que redespliegas (cada `git push`, cada reinicio),
-esos archivos desaparecen. Un consultorio real subiendo estudios/recetas
-los perdería en el primer redeploy. Configura S3 (o el proveedor
-equivalente que prefieras) **antes** de tener documentos clínicos reales
-que te importe conservar.
+en PDF, INE de validación, avatar, logo **y ahora también las fotos de la
+galería del perfil público** se guardan en el disco local del contenedor.
+**El filesystem de un servicio web de Render NO es persistente** — cada vez
+que redespliegas (cada `git push`, cada reinicio), esos archivos
+desaparecen. Un consultorio real subiendo estudios/recetas/fotos las
+perdería en el primer redeploy. Configura S3 (o el proveedor equivalente
+que prefieras) **antes** de tener documentos clínicos o fotos reales que te
+importe conservar.
 
 ### 1.3 Correo (Resend) — ✅ resuelto
 
@@ -73,9 +74,15 @@ error 63015 que impedía la entrega incluso después del "join".
    número de WhatsApp Business (requiere verificar tu negocio ante Meta —
    puede tardar días).
 2. Una vez aprobado, actualiza `TWILIO_WHATSAPP_FROM` con ese número.
-3. Prueba el flujo completo (solicitud de cita, confirmación, recordatorios)
-   con un número real que no haya hecho "join" a nada — así confirmas que
-   ya no depende del sandbox.
+3. Prueba el flujo completo (solicitud de cita, confirmación, recordatorios,
+   **y ahora también la invitación a calificar la consulta**) con un número
+   real que no haya hecho "join" a nada — así confirmas que ya no depende
+   del sandbox.
+
+Esto es aún más importante que antes: la función de **reseñas de pacientes**
+(sección 3) depende 100% de que este WhatsApp llegue de verdad — sin un
+número real, el link para calificar nunca le llega al paciente y esa
+función queda invisible aunque el código funcione perfecto.
 
 ### 1.5 Cobros (Stripe)
 
@@ -162,6 +169,14 @@ frontend reales, con tests automatizados):
   login, eligiendo con cuál consultorio entrar cuando aplica.
 - Dominio propio `propatient.pro` y correo con dominio verificado (ver
   arriba).
+- **Galería de fotos** (hasta 8) en el perfil público del doctor.
+- **Redes sociales / landing page propia** en el perfil público (Facebook,
+  Instagram, LinkedIn, X, TikTok, YouTube, sitio web), todo opcional.
+- **Reseñas de pacientes por WhatsApp**: al completar una consulta se manda
+  automáticamente un link de calificación (1–5 estrellas + comentario) al
+  paciente; el doctor aprueba cada reseña antes de que se publique en su
+  perfil. Requiere el WhatsApp Business real de la sección 1.4 para
+  funcionar con pacientes reales.
 
 ---
 
@@ -192,6 +207,32 @@ frontend reales, con tests automatizados):
 
 ---
 
+## 🟢 5. Publicidad / marketing — qué ya tienes técnicamente y qué falta decidir
+
+Esto no es código pendiente, es la estrategia de adquisición — pero vale
+dejarlo aquí porque varias piezas técnicas ya están listas para soportarla:
+
+**Ya tienes (piezas técnicas):**
+- SEO básico (meta tags, Open Graph, `robots.txt`, `sitemap.xml`).
+- Perfil público compartible por doctor (`/dr/:slug`) con foto de galería,
+  redes sociales y reseñas reales — esto es justo lo que sirve como
+  material de prueba social para anunciar cada consultorio piloto.
+- Directorio público con mapa (`/doctores`).
+
+**Falta decidir/hacer (no es código):**
+- Dar de alta `https://propatient.pro/sitemap.xml` en Google Search Console
+  (dominio ya conectado, solo falta registrarlo — 5 minutos).
+- Crear un **Google Business Profile** por consultorio piloto — mejora
+  mucho el posicionamiento local en México y es gratis.
+- Elegir el canal de adquisición inicial para los primeros consultorios
+  piloto (Google Ads local, redes sociales, alianzas directas con
+  doctores/clínicas, boca a boca).
+- Si vas a anunciar precios públicamente, tener resuelto el tema de CFDI
+  (sección 4) antes, para no prometer algo que la facturación no soporta
+  todavía.
+
+---
+
 ## Checklist rápido para marcar conforme avances
 
 - [ ] `SUPERADMIN_USERNAME` / `SUPERADMIN_PASSWORD`
@@ -209,3 +250,6 @@ frontend reales, con tests automatizados):
 - [ ] Consentimiento explícito de datos de salud en el booking público
 - [ ] CI automatizado
 - [ ] Monitoreo de errores (Sentry)
+- [ ] Sitemap dado de alta en Google Search Console
+- [ ] Google Business Profile del/los consultorio(s) piloto
+- [ ] Canal de adquisición inicial decidido (Ads / redes / alianzas)
