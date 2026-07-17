@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -26,16 +27,20 @@ import (
 // que un campo nuevo se filtre por accidente el día que alguien lo agregue
 // al modelo).
 type PublicDoctorSummary struct {
-	ID               uint     `json:"id"`
-	FullName         string   `json:"fullName"`
-	MedicalSpecialty string   `json:"medicalSpecialty"`
-	PublicBio        string   `json:"publicBio"`
-	AvatarUrl        string   `json:"avatarUrl"`
-	Address          string   `json:"address"`
-	Phone            string   `json:"phone"`
-	Latitude         *float64 `json:"latitude"`
-	Longitude        *float64 `json:"longitude"`
-	PublicSlug       string   `json:"publicSlug"`
+	ID               uint          `json:"id"`
+	FullName         string        `json:"fullName"`
+	MedicalSpecialty string        `json:"medicalSpecialty"`
+	PublicBio        string        `json:"publicBio"`
+	AvatarUrl        string        `json:"avatarUrl"`
+	Address          string        `json:"address"`
+	Phone            string        `json:"phone"`
+	Latitude         *float64      `json:"latitude"`
+	Longitude        *float64      `json:"longitude"`
+	PublicSlug       string        `json:"publicSlug"`
+	// Horario laboral configurado (ver DoctorSchedule) — nil si el doctor
+	// nunca lo configuró, para que el frontend sepa que no hay ninguna
+	// restricción que mostrarle al paciente antes de agendar.
+	Schedule *weekSchedule `json:"schedule"`
 }
 
 func toPublicDoctorSummary(d models.Doctor) PublicDoctorSummary {
@@ -104,7 +109,20 @@ func GetPublicDoctorBySlug(db *gorm.DB, storageClient storage.Client) gin.Handle
 		}
 
 		presignDoctorFiles(c.Request.Context(), storageClient, &doctor)
-		c.JSON(http.StatusOK, toPublicDoctorSummary(doctor))
+		summary := toPublicDoctorSummary(doctor)
+
+		// El horario solo se manda en el perfil individual (donde vive el
+		// formulario de agendar), no en el directorio — evita una consulta
+		// extra por doctor en un listado que puede tener muchos.
+		var schedule models.DoctorSchedule
+		if err := db.Where("doctor_id = ?", doctor.ID).First(&schedule).Error; err == nil {
+			var week weekSchedule
+			if json.Unmarshal(schedule.Days, &week) == nil {
+				summary.Schedule = &week
+			}
+		}
+
+		c.JSON(http.StatusOK, summary)
 	}
 }
 
@@ -138,6 +156,10 @@ func CreatePublicAppointment(db *gorm.DB, waClient whatsapp.Client) gin.HandlerF
 		}
 		if !isDoctorAcceptingPublicBookings(doctor) {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Este consultorio no está aceptando citas en este momento"})
+			return
+		}
+		if err := ValidateAppointmentAgainstSchedule(db, doctor.ID, req.AppointmentDateTime); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 

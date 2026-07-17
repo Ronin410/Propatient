@@ -56,10 +56,14 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
 
   // El personal solo gestiona agenda y pacientes: sin Perfil, Ajustes ni
   // gestión de Personal (todo eso ya está bloqueado también en el backend).
+  // "Horario" es la excepción a propósito: tanto el doctor como su
+  // personal necesitan poder configurarlo (ver schedule_handler.go, sin
+  // RequireDoctorRole).
   const menuItems = [
     { label: 'Dashboard', icon: 'home', route: '/inicio' },
     { label: 'Pacientes', icon: 'people', route: '/pacientes' },
     { label: 'Citas', icon: 'calendar_month', route: '/calendar' },
+    { label: 'Horario', icon: 'schedule', route: '/horario' },
     ...(!isStaff ? [
       { label: 'Personal', icon: 'badge', route: '/personal' },
       { label: 'Facturación', icon: 'credit_card', route: '/billing' },

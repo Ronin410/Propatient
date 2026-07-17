@@ -115,6 +115,11 @@ func CreateAppointment(db *gorm.DB, calClient googlecalendar.Client) gin.Handler
 		// 1. Obtener ID del Doctor desde el Token
 		doctorID := c.MustGet("doctorID").(uint)
 
+		if err := ValidateAppointmentAgainstSchedule(db, doctorID, req.AppointmentDateTime); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
 		var patient models.Patient
 
 		// 2. Lógica de Paciente (Existente o Nuevo)
@@ -562,6 +567,16 @@ func UpdateAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient wh
 		if err := c.ShouldBindJSON(&appointment); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
+		}
+
+		// Solo se valida contra el horario laboral si de verdad se está
+		// moviendo la fecha/hora (reprogramar) — un PUT que solo guarda
+		// notas de consulta o marca seguimiento no debe fallar por esto.
+		if !appointment.AppointmentDateTime.Equal(previousDateTime) {
+			if err := ValidateAppointmentAgainstSchedule(db, doctorID, appointment.AppointmentDateTime); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
 		}
 
 		// Revisar si GORM arroja algún error al guardar en Postgres

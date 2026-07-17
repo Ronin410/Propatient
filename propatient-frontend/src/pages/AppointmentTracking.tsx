@@ -6,6 +6,7 @@ import type { Appointment } from '../types';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useFetchData } from '../hooks/useFetchData';
 import { useAuth } from '../context/AuthContext';
+import { getErrorMessage } from '../utils/errorMessage';
 import './AppointmentTracking.scss';
 
 interface DashboardSummary {
@@ -147,6 +148,7 @@ export const AppointmentTracking: React.FC = () => {
   const [appToReschedule, setAppToReschedule] = useState<Appointment | null>(null);
   const [newDateTime, setNewDateTime] = useState('');
   const [rescheduling, setRescheduling] = useState(false);
+  const [rescheduleError, setRescheduleError] = useState<string | null>(null);
 
   // Convierte un ISO string a formato "YYYY-MM-DDTHH:mm" en hora local,
   // como lo espera un <input type="datetime-local">.
@@ -159,11 +161,13 @@ export const AppointmentTracking: React.FC = () => {
   const handleRescheduleClick = (app: Appointment) => {
     setAppToReschedule(app);
     setNewDateTime(toDatetimeLocalValue(app.appointmentDateTime));
+    setRescheduleError(null);
   };
 
   const handleConfirmReschedule = async () => {
     if (!appToReschedule || !newDateTime) return;
     setRescheduling(true);
+    setRescheduleError(null);
     try {
       await api.put(`/appointments/${appToReschedule.id}`, {
         appointmentDateTime: new Date(newDateTime).toISOString(),
@@ -172,7 +176,7 @@ export const AppointmentTracking: React.FC = () => {
       fetchDashboardData();
     } catch (err) {
       console.error("Error al reprogramar la cita:", err);
-      alert("No se pudo reprogramar la cita. Intenta de nuevo.");
+      setRescheduleError(getErrorMessage(err, 'No se pudo reprogramar la cita. Intenta de nuevo.'));
     } finally {
       setRescheduling(false);
     }
@@ -437,8 +441,13 @@ export const AppointmentTracking: React.FC = () => {
               onChange={(e) => setNewDateTime(e.target.value)}
               style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid var(--border)', marginTop: '8px' }}
             />
+            {rescheduleError && (
+              <p style={{ color: 'var(--color-danger)', fontSize: '0.85rem', marginTop: '8px', marginBottom: 0 }}>
+                {rescheduleError}
+              </p>
+            )}
             <div className="modal-footer">
-              <button className="btn-text" onClick={() => setAppToReschedule(null)} disabled={rescheduling}>Cancelar</button>
+              <button className="btn-text" onClick={() => { setAppToReschedule(null); setRescheduleError(null); }} disabled={rescheduling}>Cancelar</button>
               <button className="btn-primary" onClick={handleConfirmReschedule} disabled={rescheduling || !newDateTime}>
                 {rescheduling ? 'Guardando...' : 'Confirmar Nueva Fecha'}
               </button>

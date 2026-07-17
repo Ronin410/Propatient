@@ -310,6 +310,13 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 					doctorRoutes.POST("/google-calendar/disconnect", handlers.DisconnectGoogleCalendar(db))
 				}
 
+				// Horario laboral del consultorio: a propósito FUERA de
+				// doctorRoutes (sin RequireDoctorRole) — el personal también
+				// necesita poder configurarlo, no es un dato exclusivo del
+				// doctor como su perfil o sus plantillas.
+				gated.GET("/doctor/schedule", handlers.GetDoctorSchedule(db))
+				gated.PUT("/doctor/schedule", handlers.SaveDoctorSchedule(db))
+
 				// Alta/gestión de cuentas de personal: solo el doctor.
 				staffRoutes := gated.Group("/staff")
 				staffRoutes.Use(auth.RequireDoctorRole())

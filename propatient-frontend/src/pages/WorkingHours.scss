@@ -1,0 +1,222 @@
+.working-hours-container {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 10px;
+
+  .working-hours-card {
+    background-color: var(--bg);
+    border-radius: 12px;
+    padding: 2.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+
+    h2 {
+      color: var(--color-heading);
+      font-size: 1.8rem;
+      margin-top: 0;
+      margin-bottom: 0.5rem;
+    }
+
+    .description {
+      color: var(--text);
+      font-size: 0.95rem;
+      line-height: 1.5;
+      margin-bottom: 1.5rem;
+    }
+  }
+}
+
+.working-hours-alert {
+  padding: 0.8rem 1rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+
+  &.error {
+    background: var(--color-danger-bg);
+    color: var(--color-danger);
+  }
+
+  &.success {
+    background: var(--color-success-bg);
+    color: var(--color-success);
+  }
+}
+
+.days-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 2rem;
+
+  .day-row {
+    background-color: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    transition: border-color 0.2s;
+
+    &:not(.disabled) {
+      border-color: var(--color-primary);
+    }
+
+    .day-toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      color: var(--color-heading);
+      cursor: pointer;
+      font-size: 1rem;
+
+      input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--color-primary);
+        cursor: pointer;
+      }
+    }
+
+    .day-body {
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .time-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+
+      label {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--color-secondary);
+      }
+
+      input[type="time"] {
+        padding: 8px 10px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        font-size: 0.9rem;
+        background-color: var(--bg);
+        color: var(--text);
+
+        &:focus {
+          outline: none;
+          border-color: var(--color-primary);
+          box-shadow: 0 0 0 3px rgba(0, 80, 115, 0.15);
+        }
+      }
+    }
+
+    .breaks-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+
+      .break-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+
+        .break-label {
+          font-size: 0.85rem;
+          color: var(--color-secondary);
+        }
+
+        input[type="time"] {
+          padding: 6px 8px;
+          border: 1px solid var(--border);
+          border-radius: 6px;
+          font-size: 0.85rem;
+          background-color: var(--bg);
+          color: var(--text);
+        }
+
+        .btn-remove-break {
+          background: transparent;
+          border: none;
+          color: var(--color-secondary);
+          cursor: pointer;
+          padding: 4px;
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+
+          &:hover {
+            color: var(--color-danger);
+            background-color: var(--color-danger-bg);
+          }
+
+          .material-icons-outlined { font-size: 18px; }
+        }
+      }
+
+      .btn-add-break {
+        align-self: flex-start;
+        background-color: transparent;
+        color: var(--color-primary);
+        border: 1px dashed var(--color-primary);
+        padding: 6px 14px;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.85rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+
+        &:hover {
+          background-color: rgba(0, 80, 115, 0.05);
+        }
+
+        .material-icons-outlined { font-size: 16px; }
+      }
+    }
+  }
+}
+
+.working-hours-actions {
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid var(--border);
+  padding-top: 1.5rem;
+
+  .btn-save-main {
+    background-color: var(--color-primary);
+    color: #ffffff;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 80, 115, 0.2);
+    transition: background 0.2s;
+
+    &:hover:not(:disabled) {
+      background-color: var(--color-primary-dark);
+    }
+
+    &:disabled {
+      background-color: var(--color-secondary);
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+  }
+}
+
+.working-hours-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 50vh;
+  font-size: 1.1rem;
+  color: var(--color-heading);
+  font-weight: 500;
+}

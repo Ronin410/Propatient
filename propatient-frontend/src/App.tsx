@@ -40,6 +40,7 @@ import { DoctorProfile } from './pages/DoctorProfile';
 import { SettingsNotes } from './pages/SettingsNotes';
 import { StaffManagement } from './pages/StaffManagement';
 import { BillingPage } from './pages/BillingPage';
+import { WorkingHours } from './pages/WorkingHours';
 // Componente para proteger rutas privadas básicas
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated } = useAuth();
@@ -148,6 +149,10 @@ function App() {
               <Route path="pacientes/editar/:id" element={<PatientForm />} />
               <Route path="calendar" element={<AppointmentCalendar />} />
               <Route path="appointments/new" element={<AppointmentForm />} />
+              {/* Accesible también para personal: el horario laboral es una
+                  herramienta operativa del día a día, no un dato exclusivo
+                  del doctor (ver internal/handlers/schedule_handler.go). */}
+              <Route path="horario" element={<WorkingHours />} />
               {/* Historial clínico, contenido de consultas y configuración del
                   doctor: el backend ya las bloquea para personal, aquí solo
                   evitamos que lleguen a una pantalla que va a fallar. */}

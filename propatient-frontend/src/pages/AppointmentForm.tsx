@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import api from '../api/axios';
 import type { Patient } from '../types';
@@ -317,6 +317,10 @@ export const AppointmentForm: React.FC = () => {
                 min={minDateTime}
                 required
               />
+              <span className="field-hint">
+                Solo se puede agendar dentro del{' '}
+                <Link to="/horario">horario de atención configurado</Link>.
+              </span>
             </div>
 
             <div className="form-group">

@@ -244,3 +244,21 @@ type DoctorTemplate struct {
 	DoctorID  uint           `json:"doctorId" gorm:"uniqueIndex;not null"`
 	Fields    datatypes.JSON `json:"fields" gorm:"type:jsonb;not null"` // Guarda el array de apartados configurados
 }
+
+// DoctorSchedule guarda el horario laboral configurable del consultorio:
+// qué días atiende, de qué hora a qué hora, y descansos que excluir dentro
+// de esa ventana (ej. "de 2 a 3 no trabajo"). Lo puede editar tanto el
+// doctor como su personal (ver internal/handlers/schedule_handler.go, sin
+// RequireDoctorRole) — a diferencia de la plantilla de notas o el perfil,
+// que son solo del doctor. "Days" guarda un objeto JSON con una entrada
+// por día de la semana (ver weekSchedule en schedule_handler.go). Si un
+// doctor nunca configura su horario, no existe fila y no hay ninguna
+// restricción al agendar — mismo criterio de "opcional, no rompe nada
+// existente" que el resto de las integraciones de esta app.
+type DoctorSchedule struct {
+	ID        uint           `gorm:"primaryKey" json:"id"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DoctorID  uint           `json:"doctorId" gorm:"uniqueIndex;not null"`
+	Days      datatypes.JSON `json:"days" gorm:"type:jsonb;not null"`
+}

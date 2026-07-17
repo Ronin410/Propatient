@@ -121,6 +121,34 @@
   }
 }
 
+.public-profile-schedule {
+  text-align: left;
+  margin-bottom: 1.2rem;
+  background: var(--bg-subtle);
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+
+  h3 {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--color-heading);
+    margin: 0 0 0.4rem 0;
+
+    .material-icons-outlined { font-size: 18px; color: var(--color-primary); }
+  }
+
+  ul {
+    margin: 0;
+    padding-left: 1.4rem;
+    color: var(--text);
+    font-size: 0.85rem;
+    line-height: 1.6;
+  }
+}
+
 .public-profile-map {
   height: 220px;
   border-radius: 12px;

@@ -9,6 +9,39 @@ export interface PublicDoctor {
   latitude: number | null;
   longitude: number | null;
   publicSlug: string;
+  // Horario laboral configurado (ver WeekSchedule) — null si el doctor
+  // nunca lo configuró, en cuyo caso no hay ninguna restricción al agendar.
+  schedule?: WeekSchedule | null;
+}
+
+// Un bloque de horas en formato "HH:MM" (24h) — la ventana laboral de un
+// día, o un descanso dentro de ella (ver DayHours).
+export interface TimeRange {
+  start: string;
+  end: string;
+}
+
+// El horario de un solo día de la semana: si el doctor atiende ese día,
+// su ventana laboral, y los descansos a excluir dentro de ella (ej. "de 2
+// a 3 no trabajo"). Espejo exacto de dayHours en el backend
+// (internal/handlers/schedule_handler.go).
+export interface DayHours {
+  enabled: boolean;
+  start: string;
+  end: string;
+  breaks: TimeRange[];
+}
+
+// El horario completo del consultorio, un DayHours por cada día de la
+// semana — así se guarda y se agenda (ver DoctorSchedule en el backend).
+export interface WeekSchedule {
+  sunday: DayHours;
+  monday: DayHours;
+  tuesday: DayHours;
+  wednesday: DayHours;
+  thursday: DayHours;
+  friday: DayHours;
+  saturday: DayHours;
 }
 
 export interface Staff {

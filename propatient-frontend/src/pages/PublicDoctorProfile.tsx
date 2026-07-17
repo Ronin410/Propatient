@@ -10,9 +10,34 @@ import api from '../api/axios';
 import { toAbsoluteFileUrl } from '../utils/fileUrl';
 import { getErrorMessage } from '../utils/errorMessage';
 import { sanitizePhoneInput } from '../utils/phoneInput';
-import type { PublicDoctor } from '../types';
+import type { PublicDoctor, WeekSchedule } from '../types';
 import { Footer } from '../components/Footer';
 import './PublicDoctorProfile.scss';
+
+const DAY_ORDER: (keyof WeekSchedule)[] = [
+  'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+];
+const DAY_LABELS: Record<keyof WeekSchedule, string> = {
+  monday: 'Lunes', tuesday: 'Martes', wednesday: 'Miércoles', thursday: 'Jueves',
+  friday: 'Viernes', saturday: 'Sábado', sunday: 'Domingo',
+};
+
+// Líneas legibles del horario configurado, ej. "Lunes: 06:00 - 19:00
+// (descanso 14:00-15:00)" — solo los días habilitados, en el orden usual
+// de la semana en México (lunes primero).
+function formatScheduleLines(schedule: WeekSchedule | null | undefined): string[] {
+  if (!schedule) return [];
+  return DAY_ORDER
+    .filter((day) => schedule[day]?.enabled)
+    .map((day) => {
+      const d = schedule[day];
+      const breaks = d.breaks || [];
+      const breaksText = breaks.length
+        ? ` (descanso ${breaks.map((b) => `${b.start}-${b.end}`).join(', ')})`
+        : '';
+      return `${DAY_LABELS[day]}: ${d.start} - ${d.end}${breaksText}`;
+    });
+}
 
 const defaultIcon = L.icon({
   iconUrl: markerIcon,
@@ -159,6 +184,19 @@ export const PublicDoctorProfile: React.FC = () => {
               </div>
             )}
           </div>
+
+          {formatScheduleLines(doctor.schedule).length > 0 && (
+            <div className="public-profile-schedule">
+              <h3>
+                <span className="material-icons-outlined">schedule</span> Horario de atención
+              </h3>
+              <ul>
+                {formatScheduleLines(doctor.schedule).map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {hasLocation && (
             <div className="public-profile-map">
