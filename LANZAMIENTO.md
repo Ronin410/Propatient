@@ -265,8 +265,7 @@ dejarlo aquí porque varias piezas técnicas ya están listas para soportarla:
 - Directorio público con mapa (`/doctores`).
 
 **Falta decidir/hacer (no es código):**
-- Dar de alta `https://propatient.pro/sitemap.xml` en Google Search Console
-  (dominio ya conectado, solo falta registrarlo — 5 minutos).
+- ~~Dar de alta `https://propatient.pro/sitemap.xml` en Google Search Console~~ ✅ resuelto — dominio verificado y sitemap enviado.
 - Crear un **Google Business Profile** por consultorio piloto — mejora
   mucho el posicionamiento local en México y es gratis.
 - Elegir el canal de adquisición inicial para los primeros consultorios
@@ -297,6 +296,6 @@ dejarlo aquí porque varias piezas técnicas ya están listas para soportarla:
 - [x] CI automatizado ✅
 - [ ] `RECAPTCHA_SECRET_KEY` / `VITE_RECAPTCHA_SITE_KEY` (código ya listo, ver sección 1.6)
 - [ ] `SENTRY_DSN` / `VITE_SENTRY_DSN` (código ya listo, ver sección 1.7)
-- [ ] Sitemap dado de alta en Google Search Console
+- [x] Sitemap dado de alta en Google Search Console ✅
 - [ ] Google Business Profile del/los consultorio(s) piloto
 - [ ] Canal de adquisición inicial decidido (Ads / redes / alianzas)
