@@ -209,6 +209,12 @@ type publicAppointmentRequest struct {
 	PatientLastName     string    `json:"patientLastName" binding:"required"`
 	PatientPhone        string    `json:"patientPhone" binding:"required"`
 	PatientEmail        string    `json:"patientEmail" binding:"required,email"`
+	// El paciente debe aceptar explícitamente el tratamiento de sus datos de
+	// salud (dato personal sensible bajo la LFPDPPP) antes de poder agendar
+	// sin cuenta — se valida a mano abajo (no con `binding:"required"`) para
+	// poder devolver un mensaje en español en vez del error genérico de
+	// validación de Gin.
+	DataConsent bool `json:"dataConsent"`
 }
 
 // CreatePublicAppointment permite a cualquier persona (sin cuenta) solicitar
@@ -221,6 +227,10 @@ func CreatePublicAppointment(db *gorm.DB, waClient whatsapp.Client) gin.HandlerF
 		var req publicAppointmentRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if !req.DataConsent {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Debes aceptar el tratamiento de tus datos de salud para poder agendar la cita."})
 			return
 		}
 

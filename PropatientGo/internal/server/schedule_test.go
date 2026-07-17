@@ -226,7 +226,7 @@ func TestPublicAppointment_BlockedOutsideWorkingHours(t *testing.T) {
 		"doctorId":            doc.ID,
 		"appointmentDateTime": "2026-07-25T17:00:00Z", // sábado, deshabilitado
 		"patientFirstName":    "Paciente", "patientLastName": "Publico",
-		"patientPhone": "5512345678", "patientEmail": "publico_bloqueado@test.local",
+		"patientPhone": "5512345678", "patientEmail": "publico_bloqueado@test.local", "dataConsent": true,
 	})
 	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 
@@ -234,7 +234,7 @@ func TestPublicAppointment_BlockedOutsideWorkingHours(t *testing.T) {
 		"doctorId":            doc.ID,
 		"appointmentDateTime": "2026-07-20T17:00:00Z", // lunes 10:00 local, válido
 		"patientFirstName":    "Paciente", "patientLastName": "Publico",
-		"patientPhone": "5512345678", "patientEmail": "publico_valido@test.local",
+		"patientPhone": "5512345678", "patientEmail": "publico_valido@test.local", "dataConsent": true,
 	})
 	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 }

@@ -68,6 +68,7 @@ interface BookingForm {
   patientLastName: string;
   patientPhone: string;
   patientEmail: string;
+  dataConsent: boolean;
 }
 
 const EMPTY_FORM: BookingForm = {
@@ -77,6 +78,7 @@ const EMPTY_FORM: BookingForm = {
   patientLastName: '',
   patientPhone: '',
   patientEmail: '',
+  dataConsent: false,
 };
 
 // Formato mínimo aceptado por <input type="datetime-local">: no se puede
@@ -112,9 +114,17 @@ export const PublicDoctorProfile: React.FC = () => {
     setForm((prev) => ({ ...prev, [name]: name === 'patientPhone' ? sanitizePhoneInput(value) : value }));
   };
 
+  const handleConsentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setForm((prev) => ({ ...prev, dataConsent: e.target.checked }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!doctor) return;
+    if (!form.dataConsent) {
+      setSubmitError('Debes aceptar el tratamiento de tus datos de salud para poder agendar la cita.');
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -126,6 +136,7 @@ export const PublicDoctorProfile: React.FC = () => {
         patientLastName: form.patientLastName,
         patientPhone: form.patientPhone,
         patientEmail: form.patientEmail,
+        dataConsent: form.dataConsent,
       });
       setSubmitted(true);
     } catch (err) {
@@ -303,6 +314,15 @@ export const PublicDoctorProfile: React.FC = () => {
                   <label>Motivo de la consulta (opcional)</label>
                   <textarea name="reason" value={form.reason} onChange={handleChange} rows={3} />
                 </div>
+
+                <label className="consent-checkbox">
+                  <input type="checkbox" checked={form.dataConsent} onChange={handleConsentChange} required />
+                  <span>
+                    Acepto que mis datos personales y de salud sean tratados conforme al{' '}
+                    <Link to="/privacidad" target="_blank" rel="noopener noreferrer">Aviso de Privacidad</Link>{' '}
+                    para agendar y dar seguimiento a esta cita.
+                  </span>
+                </label>
 
                 <button type="submit" className="btn-primary-lg" disabled={submitting}>
                   {submitting ? 'Enviando solicitud...' : 'Solicitar cita'}

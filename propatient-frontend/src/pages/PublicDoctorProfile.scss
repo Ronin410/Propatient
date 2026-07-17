@@ -230,6 +230,24 @@
     }
   }
 
+  .consent-checkbox {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    font-size: 0.8rem;
+    color: var(--color-secondary);
+    line-height: 1.5;
+    cursor: pointer;
+
+    input[type="checkbox"] {
+      margin-top: 0.15rem;
+      flex-shrink: 0;
+      width: auto;
+    }
+
+    a { color: var(--color-primary); font-weight: 600; }
+  }
+
   .btn-primary-lg {
     background: var(--color-primary);
     color: #ffffff;

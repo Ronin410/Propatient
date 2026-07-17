@@ -116,6 +116,7 @@ func TestPublicAppointment_FullLifecycle(t *testing.T) {
 		"patientLastName":     "Ramírez",
 		"patientPhone":        "5551234567",
 		"patientEmail":        "carlos.publico@test.local",
+		"dataConsent":         true,
 	})
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 
@@ -164,6 +165,7 @@ func TestPublicAppointment_RejectsDoctorNotListed(t *testing.T) {
 		"patientLastName":     "López",
 		"patientPhone":        "5559876543",
 		"patientEmail":        "ana.publico@test.local",
+		"dataConsent":         true,
 	})
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
@@ -191,6 +193,7 @@ func TestPublicAppointment_HiddenFromCalendarAndTodaySummaryBeforeConfirmation(t
 		"patientLastName":     "Solís",
 		"patientPhone":        "5550001111",
 		"patientEmail":        "mario.hidden@test.local",
+		"dataConsent":         true,
 	})
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 
@@ -260,6 +263,7 @@ func TestPublicAppointment_DedupesPatientByPhoneWhenAlreadyDoctorsPatient(t *tes
 		"patientLastName":     "Ramírez",
 		"patientPhone":        "5557778888",
 		"patientEmail":        "lucia.nuevo-correo@test.local",
+		"dataConsent":         true,
 	})
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 
@@ -292,6 +296,7 @@ func TestPublicAppointment_DedupesPatientByEmail(t *testing.T) {
 		"patientLastName":     "Torres",
 		"patientPhone":        "5551112222",
 		"patientEmail":        "luis.dedupe@test.local",
+		"dataConsent":         true,
 	}
 
 	w := doRequest(t, router, http.MethodPost, "/api/public/appointments", "", body)
@@ -304,4 +309,43 @@ func TestPublicAppointment_DedupesPatientByEmail(t *testing.T) {
 	var count int64
 	db.Model(&models.Patient{}).Where("email = ?", "luis.dedupe@test.local").Count(&count)
 	assert.Equal(t, int64(1), count, "no debe crear un paciente duplicado en la segunda solicitud")
+}
+
+// TestPublicAppointment_RequiresDataConsent cubre el consentimiento
+// obligatorio de tratamiento de datos de salud: sin dataConsent=true, la
+// solicitud se rechaza y no debe crear ni cita ni paciente.
+func TestPublicAppointment_RequiresDataConsent(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), nil)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_consent_required", "password123")
+	require.NoError(t, db.Model(&doc).Updates(map[string]any{"public_listed": true, "public_slug": "dr-consent-1"}).Error)
+
+	baseBody := map[string]any{
+		"doctorId":            doc.ID,
+		"appointmentDateTime": "2026-09-01T10:00:00Z",
+		"patientFirstName":    "Sin",
+		"patientLastName":     "Consentimiento",
+		"patientPhone":        "5550009999",
+		"patientEmail":        "sin.consentimiento@test.local",
+	}
+
+	// Campo ausente.
+	w := doRequest(t, router, http.MethodPost, "/api/public/appointments", "", baseBody)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	// Explícitamente en false.
+	baseBody["dataConsent"] = false
+	w = doRequest(t, router, http.MethodPost, "/api/public/appointments", "", baseBody)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var count int64
+	db.Model(&models.Appointment{}).Count(&count)
+	assert.Equal(t, int64(0), count, "no debe crear ninguna cita sin el consentimiento aceptado")
+
+	// Con dataConsent=true sí debe funcionar.
+	baseBody["dataConsent"] = true
+	w = doRequest(t, router, http.MethodPost, "/api/public/appointments", "", baseBody)
+	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 }

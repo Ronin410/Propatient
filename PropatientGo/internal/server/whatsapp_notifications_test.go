@@ -39,6 +39,7 @@ func TestPublicAppointment_NotifiesPatientAndDoctorByWhatsApp(t *testing.T) {
 		"patientLastName":     "Nuñez",
 		"patientPhone":        "5551237890",
 		"patientEmail":        "sofia.wa@test.local",
+		"dataConsent":         true,
 	})
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 
@@ -67,6 +68,7 @@ func TestConfirmAppointment_NotifiesPatientByWhatsApp(t *testing.T) {
 		"patientLastName":     "Castro",
 		"patientPhone":        "5559990000",
 		"patientEmail":        "ivan.wa@test.local",
+		"dataConsent":         true,
 	})
 	require.Equal(t, http.StatusCreated, w.Code)
 
@@ -109,6 +111,7 @@ func TestCancelAppointment_NotifiesPatientOnlyWhenRejectingOnlineRequest(t *test
 		"patientLastName":     "Prueba",
 		"patientPhone":        "5551110001",
 		"patientEmail":        "rechazado.wa@test.local",
+		"dataConsent":         true,
 	})
 	require.Equal(t, http.StatusCreated, w.Code)
 
