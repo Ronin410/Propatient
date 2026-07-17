@@ -27,7 +27,13 @@ func TestConsultorioStats(t *testing.T) {
 	patientID := int(decodeJSON(t, w)["id"].(float64))
 
 	now := time.Now().UTC()
-	thisMonth := time.Date(now.Year(), now.Month(), 15, 10, 0, 0, 0, time.UTC).Format(time.RFC3339)
+	// Antes esto usaba un día fijo (15) del mes actual, lo que rompía el
+	// test en cuanto se corría después del día 15: esa fecha quedaba en el
+	// pasado y dejaba de contar como "upcomingAppointments" (que exige
+	// appointment_date_time >= now, ver GetConsultorioStats). Usar "dentro
+	// de un par de horas" garantiza que siempre esté en el futuro y,
+	// prácticamente siempre, dentro del mismo mes calendario.
+	thisMonth := now.Add(2 * time.Hour).Format(time.RFC3339)
 
 	// Una cita agendada este mes (se queda PENDING).
 	w = doRequest(t, router, http.MethodPost, "/api/appointments", token, map[string]any{

@@ -1,8 +1,8 @@
 package handlers
 
 import (
-	"net/http"
 	"github.com/gin-gonic/gin"
+	"net/http"
 )
 
 // GetSpecialties devuelve una lista estática de especialidades médicas

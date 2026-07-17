@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend (Go)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: propatient_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        working-directory: PropatientGo
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: PropatientGo/go.mod
+
+      - name: Descargar dependencias
+        run: go mod download
+
+      - name: gofmt (verifica formato, no reescribe)
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "Archivos sin formatear (correr 'gofmt -w'):"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go build
+        run: go build ./...
+
+      - name: go test
+        env:
+          TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/propatient_test?sslmode=disable
+          JWT_SECRET: ci-test-secret-not-for-production
+        run: go test ./...
+
+  frontend:
+    name: Frontend (React)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: propatient-frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: propatient-frontend/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      # OJO: "npm run build" (tsc -b && vite build) fallaría hoy — hay ~6
+      # errores de TypeScript preexistentes en el repo (variables sin usar,
+      # un tipo `google` sin declarar de Google Identity Services, una
+      # propiedad mal escrita en DoctorProfile.tsx), ninguno relacionado con
+      # trabajo reciente. Corre solo "vite build" (transpila con esbuild,
+      # sin type-check estricto) para no bloquear CI con deuda ya
+      # existente. Cuando se limpien esos errores, cambiar esto a
+      # "npm run build" para recuperar el type-check completo en CI.
+      - name: Build
+        run: npx vite build
+
+      - name: Tests
+        run: npx vitest run
