@@ -9,6 +9,7 @@ import 'leaflet/dist/leaflet.css';
 import api from '../api/axios';
 import { toAbsoluteFileUrl } from '../utils/fileUrl';
 import { getErrorMessage } from '../utils/errorMessage';
+import { sanitizePhoneInput } from '../utils/phoneInput';
 import type { PublicDoctor } from '../types';
 import { Footer } from '../components/Footer';
 import './PublicDoctorProfile.scss';
@@ -71,7 +72,7 @@ export const PublicDoctorProfile: React.FC = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    setForm((prev) => ({ ...prev, [name]: name === 'patientPhone' ? sanitizePhoneInput(value) : value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

@@ -6,6 +6,7 @@ import type { Patient } from '../types';
 import { Popup } from '../components/Popup'; // Asegura la ruta correcta de tu componente genérico
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { getErrorMessage } from '../utils/errorMessage';
+import { sanitizePhoneInput } from '../utils/phoneInput';
 import './AppointmentForm.scss';
 
 interface DuplicatePatient {
@@ -286,7 +287,7 @@ export const AppointmentForm: React.FC = () => {
                 <input
                   type="tel"
                   value={newPatient.phone}
-                  onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })}
+                  onChange={(e) => setNewPatient({ ...newPatient, phone: sanitizePhoneInput(e.target.value) })}
                 />
               </div>
               <div className="form-group">

@@ -5,6 +5,7 @@ import { Popup } from '../components/Popup';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { getErrorMessage } from '../utils/errorMessage';
 import { toAbsoluteFileUrl } from '../utils/fileUrl';
+import { sanitizePhoneInput } from '../utils/phoneInput';
 import { LocationPicker } from '../components/LocationPicker';
 import { useAuth } from '../context/AuthContext';
 
@@ -249,7 +250,7 @@ export const DoctorProfile = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setProfile(prev => ({ ...prev, [name]: value }));
+    setProfile(prev => ({ ...prev, [name]: name === 'phone' ? sanitizePhoneInput(value) : value }));
   };
 
   const handlePublicListedChange = (e: React.ChangeEvent<HTMLInputElement>) => {

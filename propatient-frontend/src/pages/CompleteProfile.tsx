@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { AuthLayout } from './AuthLayout';
 import { getErrorMessage } from '../utils/errorMessage';
+import { sanitizePhoneInput } from '../utils/phoneInput';
 import { LocationPicker } from '../components/LocationPicker';
 
 export const CompleteProfile = () => {
@@ -32,7 +33,8 @@ export const CompleteProfile = () => {
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: name === 'phone' ? sanitizePhoneInput(value) : value });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

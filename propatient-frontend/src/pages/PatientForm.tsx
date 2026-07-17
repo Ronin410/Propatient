@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import api from '../api/axios';
 import { formatToLocalDate } from '../utils/dateFormatter';
+import { sanitizePhoneInput } from '../utils/phoneInput';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import './PatientForm.scss';
 
@@ -132,11 +133,11 @@ export const PatientForm: React.FC = () => {
         <div className="form-row">
           <div className="form-group">
             <label>Teléfono</label>
-            <input 
-              type="tel" 
-              value={formData.phone} 
-              onChange={e => setFormData({...formData, phone: e.target.value})} 
-              required 
+            <input
+              type="tel"
+              value={formData.phone}
+              onChange={e => setFormData({...formData, phone: sanitizePhoneInput(e.target.value)})}
+              required
             />
           </div>
           <div className="form-group">

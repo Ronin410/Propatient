@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import './ConsultationManager.scss';
 import { useConsultation, type AppointmentFile } from '../hooks/useConsultation';
 import { toAbsoluteFileUrl } from '../utils/fileUrl';
+import { sanitizePhoneInput } from '../utils/phoneInput';
 
 type FormSection = 'generalData' | 'medicalHistory';
 
@@ -205,7 +206,7 @@ export const ConsultationManager: React.FC = () => {
                     <input
                       type="tel"
                       value={patientForm.phone}
-                      onChange={e => setPatientFormData({...patientForm, phone: e.target.value})}
+                      onChange={e => setPatientFormData({...patientForm, phone: sanitizePhoneInput(e.target.value)})}
                     />
                   </div>
                   <div className="form-group">
