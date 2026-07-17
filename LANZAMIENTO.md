@@ -46,24 +46,12 @@ los perdería en el primer redeploy. Configura S3 (o el proveedor
 equivalente que prefieras) **antes** de tener documentos clínicos reales
 que te importe conservar.
 
-### 1.3 Correo (Resend)
+### 1.3 Correo (Resend) — ✅ resuelto
 
-| Variable | Qué es |
-|---|---|
-| `RESEND_API_KEY` | API key de tu cuenta de [resend.com](https://resend.com) |
-| `RESEND_FROM_EMAIL` | ej. `ProPatient <notificaciones@tudominio.com>` |
-
-**Por qué es crítico:** sin `RESEND_FROM_EMAIL`, el remitente cae al
-default `onboarding@resend.dev`, que **por diseño de Resend solo entrega
-correos a la cuenta dueña de la API key** — nunca le llegará nada a un
-paciente o doctor real. Pasos:
-1. En Resend, agrega tu dominio (Domains → Add Domain).
-2. Agrega los registros DNS que te da Resend (SPF/DKIM) en tu proveedor de
-   dominio.
-3. Espera a que el dominio quede "Verified" (puede tardar unos minutos a
-   unas horas según el proveedor de DNS).
-4. Usa `notificaciones@tudominio.com` (o el que prefieras de ese dominio)
-   en `RESEND_FROM_EMAIL`.
+Dominio `propatient.pro` verificado en Resend (DKIM/MX/SPF/DMARC en
+Porkbun) y `RESEND_FROM_EMAIL` configurado con `notificaciones@propatient.pro`
+— confirmado con un correo real recibido de punta a punta. No requiere más
+trabajo.
 
 ### 1.4 WhatsApp (Twilio)
 
@@ -127,31 +115,11 @@ solo para desarrollo local (docker-compose ya la activa ahí por defecto).
   Google, y todos los demás ven una advertencia de "app no verificada".
   Para producción real, hay que pasar el proyecto a "In production"
   (Google puede pedir una revisión si usas scopes sensibles).
-- **Dominio propio**: se compró **`propatient.pro`** en Porkbun. Falta
-  conectarlo:
-  1. En Render → cada servicio (`propatient-frontend` y, si quieres un
-     subdominio para la API, también `propatient-api`) → **Settings →
-     Custom Domains** → agrega `propatient.pro` (y `www.propatient.pro` si
-     lo quieres) al frontend, y algo como `api.propatient.pro` al backend.
-  2. Render te da los registros DNS exactos a crear (normalmente un `A`/`ALIAS`
-     para el dominio raíz y un `CNAME` para subdominios). Cópialos.
-  3. En Porkbun → tu dominio → **DNS Records** → agrega esos registros
-     exactamente como Render los pide.
-  4. Espera a que el DNS propague (minutos a un par de horas) y a que
-     Render marque el dominio como verificado con SSL emitido automáticamente.
-  5. Actualiza `FRONTEND_URL` (en `propatient-api`) y `VITE_API_URL` (en
-     `propatient-frontend`) para que usen `propatient.pro`/`api.propatient.pro`
-     en vez de las URLs `*.onrender.com`, y vuelve a desplegar ambos.
-  6. Agrega `https://propatient.pro` a los "Authorized JavaScript origins"
-     del OAuth Client ID en Google Cloud Console (si no lo agregas, el login
-     con Google se rompe en el dominio nuevo).
-  7. Si usas Google Calendar, actualiza también `GOOGLE_CALENDAR_REDIRECT_URI`
-     al nuevo dominio, tanto en Render como en el "Authorized redirect URIs"
-     de ESE Client ID en Google Cloud Console.
-
-  El código del frontend (`sitemap.xml`, `robots.txt`, `og:url`) ya está
-  actualizado con `propatient.pro` — no necesita más cambios de tu parte,
-  solo la conexión de DNS de los pasos de arriba.
+- **Dominio propio — ✅ resuelto**: `propatient.pro` conectado en Render
+  (frontend en la raíz + `www`, backend en `api.propatient.pro`), DNS en
+  Porkbun, SSL emitido, `FRONTEND_URL`/`VITE_API_URL` actualizados, y
+  `https://propatient.pro` agregado a los orígenes autorizados de Google
+  OAuth. Confirmado funcionando en producción.
 - **Confirma que la base de datos no siga en el plan "free" de Render** si
   vas a depender de estos datos en serio: el plan free de Postgres en
   Render tiene almacenamiento limitado y (verifica en tu dashboard) puede
@@ -185,6 +153,15 @@ frontend reales, con tests automatizados):
 - Cobro de suscripción con Stripe (checkout, portal de cliente, webhooks)
   completamente implementado — solo falta la configuración de la sección
   1.5 de arriba.
+- Cierre automático nocturno de citas vencidas a "No asistió" (corregido:
+  antes dejaba de correr en producción por el modelo de sleep de Render).
+- Vista de mes del calendario menos amontonada (máximo 3 citas por día +
+  detalle del día completo al seleccionarlo).
+- Personal (staff) compartido entre varios doctores/consultorios — una
+  misma cuenta puede administrar la agenda de varias clínicas con un solo
+  login, eligiendo con cuál consultorio entrar cuando aplica.
+- Dominio propio `propatient.pro` y correo con dominio verificado (ver
+  arriba).
 
 ---
 
@@ -207,8 +184,8 @@ frontend reales, con tests automatizados):
   bugs en producción si el usuario te manda una captura del log de Render.
 - **reCAPTCHA/hCaptcha** en el formulario de cita pública, además del rate
   limiting ya implementado, si empiezas a ver spam de citas falsas.
-- Una vez conectado `propatient.pro` (ver sección 2), enviar el sitemap
-  (`https://propatient.pro/sitemap.xml`) a Google Search Console.
+- Enviar el sitemap (`https://propatient.pro/sitemap.xml`) a Google Search
+  Console — el dominio ya está conectado, solo falta darlo de alta ahí.
 - **Confirmar que la contraseña de Gmail filtrada** siga revocada (ya lo
   hiciste) y considerar reescribir el historial de git si en algún momento
   el repo se vuelve público.
@@ -219,13 +196,13 @@ frontend reales, con tests automatizados):
 
 - [ ] `SUPERADMIN_USERNAME` / `SUPERADMIN_PASSWORD`
 - [ ] `AWS_S3_BUCKET` / `AWS_REGION` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`
-- [ ] `RESEND_API_KEY` / `RESEND_FROM_EMAIL` (dominio verificado)
+- [x] `RESEND_API_KEY` / `RESEND_FROM_EMAIL` (dominio verificado) ✅
 - [ ] `TWILIO_*` con número de WhatsApp Business real (no sandbox)
 - [ ] `STRIPE_*` en modo Live (no Test)
 - [ ] Verificar `JWT_SECRET`, `FRONTEND_URL`, `VITE_API_URL`
 - [ ] Google OAuth fuera de modo "Testing"
-- [ ] Conectar `propatient.pro` en Render (DNS en Porkbun) y actualizar
-      `FRONTEND_URL`/`VITE_API_URL`/Google OAuth con el dominio nuevo
+- [x] Conectar `propatient.pro` en Render (DNS en Porkbun) y actualizar
+      `FRONTEND_URL`/`VITE_API_URL`/Google OAuth con el dominio nuevo ✅
 - [ ] Base de datos y backend fuera del plan free de Render
 - [ ] Revisión legal de Privacidad/Términos
 - [ ] CFDI/facturación fiscal (si aplica)
