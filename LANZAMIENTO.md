@@ -28,7 +28,7 @@ Sin esto, `/admin/login` existe pero no hay ninguna cuenta con la que
 entrar — sigues sin poder aprobar doctores nuevos. Se crea automáticamente
 la primera vez que el backend arranca con estas dos variables definidas.
 
-### 1.2 Almacenamiento de archivos (⚠️ crítico, fácil de pasar por alto)
+### 1.2 Almacenamiento de archivos — ✅ resuelto
 
 | Variable | Qué es |
 |---|---|
@@ -43,9 +43,11 @@ galería del perfil público** se guardan en el disco local del contenedor.
 **El filesystem de un servicio web de Render NO es persistente** — cada vez
 que redespliegas (cada `git push`, cada reinicio), esos archivos
 desaparecen. Un consultorio real subiendo estudios/recetas/fotos las
-perdería en el primer redeploy. Configura S3 (o el proveedor equivalente
-que prefieras) **antes** de tener documentos clínicos o fotos reales que te
-importe conservar.
+perdería en el primer redeploy. **Ya está configurado en Render** — para
+confirmar que quedó bien: sube una foto de galería o el avatar del doctor,
+haz un redeploy (o espera a que el servicio se reinicie por inactividad si
+está en plan free), y verifica que la foto siga apareciendo — si
+desapareció, todavía está guardando en disco local en vez de S3.
 
 ### 1.3 Correo (Resend) — ✅ resuelto
 
@@ -236,7 +238,7 @@ dejarlo aquí porque varias piezas técnicas ya están listas para soportarla:
 ## Checklist rápido para marcar conforme avances
 
 - [ ] `SUPERADMIN_USERNAME` / `SUPERADMIN_PASSWORD`
-- [ ] `AWS_S3_BUCKET` / `AWS_REGION` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`
+- [x] `AWS_S3_BUCKET` / `AWS_REGION` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` ✅
 - [x] `RESEND_API_KEY` / `RESEND_FROM_EMAIL` (dominio verificado) ✅
 - [ ] `TWILIO_*` con número de WhatsApp Business real (no sandbox)
 - [ ] `STRIPE_*` en modo Live (no Test)
