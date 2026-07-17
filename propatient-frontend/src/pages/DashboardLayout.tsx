@@ -3,6 +3,7 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Footer } from '../components/Footer';
+import api from '../api/axios';
 import './DashboardLayout.scss';
 
 interface DashboardLayoutProps {
@@ -14,19 +15,37 @@ interface DashboardLayoutProps {
 }
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
-  const { logout, isStaff, doctorName: sessionDoctorName } = useAuth();
+  const { logout, isStaff, doctorName: sessionDoctorName, setDoctorName } = useAuth();
   const { resolvedTheme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // Nombre dinámico del contexto (login/loginStaff/Perfil lo actualizan ahí,
-  // ver AuthContext) — usar el contexto en vez de leer localStorage directo
-  // aquí es lo que hace que un cambio de nombre en el Perfil se refleje de
-  // inmediato en el sidebar sin recargar la página. El genérico de abajo
-  // solo se ve en el instante entre iniciar sesión y que la respuesta se
-  // procese, o si algo quedó sin guardarse — nunca debe mostrar el nombre
-  // de una persona real como si fuera un valor por defecto del sistema.
+  // Autocompletar el nombre si la sesión ya estaba abierta antes de que
+  // login()/Perfil empezaran a guardarlo (o si por lo que sea nunca se
+  // guardó) — sin este fallback, una sesión vieja se queda mostrando el
+  // genérico "Doctor" para siempre, porque login() solo corre una vez, al
+  // iniciar sesión. Solo aplica al doctor: el personal ya lo recibe
+  // siempre en loginStaff() al iniciar sesión.
+  useEffect(() => {
+    if (isStaff || sessionDoctorName) return;
+    api.get('/doctor/me')
+      .then((res) => {
+        if (res.data?.fullName) setDoctorName(res.data.fullName);
+      })
+      .catch(() => {
+        // Sin permiso (personal, suscripción vencida) o sin red: se queda
+        // con el genérico, no hay nada más que intentar aquí.
+      });
+  }, [isStaff, sessionDoctorName, setDoctorName]);
+
+  // Nombre dinámico del contexto (login/loginStaff/Perfil/el autocompletado
+  // de arriba lo actualizan ahí, ver AuthContext) — usar el contexto en vez
+  // de leer localStorage directo aquí es lo que hace que un cambio de
+  // nombre en el Perfil se refleje de inmediato en el sidebar sin recargar
+  // la página. El genérico de abajo solo se ve mientras carga o si de
+  // plano no se pudo obtener — nunca debe mostrar el nombre de una persona
+  // real como si fuera un valor por defecto del sistema.
   const doctorName = sessionDoctorName || 'Doctor';
   const initialLetter = doctorName.replace('Dr. ', '').charAt(0).toUpperCase();
 
