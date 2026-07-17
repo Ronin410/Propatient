@@ -44,6 +44,10 @@ func NewRouter(db *gorm.DB) *gin.Engine {
 	if err != nil {
 		log.Printf("⚠️ No se pudo inicializar el almacenamiento en S3, usando disco local: %v", err)
 		storageClient, _ = storage.NewClient(context.Background(), storage.Config{})
+	} else if storageConfig.IsConfigured() {
+		log.Printf("✅ Almacenamiento en S3 configurado — bucket %q, región %q.", storageConfig.Bucket, storageConfig.Region)
+	} else {
+		log.Println("⚠️ Almacenamiento en S3 NO configurado — faltan AWS_S3_BUCKET/AWS_REGION. Los archivos se están guardando en el disco local del contenedor (se pierden en cada redeploy).")
 	}
 
 	// Cliente de Stripe: solo se construye si STRIPE_SECRET_KEY y
