@@ -3,6 +3,10 @@
   max-width: 1300px;
   margin: 0 auto;
 
+  @media (max-width: 600px) {
+    padding: 1rem;
+  }
+
   .calendar-header {
     display: flex;
     justify-content: space-between;
@@ -28,6 +32,7 @@
     .calendar-controls {
       display: flex;
       align-items: center;
+      flex-wrap: wrap;
       gap: 1rem;
       background: var(--bg);
       padding: 0.4rem 0.8rem;
@@ -42,6 +47,11 @@
         margin: 0;
         min-width: 160px;
         text-align: center;
+
+        @media (max-width: 480px) {
+          min-width: 0;
+          font-size: 0.95rem;
+        }
       }
 
       .btn-today {
@@ -171,6 +181,19 @@
 
     div {
       padding: 1rem 0.5rem;
+      // Los items de un grid no se encogen debajo de su contenido por
+      // defecto (min-width: auto implícito) aunque la columna sea "1fr" —
+      // sin esto, "MIÉ" o "SÁB" empujan las 7 columnas más anchas que la
+      // pantalla en vez de quedarse dentro del ancho disponible.
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+
+      @media (max-width: 600px) {
+        padding: 0.6rem 0.2rem;
+        font-size: 0.7rem;
+      }
     }
   }
 
@@ -184,11 +207,17 @@
   .calendar-day {
     background-color: var(--bg);
     min-height: 120px;
+    min-width: 0; // mismo motivo que arriba: deja que las 7 columnas se encojan de verdad
     padding: 0.6rem;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
     transition: background-color 0.15s ease;
+
+    @media (max-width: 600px) {
+      min-height: 64px;
+      padding: 0.3rem;
+    }
 
     &.empty {
       background-color: var(--bg-subtle);
@@ -229,6 +258,11 @@
       color: var(--text);
       margin-bottom: 0.6rem;
       display: block;
+
+      @media (max-width: 600px) {
+        font-size: 0.7rem;
+        margin-bottom: 0.2rem;
+      }
     }
 
     .day-events {
@@ -258,6 +292,11 @@
       text-overflow: ellipsis;
       cursor: pointer;
       transition: transform 0.1s ease, box-shadow 0.15s ease;
+
+      @media (max-width: 600px) {
+        font-size: 0.62rem;
+        padding: 3px 4px;
+      }
 
       &:hover {
         transform: translateY(-1px);

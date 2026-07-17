@@ -153,6 +153,12 @@ html, body {
   height: 100%;
   /* Evitamos el scroll en el body para que el dashboard controle sus propios scrolls */
   /* overflow: hidden;  */
+  /* Red de seguridad: si algún elemento se desborda horizontalmente (una
+     barra de herramientas sin flex-wrap, una tabla ancha, etc.), esto
+     evita que arrastre a toda la página a un scroll lateral en celular —
+     no reemplaza corregir el elemento que se desborda, solo evita que un
+     desborde puntual se sienta como "toda la pantalla se mueve". */
+  overflow-x: hidden;
 }
 
 .dashboard-layout-active {
