@@ -217,7 +217,16 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
 
       {/* ÁREA DE CONTENIDO */}
       <main className="main-content">
-        {children ?? <Outlet />}
+        {/* Envolver la ruta en su propio bloque, en vez de dejarla como
+            hijo directo del flex column de abajo: un hijo flex con
+            "margin: 0 auto" (el patrón que usan casi todas las páginas
+            para centrar su contenido con un max-width) deja de estirarse
+            y se encoge a su contenido — este wrapper (sin margin auto)
+            sí se estira normal, y la página adentro vuelve a centrarse
+            como bloque normal, no como hijo flex. */}
+        <div className="main-content-inner">
+          {children ?? <Outlet />}
+        </div>
         <Footer />
       </main>
     </div>

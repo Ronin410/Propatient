@@ -1,5 +1,9 @@
 .consultation-manager-container {
-  max-width: 1300px;
+  // Más ancho que el resto de las páginas (1200-1300px): esta es una
+  // pantalla de trabajo densa (formulario + notas + vista previa de
+  // documentos lado a lado), y con el límite anterior se veía angosta y
+  // con mucho margen vacío a los lados en monitores grandes.
+  max-width: 1700px;
   margin: 0 auto;
   padding: 24px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
