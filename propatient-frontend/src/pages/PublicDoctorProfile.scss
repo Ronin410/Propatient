@@ -1,6 +1,8 @@
 .public-profile-page {
   background: var(--bg-main);
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .public-profile-loading {

@@ -6,7 +6,7 @@
 // de su perfil en vez de estar fijo aquí — ver también
 // auth.AppTimeZone en el backend (Go), que usa el mismo valor para los
 // correos/WhatsApp automáticos.
-const APP_TIMEZONE = 'America/Mazatlan';
+export const APP_TIMEZONE = 'America/Mazatlan';
 
 export const formatToLocalTime = (utcDate: string) => {
   if (!utcDate) return '';

@@ -4,6 +4,8 @@
 .legal-page {
   background: var(--bg-main);
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .legal-nav {

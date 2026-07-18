@@ -2,12 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import api from '../api/axios';
-import type { Patient } from '../types';
+import type { Patient, WeekSchedule } from '../types';
 import { Popup } from '../components/Popup'; // Asegura la ruta correcta de tu componente genérico
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { SlotPicker } from '../components/SlotPicker';
 import { getErrorMessage } from '../utils/errorMessage';
 import { sanitizePhoneInput } from '../utils/phoneInput';
+import { zonedTimeToUtc, nowInAppTimezone } from '../utils/appointmentSlots';
+import { APP_TIMEZONE } from '../utils/dateFormatter';
 import './AppointmentForm.scss';
+
+// true si el doctor configuró al menos un día con horario habilitado.
+function hasConfiguredSchedule(schedule: WeekSchedule | null): schedule is WeekSchedule {
+  if (!schedule) return false;
+  return Object.values(schedule).some((d) => d?.enabled);
+}
 
 interface DuplicatePatient {
   id: number;
@@ -48,7 +57,28 @@ export const AppointmentForm: React.FC = () => {
   const now = new Date();
   const tzOffset = now.getTimezoneOffset() * 60000;
   const minDateTime = new Date(now.getTime() - tzOffset).toISOString().slice(0, 16);
+  // Fallback de siempre (<input type="datetime-local"> libre): solo se usa
+  // si el doctor nunca configuró un horario (ver schedule más abajo).
   const [dateTime, setDateTime] = useState('');
+
+  // Horario del consultorio, para el selector de horarios de 30 en 30
+  // minutos (ver SlotPicker) — null mientras carga o si nunca se configuró.
+  const [schedule, setSchedule] = useState<WeekSchedule | null>(null);
+  const [scheduleLoaded, setScheduleLoaded] = useState(false);
+  const [slotDateKey, setSlotDateKey] = useState(() => nowInAppTimezone().dateKey);
+  const [slotTime, setSlotTime] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.get('/doctor/schedule')
+      .then((res) => {
+        if (res.data?.configured) setSchedule(res.data.days);
+      })
+      .catch(() => {
+        // Sin horario configurado o sin permiso: se usa el datetime-local
+        // libre de siempre, no bloquea el agendado.
+      })
+      .finally(() => setScheduleLoaded(true));
+  }, []);
 
   // Carga inicial si viene un ID de paciente por URL
   useEffect(() => {
@@ -90,9 +120,13 @@ export const AppointmentForm: React.FC = () => {
   }, [searchTerm, mode]);
 
   const bookAppointment = async (patientId: number) => {
+    const appointmentDateTime = hasConfiguredSchedule(schedule) && slotTime
+      ? zonedTimeToUtc(slotDateKey, slotTime, APP_TIMEZONE).toISOString()
+      : new Date(dateTime).toISOString();
+
     await api.post('/appointments', {
       patientId,
-      appointmentDateTime: new Date(dateTime).toISOString(), // ✨ Cambiado de dateTime a appointmentDateTime
+      appointmentDateTime,
       service: reason,                                       // ✨ Cambiado de reason a service (asumiendo que guardas el motivo aquí)
       observations: observations
     });
@@ -107,6 +141,17 @@ export const AppointmentForm: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (hasConfiguredSchedule(schedule) && !slotTime) {
+      setPopupConfig({
+        isOpen: true,
+        type: 'error',
+        title: 'Falta el horario',
+        message: 'Elige un horario disponible para la cita.'
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -309,18 +354,36 @@ export const AppointmentForm: React.FC = () => {
           <div className="form-grid">
             <div className="form-group">
               <label htmlFor="datetime">Fecha y Hora Programada</label>
-              <input
-                id="datetime"
-                type="datetime-local"
-                value={dateTime}
-                onChange={(e) => setDateTime(e.target.value)}
-                min={minDateTime}
-                required
-              />
-              <span className="field-hint">
-                Solo se puede agendar dentro del{' '}
-                <Link to="/horario">horario de atención configurado</Link>.
-              </span>
+              {scheduleLoaded && hasConfiguredSchedule(schedule) ? (
+                <>
+                  <SlotPicker
+                    schedule={schedule}
+                    dateKey={slotDateKey}
+                    onDateChange={(k) => { setSlotDateKey(k); setSlotTime(null); }}
+                    selectedTime={slotTime}
+                    onSelectTime={setSlotTime}
+                  />
+                  <span className="field-hint">
+                    Horarios de 30 minutos según el{' '}
+                    <Link to="/horario">horario de atención configurado</Link>. Se pueden agendar varias citas en el mismo horario.
+                  </span>
+                </>
+              ) : (
+                <>
+                  <input
+                    id="datetime"
+                    type="datetime-local"
+                    value={dateTime}
+                    onChange={(e) => setDateTime(e.target.value)}
+                    min={minDateTime}
+                    required
+                  />
+                  <span className="field-hint">
+                    Solo se puede agendar dentro del{' '}
+                    <Link to="/horario">horario de atención configurado</Link>.
+                  </span>
+                </>
+              )}
             </div>
 
             <div className="form-group">

@@ -11,9 +11,18 @@ import { toAbsoluteFileUrl } from '../utils/fileUrl';
 import { getErrorMessage } from '../utils/errorMessage';
 import { sanitizePhoneInput } from '../utils/phoneInput';
 import { preloadRecaptcha, getRecaptchaToken } from '../utils/recaptcha';
+import { zonedTimeToUtc, nowInAppTimezone } from '../utils/appointmentSlots';
+import { APP_TIMEZONE } from '../utils/dateFormatter';
 import type { PublicDoctor, WeekSchedule } from '../types';
 import { Footer } from '../components/Footer';
+import { SlotPicker } from '../components/SlotPicker';
 import './PublicDoctorProfile.scss';
+
+// true si el doctor configuró al menos un día con horario habilitado.
+function hasConfiguredSchedule(schedule: WeekSchedule | null | undefined): schedule is WeekSchedule {
+  if (!schedule) return false;
+  return Object.values(schedule).some((d) => d?.enabled);
+}
 
 const DAY_ORDER: (keyof WeekSchedule)[] = [
   'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
@@ -101,6 +110,12 @@ export const PublicDoctorProfile: React.FC = () => {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
+  // Selector de horarios de 30 en 30 minutos (ver SlotPicker) — solo se usa
+  // si el doctor configuró un horario; si no, se cae al datetime-local
+  // libre de siempre (form.appointmentDateTime).
+  const [slotDateKey, setSlotDateKey] = useState(() => nowInAppTimezone().dateKey);
+  const [slotTime, setSlotTime] = useState<string | null>(null);
+
   useEffect(() => {
     if (!slug) return;
     setLoading(true);
@@ -130,13 +145,20 @@ export const PublicDoctorProfile: React.FC = () => {
       setSubmitError('Debes aceptar el tratamiento de tus datos de salud para poder agendar la cita.');
       return;
     }
+    if (hasConfiguredSchedule(doctor.schedule) && !slotTime) {
+      setSubmitError('Elige un horario disponible para tu cita.');
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
+      const appointmentDateTime = hasConfiguredSchedule(doctor.schedule) && slotTime
+        ? zonedTimeToUtc(slotDateKey, slotTime, APP_TIMEZONE).toISOString()
+        : new Date(form.appointmentDateTime).toISOString();
       const recaptchaToken = await getRecaptchaToken('public_appointment');
       await api.post('/public/appointments', {
         doctorId: doctor.id,
-        appointmentDateTime: new Date(form.appointmentDateTime).toISOString(),
+        appointmentDateTime,
         reason: form.reason,
         patientFirstName: form.patientFirstName,
         patientLastName: form.patientLastName,
@@ -307,14 +329,24 @@ export const PublicDoctorProfile: React.FC = () => {
 
                 <div className="form-group">
                   <label>Fecha y hora deseada</label>
-                  <input
-                    type="datetime-local"
-                    name="appointmentDateTime"
-                    value={form.appointmentDateTime}
-                    onChange={handleChange}
-                    min={minDateTimeLocal()}
-                    required
-                  />
+                  {hasConfiguredSchedule(doctor.schedule) ? (
+                    <SlotPicker
+                      schedule={doctor.schedule}
+                      dateKey={slotDateKey}
+                      onDateChange={(k) => { setSlotDateKey(k); setSlotTime(null); }}
+                      selectedTime={slotTime}
+                      onSelectTime={setSlotTime}
+                    />
+                  ) : (
+                    <input
+                      type="datetime-local"
+                      name="appointmentDateTime"
+                      value={form.appointmentDateTime}
+                      onChange={handleChange}
+                      min={minDateTimeLocal()}
+                      required
+                    />
+                  )}
                 </div>
 
                 <div className="form-group">

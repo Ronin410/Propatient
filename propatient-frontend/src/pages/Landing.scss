@@ -2,6 +2,8 @@
   background: var(--bg-main);
   color: var(--text);
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 
   a { text-decoration: none; }
 }

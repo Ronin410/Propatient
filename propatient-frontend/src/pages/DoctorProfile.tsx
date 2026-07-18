@@ -606,7 +606,22 @@ export const DoctorProfile = () => {
                   <input type="text" readOnly value={`${window.location.origin}/dr/${profile.publicSlug}`} onClick={(e) => (e.target as HTMLInputElement).select()} />
                 </div>
               )}
+            </div>
+          )}
+        </div>
 
+        {/* REDES SOCIALES: tarjeta propia, mismo formato que el resto de
+            secciones del perfil (título + descripción + grid-layout) —
+            antes vivían sin encabezado propio, mezcladas dentro de la
+            tarjeta de "Directorio Público". */}
+        {profile.publicListed && (
+          <div className="profile-form-section">
+            <div className="section-title">
+              <h3>Redes Sociales</h3>
+              <p>Se muestran en tu perfil público para dar más confianza a pacientes nuevos.</p>
+            </div>
+
+            <div className="grid-layout">
               <div className="form-group">
                 <label>Facebook</label>
                 <input type="url" name="facebookUrl" placeholder="https://facebook.com/tu-página" value={profile.facebookUrl || ''} onChange={handleInputChange} />
@@ -636,10 +651,16 @@ export const DoctorProfile = () => {
                 <input type="url" name="websiteUrl" placeholder="https://tu-sitio.com" value={profile.websiteUrl || ''} onChange={handleInputChange} />
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {profile.publicListed && <DoctorGallery />}
-        </div>
+        {/* GALERÍA DE FOTOS: tarjeta propia, separada de "Directorio
+            Público" — DoctorGallery ya trae su propio título/descripción. */}
+        {profile.publicListed && (
+          <div className="profile-form-section">
+            <DoctorGallery />
+          </div>
+        )}
 
         {/* INTEGRACIÓN CON GOOGLE CALENDAR */}
         <div className="profile-form-section">

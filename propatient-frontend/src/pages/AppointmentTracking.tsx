@@ -348,6 +348,7 @@ export const AppointmentTracking: React.FC = () => {
                   <th>Horario</th>
                   <th>Paciente</th>
                   <th>Motivo de Consulta</th>
+                  <th>Teléfono</th>
                   <th className="action-cell">Acciones</th>
                 </tr>
               </thead>
@@ -368,6 +369,7 @@ export const AppointmentTracking: React.FC = () => {
                       <td className="reason-cell" title={app.reason}>
                         {app.reason || 'Consulta General'}
                       </td>
+                      <td className="phone-cell">{patient?.phone || '—'}</td>
                       <td className="action-cell">
                         {isCompleted ? (
                           <span style={{ fontSize: '13px', color: 'var(--color-success)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>

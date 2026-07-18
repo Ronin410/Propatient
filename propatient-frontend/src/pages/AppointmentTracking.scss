@@ -204,6 +204,11 @@
             text-overflow: ellipsis;
         }
 
+        .phone-cell {
+            color: var(--color-secondary);
+            white-space: nowrap;
+        }
+
         .action-cell {
             text-align: right;
         }

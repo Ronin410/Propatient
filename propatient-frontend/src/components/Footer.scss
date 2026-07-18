@@ -7,6 +7,11 @@
   border-top: 1px solid var(--border);
   color: var(--color-secondary);
   font-size: 0.85rem;
+  // Empuja el footer hasta el fondo de su contenedor cuando este es un
+  // flex column más alto que el contenido (ver .legal-page, .main-content,
+  // .public-profile-page, .landing-page) — así no queda pegado justo
+  // debajo de una pantalla con poco contenido, con hueco vacío abajo.
+  margin-top: auto;
 
   @media (min-width: 640px) {
     flex-direction: row;
