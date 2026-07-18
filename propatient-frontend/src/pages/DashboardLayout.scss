@@ -72,12 +72,9 @@
         padding-left: 8px;
 
         .medical-logo {
-            width: 28px;
-            height: 28px;
-
-            path {
-                fill: #ffffff; /* Isotipo blanco sobre azul */
-            }
+            width: 32px;
+            height: 32px;
+            object-fit: contain;
         }
 
         .office-name {

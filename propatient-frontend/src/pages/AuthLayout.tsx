@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import logo from '../assets/logo.png';
 import './AuthLayout.scss';
 
 // wa.me quiere el número completo en formato internacional, sin "+" ni
@@ -21,20 +22,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
       <div className="auth-layout-visual">
         {/* Marca Superior */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{
-            width: '28px',
-            height: '28px',
-            borderRadius: '50%',
-            background: 'rgba(255, 255, 255, 0.2)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: '600',
-            color: '#ffffff',
-            fontSize: '13px'
-          }}>
-            P
-          </div>
+          <img src={logo} alt="ProPatient" style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
           <span style={{ fontSize: '18px', fontWeight: 500, letterSpacing: '0.3px' }}>ProPatient</span>
         </div>
 

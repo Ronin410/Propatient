@@ -5,6 +5,7 @@ import { toAbsoluteFileUrl } from '../utils/fileUrl';
 import type { PublicDoctor } from '../types';
 import { Footer } from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
+import logo from '../assets/logo.png';
 import './Landing.scss';
 
 const ROTATION_MS = 5000;
@@ -46,7 +47,7 @@ export const Landing: React.FC = () => {
       <header className="landing-nav">
         <div className="landing-nav-inner">
           <div className="landing-logo">
-            <span className="material-icons-outlined">favorite</span>
+            <img src={logo} alt="ProPatient" className="brand-logo-icon" />
             ProPatient
           </div>
           <nav>

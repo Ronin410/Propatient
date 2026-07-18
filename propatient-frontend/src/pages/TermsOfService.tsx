@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Footer } from '../components/Footer';
 import { TermsOfServiceContent } from './TermsOfServiceContent';
+import logo from '../assets/logo.png';
 import './LegalPage.scss';
 
 // Versión pública standalone (sin sesión iniciada): trae su propia
@@ -13,7 +14,7 @@ export const TermsOfService: React.FC = () => {
     <div className="legal-page">
       <header className="legal-nav">
         <Link to="/" className="legal-logo">
-          <span className="material-icons-outlined">favorite</span>
+          <img src={logo} alt="ProPatient" className="brand-logo-icon" />
           ProPatient
         </Link>
       </header>

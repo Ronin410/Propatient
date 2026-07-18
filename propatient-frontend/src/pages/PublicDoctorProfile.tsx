@@ -16,6 +16,7 @@ import { APP_TIMEZONE } from '../utils/dateFormatter';
 import type { PublicDoctor, WeekSchedule } from '../types';
 import { Footer } from '../components/Footer';
 import { SlotPicker } from '../components/SlotPicker';
+import logo from '../assets/logo.png';
 import './PublicDoctorProfile.scss';
 
 // true si el doctor configuró al menos un día con horario habilitado.
@@ -202,7 +203,7 @@ export const PublicDoctorProfile: React.FC = () => {
     <div className="public-profile-page">
       <header className="public-profile-nav">
         <Link to="/" className="public-profile-logo">
-          <span className="material-icons-outlined">favorite</span>
+          <img src={logo} alt="ProPatient" className="brand-logo-icon" />
           ProPatient
         </Link>
         <Link to="/doctores" className="nav-link">Ver directorio</Link>

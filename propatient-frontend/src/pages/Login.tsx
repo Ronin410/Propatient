@@ -4,6 +4,7 @@ import api from '../api/axios';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthLayout } from './AuthLayout';
 import { getErrorMessage } from '../utils/errorMessage';
+import logo from '../assets/logo.png';
 import './Login.scss';
 
 export const Login = () => {
@@ -105,11 +106,7 @@ export const Login = () => {
         justifyContent: 'center',
         boxShadow: '0 8px 20px rgba(0, 115, 112, 0.15)'
       }}>
-        {/* Isotipo médico minimalista en SVG integrado */}
-        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-          <path d="M12 8v8M9 12h6"/>
-        </svg>
+        <img src={logo} alt="ProPatient" style={{ width: '64px', height: '64px', objectFit: 'contain' }} />
       </div>
 
       {/* 📄 TARJETA CONTENEDORA BLANCA */}

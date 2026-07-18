@@ -39,6 +39,11 @@
     color: var(--color-heading);
     white-space: nowrap;
 
+    .brand-logo-icon {
+      height: 30px;
+      width: auto;
+    }
+
     .material-icons-outlined { color: var(--color-primary); }
 
     @media (max-width: 480px) {

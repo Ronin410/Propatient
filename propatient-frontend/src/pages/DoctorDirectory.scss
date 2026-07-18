@@ -22,6 +22,11 @@
     color: var(--color-heading);
     text-decoration: none;
 
+    .brand-logo-icon {
+      height: 28px;
+      width: auto;
+    }
+
     .material-icons-outlined { color: var(--color-primary); }
   }
 

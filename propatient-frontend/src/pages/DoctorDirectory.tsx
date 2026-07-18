@@ -10,6 +10,7 @@ import api from '../api/axios';
 import { toAbsoluteFileUrl } from '../utils/fileUrl';
 import type { PublicDoctor } from '../types';
 import { Footer } from '../components/Footer';
+import logo from '../assets/logo.png';
 import './DoctorDirectory.scss';
 
 // Vite empaqueta los PNG del propio paquete leaflet como assets; sin esto,
@@ -61,7 +62,7 @@ export const DoctorDirectory: React.FC = () => {
     <div className="directory-page">
       <header className="directory-nav">
         <Link to="/" className="directory-logo">
-          <span className="material-icons-outlined">favorite</span>
+          <img src={logo} alt="ProPatient" className="brand-logo-icon" />
           ProPatient
         </Link>
         <Link to="/login" className="nav-link">Soy doctor</Link>
