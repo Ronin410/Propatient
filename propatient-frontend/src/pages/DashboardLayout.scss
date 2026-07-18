@@ -28,6 +28,11 @@
     box-sizing: border-box;
     z-index: 10;
     color: #ffffff;
+    // En ventanas bajas o zoom alto, el menú + el pie (nombre, cambiar de
+    // consultorio, tema, cerrar sesión) pueden juntos medir más que el
+    // alto disponible — sin esto, lo de abajo (Cerrar Sesión) quedaba
+    // recortado fuera de la vista sin ninguna forma de llegar a él.
+    overflow-y: auto;
 }
 
 /* Cabecera del Sidebar */

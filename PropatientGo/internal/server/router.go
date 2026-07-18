@@ -221,6 +221,12 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 			// público — evita que alguien intente adivinar tokens a fuerza bruta.
 			public.GET("/reviews/:token", handlers.GetReviewInvite(db))
 			public.POST("/reviews/:token", publicBookingLimiter.Middleware(), handlers.SubmitReview(db))
+			// Subir documentos/estudios antes de la cita: el link/QR llega por
+			// WhatsApp o se escanea en el consultorio (ver ConsultationManager
+			// → toggleQR). Mismo límite que agendar público en la subida, para
+			// no permitir spamear archivos con un link real interceptado.
+			public.GET("/upload/:token", handlers.GetPublicUploadInfo(db))
+			public.POST("/upload/:token", publicBookingLimiter.Middleware(), handlers.PublicUploadDocuments(db, storageClient))
 		}
 
 		// --- RUTAS PROTEGIDAS ---
@@ -305,6 +311,7 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 					appointments.GET("/:id", auth.RequireDoctorRole(), handlers.GetAppointmentDetail(db, storageClient))
 					appointments.PUT("/:id", auth.RequireDoctorRole(), handlers.UpdateAppointment(db, calendarClient, whatsappClient))
 					appointments.POST("/:id/upload-document", auth.RequireDoctorRole(), handlers.UploadDocuments(db, storageClient))
+					appointments.GET("/:id/upload-link", auth.RequireDoctorRole(), handlers.GetAppointmentUploadLink(db))
 					appointments.PUT("/:id/documents/:docId", auth.RequireDoctorRole(), handlers.UpdateAppointmentDocument(db))
 					appointments.POST("/:id/save-recipe-pdf", auth.RequireDoctorRole(), handlers.SaveRecipePDF(db, storageClient))
 				}

@@ -4,6 +4,8 @@ import './ConsultationManager.scss';
 import { useConsultation, type AppointmentFile } from '../hooks/useConsultation';
 import { toAbsoluteFileUrl } from '../utils/fileUrl';
 import { sanitizePhoneInput } from '../utils/phoneInput';
+import api from '../api/axios';
+import { getErrorMessage } from '../utils/errorMessage';
 
 type FormSection = 'generalData' | 'medicalHistory';
 
@@ -45,6 +47,8 @@ export const ConsultationManager: React.FC = () => {
   const isResizingRef = useRef<boolean>(false);
   const [showQR, setShowQR] = useState(false);
   const [qrImageUrl, setQrImageUrl] = useState('');
+  const [loadingQR, setLoadingQR] = useState(false);
+  const [qrError, setQrError] = useState<string | null>(null);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -77,12 +81,28 @@ export const ConsultationManager: React.FC = () => {
     document.body.style.userSelect = 'none';
   };
 
-  const toggleQR = () => {
-    if (!showQR) {
-      const uploadUrl = `${window.location.origin}/public-upload/${appointmentId}`;
-      setQrImageUrl(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(uploadUrl)}`);
+  const toggleQR = async () => {
+    if (showQR) {
+      setShowQR(false);
+      return;
     }
-    setShowQR(!showQR);
+    // El link/QR usa un token opaco generado por el backend (ver
+    // GetAppointmentUploadLink), no el ID crudo de la cita: así quien lo
+    // intercepte solo puede subir documentos a ESTA cita, no adivinar
+    // otras. Se pide cada vez que se abre (el backend reutiliza el mismo
+    // token mientras no haya vencido, así que sigue siendo el mismo QR).
+    setShowQR(true);
+    setLoadingQR(true);
+    setQrError(null);
+    try {
+      const res = await api.get(`/appointments/${appointmentId}/upload-link`);
+      const uploadUrl = res.data.uploadUrl as string;
+      setQrImageUrl(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(uploadUrl)}`);
+    } catch (err) {
+      setQrError(getErrorMessage(err, 'No se pudo generar el link para el paciente.'));
+    } finally {
+      setLoadingQR(false);
+    }
   };
 
   if (loading) {
@@ -368,8 +388,16 @@ export const ConsultationManager: React.FC = () => {
 
             {showQR && (
               <div className="qr-display">
-                <img src={qrImageUrl} alt="QR de carga" />
-                <p className="qr-desc">Pida al paciente que escanee este código para subir fotos desde su móvil.</p>
+                {loadingQR ? (
+                  <p className="qr-desc">Generando link...</p>
+                ) : qrError ? (
+                  <p className="qr-desc qr-error">{qrError}</p>
+                ) : (
+                  <>
+                    <img src={qrImageUrl} alt="QR de carga" />
+                    <p className="qr-desc">Pida al paciente que escanee este código para subir sus estudios desde su móvil, o mándele el link por WhatsApp.</p>
+                  </>
+                )}
               </div>
             )}
 

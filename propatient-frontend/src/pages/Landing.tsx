@@ -8,23 +8,16 @@ import { useAuth } from '../context/AuthContext';
 import './Landing.scss';
 
 const ROTATION_MS = 5000;
-
-// Elige un índice al azar distinto del actual (si hay más de un doctor),
-// para que la rotación se sienta aleatoria de verdad y no repita seguido
-// al mismo doctor.
-function pickNextIndex(length: number, current: number): number {
-  if (length <= 1) return 0;
-  let next = current;
-  while (next === current) {
-    next = Math.floor(Math.random() * length);
-  }
-  return next;
-}
+// Cuántas tarjetas se muestran a la vez (se acomodan en una sola columna
+// en móvil vía CSS, sin cambiar esta lógica) — antes solo se mostraba UN
+// doctor a la vez, rotando; ahora se ve un grupo completo y el grupo
+// siguiente entra cuando hay más doctores de los que caben en pantalla.
+const CARDS_PER_VIEW = 3;
 
 export const Landing: React.FC = () => {
   const { isAuthenticated } = useAuth();
   const [doctors, setDoctors] = useState<PublicDoctor[]>([]);
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [groupStart, setGroupStart] = useState(0);
 
   useEffect(() => {
     api.get('/public/doctors')
@@ -33,14 +26,20 @@ export const Landing: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (doctors.length <= 1) return;
+    if (doctors.length <= CARDS_PER_VIEW) return;
     const timer = setInterval(() => {
-      setActiveIndex((prev) => pickNextIndex(doctors.length, prev));
+      setGroupStart((prev) => (prev + CARDS_PER_VIEW) % doctors.length);
     }, ROTATION_MS);
     return () => clearInterval(timer);
   }, [doctors.length]);
 
-  const activeDoctor = doctors[activeIndex];
+  // Grupo visible: los siguientes CARDS_PER_VIEW doctores a partir de
+  // groupStart, dando la vuelta al principio de la lista si hace falta —
+  // así siempre se ven CARDS_PER_VIEW tarjetas completas, nunca un grupo
+  // incompleto al llegar al final.
+  const visibleDoctors = doctors.length <= CARDS_PER_VIEW
+    ? doctors
+    : Array.from({ length: CARDS_PER_VIEW }, (_, i) => doctors[(groupStart + i) % doctors.length]);
 
   return (
     <div className="landing-page">
@@ -81,22 +80,27 @@ export const Landing: React.FC = () => {
             )}
           </div>
         </div>
+      </section>
 
-        <div className="hero-doctor-card">
-          {activeDoctor ? (
-            <div key={activeDoctor.id} className="rotating-doctor-card">
-              <div className="doctor-avatar">
-                {activeDoctor.avatarUrl ? (
-                  <img src={toAbsoluteFileUrl(activeDoctor.avatarUrl)} alt={activeDoctor.fullName} />
-                ) : (
-                  <span className="material-icons-outlined">person</span>
-                )}
+      <section className="landing-featured-doctors">
+        <h2>Doctores en ProPatient</h2>
+        <div className="hero-doctor-cards">
+          {visibleDoctors.length > 0 ? (
+            visibleDoctors.map((doc) => (
+              <div key={doc.id} className="rotating-doctor-card">
+                <div className="doctor-avatar">
+                  {doc.avatarUrl ? (
+                    <img src={toAbsoluteFileUrl(doc.avatarUrl)} alt={doc.fullName} />
+                  ) : (
+                    <span className="material-icons-outlined">person</span>
+                  )}
+                </div>
+                <h3>Dr(a). {doc.fullName}</h3>
+                <p className="doctor-specialty">{doc.medicalSpecialty || 'Médico General'}</p>
+                {doc.publicBio && <p className="doctor-bio">{doc.publicBio}</p>}
+                <Link to={`/dr/${doc.publicSlug}`} className="btn-text">Ver perfil y agendar →</Link>
               </div>
-              <h3>Dr(a). {activeDoctor.fullName}</h3>
-              <p className="doctor-specialty">{activeDoctor.medicalSpecialty || 'Médico General'}</p>
-              {activeDoctor.publicBio && <p className="doctor-bio">{activeDoctor.publicBio}</p>}
-              <Link to={`/dr/${activeDoctor.publicSlug}`} className="btn-text">Ver perfil y agendar →</Link>
-            </div>
+            ))
           ) : (
             <div className="rotating-doctor-card empty">
               <span className="material-icons-outlined">groups</span>

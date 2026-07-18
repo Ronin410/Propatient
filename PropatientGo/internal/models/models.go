@@ -267,6 +267,16 @@ type Appointment struct {
 	// que empiece la cita (WhatsApp, ~60 min antes). Ver
 	// workers.SendDueDoctorReminders.
 	DoctorReminderSentAt *time.Time `json:"-"`
+
+	// Token opaco para el link/QR de "sube tus documentos antes de la
+	// cita" (ver ConsultationManager → toggleQR y handlers.GetAppointmentUploadLink/
+	// GetPublicUploadInfo/PublicUploadDocuments). Se genera la primera vez
+	// que el doctor pide el link, no antes — "" significa que nunca se
+	// generó. A diferencia de Review.Token, no se consume de un solo uso:
+	// el paciente puede volver a escanear el mismo QR las veces que
+	// necesite antes de que expire.
+	UploadToken          string     `gorm:"index" json:"-"`
+	UploadTokenExpiresAt *time.Time `json:"-"`
 }
 
 type MedicalDocument struct {

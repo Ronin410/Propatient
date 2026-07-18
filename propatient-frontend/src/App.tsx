@@ -55,6 +55,7 @@ const BillingPage = lazy(() => import('./pages/BillingPage').then((m) => ({ defa
 const WorkingHours = lazy(() => import('./pages/WorkingHours').then((m) => ({ default: m.WorkingHours })));
 const Reviews = lazy(() => import('./pages/Reviews').then((m) => ({ default: m.Reviews })));
 const SubmitReview = lazy(() => import('./pages/SubmitReview').then((m) => ({ default: m.SubmitReview })));
+const PublicUpload = lazy(() => import('./pages/PublicUpload').then((m) => ({ default: m.PublicUpload })));
 
 // Componente para proteger rutas privadas básicas
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -129,6 +130,7 @@ function App() {
             <Route path="/personal/recuperar" element={<ForgotStaffPassword />} />
             <Route path="/personal/restablecer/:token" element={<ResetStaffPassword />} />
             <Route path="/resena/:token" element={<SubmitReview />} />
+            <Route path="/public-upload/:token" element={<PublicUpload />} />
 
             {/* 🔐 PANEL INTERNO DE ADMINISTRACIÓN: sesión separada de la del doctor */}
             <Route path="/admin/login" element={<AdminLogin />} />

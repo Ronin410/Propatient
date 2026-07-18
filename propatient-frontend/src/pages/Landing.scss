@@ -84,16 +84,12 @@
 }
 
 .landing-hero {
-  max-width: 1200px;
+  max-width: 800px;
   margin: 0 auto;
   padding: 4rem 2rem;
-  display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
-  gap: 3rem;
-  align-items: center;
+  text-align: center;
 
   @media (max-width: 860px) {
-    grid-template-columns: 1fr;
     padding: 2.5rem 1.5rem;
   }
 
@@ -118,6 +114,7 @@
   .hero-actions {
     display: flex;
     flex-wrap: wrap;
+    justify-content: center;
     gap: 1rem;
   }
 
@@ -144,9 +141,27 @@
   }
 }
 
-.hero-doctor-card {
+.landing-featured-doctors {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1rem 2rem 3rem 2rem;
+
+  h2 {
+    text-align: center;
+    color: var(--color-heading);
+    margin: 0 0 2rem 0;
+  }
+
+  @media (max-width: 860px) {
+    padding: 1rem 1.5rem 2.5rem 1.5rem;
+  }
+}
+
+.hero-doctor-cards {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
+  gap: 1.5rem;
 }
 
 .rotating-doctor-card {
@@ -155,13 +170,20 @@
   border-radius: 20px;
   box-shadow: var(--shadow);
   padding: 2.5rem 2rem;
-  width: 100%;
+  // 3 tarjetas por fila en escritorio, respetando el gap; se van a una
+  // sola columna en pantallas angostas.
+  flex: 1 1 300px;
   max-width: 340px;
+  min-width: 0;
+  box-sizing: border-box;
   text-align: center;
   animation: landing-fade-in 0.4s ease;
 
   &.empty {
     color: var(--color-secondary);
+    flex-basis: 100%;
+    max-width: 480px;
+    margin: 0 auto;
 
     .material-icons-outlined { font-size: 40px; margin-bottom: 0.8rem; }
   }
@@ -196,6 +218,16 @@
     font-size: 0.9rem;
     line-height: 1.5;
     margin: 0 0 1.2rem 0;
+    // Un texto sin espacios (o solo muy largo) no debe estirar la tarjeta
+    // ni desbordarse fuera de ella — antes no había ningún corte de línea
+    // aquí, así que una sola "palabra" larga rompía el ancho de toda la
+    // página. Se recorta a 3 líneas para que todas las tarjetas del grupo
+    // midan lo mismo sin importar qué tan larga sea la biografía.
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .btn-text {

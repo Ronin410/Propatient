@@ -50,6 +50,20 @@
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid var(--border);
+
+  // Leaflet trae su propio cursor "grab" (una imagen SVG), pero en
+  // algunos navegadores/entornos esa imagen no carga y el mapa se queda
+  // sin ningún cursor visible, dando la impresión de que no se puede
+  // hacer clic — "crosshair" es un cursor estándar del navegador, sin
+  // depender de que cargue ningún recurso externo, y deja claro que se
+  // puede hacer clic para colocar el marcador (ver ClickToPlace).
+  .leaflet-container {
+    cursor: crosshair;
+  }
+
+  .leaflet-marker-draggable {
+    cursor: move;
+  }
 }
 
 .location-picker-placeholder {

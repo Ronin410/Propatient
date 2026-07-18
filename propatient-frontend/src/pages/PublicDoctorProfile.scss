@@ -64,6 +64,13 @@
   @media (max-width: 860px) {
     grid-template-columns: 1fr;
   }
+
+  // Sin esto, un texto largo sin espacios (biografía, dirección) no deja
+  // que la columna se encoja por debajo de su ancho intrínseco de
+  // contenido — el mismo bug que ya se corrigió antes en otras grillas de
+  // esta app: la columna termina más ancha que su "1fr" y desborda toda
+  // la página en vez de recortarse/envolverse dentro de su tarjeta.
+  > * { min-width: 0; }
 }
 
 .public-profile-card {
@@ -103,6 +110,7 @@
   line-height: 1.6;
   text-align: left;
   margin: 0 0 1.2rem 0;
+  overflow-wrap: anywhere;
 }
 
 .public-profile-contact {
