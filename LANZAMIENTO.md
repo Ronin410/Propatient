@@ -223,10 +223,10 @@ frontend reales, con tests automatizados):
 - **Revisión legal real** del Aviso de Privacidad y los Términos y
   Condiciones — hoy son placeholders estructurados con un banner de
   "borrador" bien visible, pensados para que un abogado los complete, no
-  para publicarse tal cual.
+  para publicarse tal cual. Ver el desglose completo en la sección 6.
 - **Facturación fiscal (CFDI)** si vas a cobrarle formalmente a
   consultorios en México — Stripe no la genera, necesitarías un PAC
-  (proveedor autorizado de certificación) aparte.
+  (proveedor autorizado de certificación) aparte. Ver sección 6.6.
 - **Consentimiento explícito de datos de salud — ✅ resuelto**: checkbox
   obligatorio (con link al Aviso de Privacidad) en el formulario de
   agendar cita pública, validado también en el backend.
@@ -277,6 +277,165 @@ dejarlo aquí porque varias piezas técnicas ya están listas para soportarla:
 
 ---
 
+## 🔴 6. Marco legal aplicable — detallado
+
+Esta sección junta todo lo relacionado con la ley, con el detalle suficiente
+para llevarlo a una consulta real con un abogado (idealmente uno con
+experiencia en salud, no solo en protección de datos genérica — la
+combinación de ambas cosas es la que menos abogados dominan de entrada).
+**Nada de esto es asesoría legal formal**, es un mapa de qué preguntar.
+
+### 6.1 Protección de datos personales (LFPDPPP)
+
+Ley Federal de Protección de Datos Personales en Posesión de los
+Particulares — la ley mexicana que rige todo el manejo de datos de
+pacientes, doctores y personal.
+
+- **Aviso de Privacidad completo.** El Artículo 16 de la LFPDPPP exige que
+  incluya, como mínimo:
+  - Identidad y domicilio del responsable (quién eres tú/tu empresa
+    legalmente, no solo "ProPatient").
+  - Las finalidades del tratamiento de datos (agendar citas, expediente
+    clínico, recetas, facturación, recordatorios, etc. — ya listadas en el
+    borrador, falta completarlas formalmente).
+  - Opciones para limitar el uso o divulgación de los datos.
+  - Los medios para ejercer los derechos ARCO.
+  - Las transferencias de datos que se realicen (ver 6.1.2 abajo).
+  - El procedimiento para comunicar cambios al aviso.
+  - Estado actual: `PrivacyPolicyContent.tsx` tiene la estructura completa
+    con las 9 secciones, pero varias siguen con `[Completar: ...]` —
+    específicamente el responsable legal, el mecanismo de consentimiento,
+    y el procedimiento ARCO necesitan texto real, no placeholder.
+
+- **Datos de salud = "datos personales sensibles" (Art. 3, fracción VI).**
+  Esto es más estricto que datos personales normales:
+  - Requieren **consentimiento expreso** del titular, no solo el
+    consentimiento tácito que basta para datos no sensibles. El checkbox
+    obligatorio en el booking público (ya implementado) es un paso fuerte
+    en esa dirección, pero confirma con tu abogado si el texto exacto y el
+    mecanismo (un checkbox, sin firma) cumple el estándar de "expreso"
+    para datos de salud específicamente — a veces se pide un paso
+    adicional (ej. reenviar un correo de confirmación).
+  - El expediente clínico completo (antecedentes, diagnósticos,
+    tratamientos) cae aquí — es el dato más sensible que maneja el
+    sistema.
+
+- **Transferencias internacionales de datos (Art. 36-37).** Usas varios
+  proveedores con sede fuera de México que procesan datos de tus usuarios:
+  - **Google** (login, Calendar, reCAPTCHA) — procesa correo, nombre, y
+    (si se conecta Calendar) datos de citas.
+  - **Twilio** (WhatsApp) — procesa teléfonos y el contenido de los
+    mensajes.
+  - **Resend** (correo) — procesa correos y contenido de los emails.
+  - **Stripe** (pagos) — procesa datos de facturación del doctor.
+  - **AWS S3** (si está configurado) — almacena documentos clínicos,
+    recetas, INE.
+  - La LFPDPPP exige que estas transferencias se declaren explícitamente
+    en el Aviso de Privacidad (ya hay una sección para Google Calendar
+    específicamente, agregada esta sesión — falta extenderla a los demás
+    proveedores).
+
+- **Consentimiento para reCAPTCHA/Sentry.** Como se agregaron esta sesión,
+  técnicamente califican como "transferencia a terceros" (Google, Sentry)
+  igual que los de arriba — hay que agregarlos al Aviso de Privacidad
+  cuando se activen de verdad (con las llaves configuradas).
+
+- **Derechos ARCO — ✅ ya implementados**: exportar mis datos y eliminar mi
+  cuenta, desde el Perfil del doctor.
+
+- **INAI**: si alguna vez hay una brecha de seguridad con datos de salud
+  expuestos, la LFPDPPP obliga a notificar al INAI (Instituto Nacional de
+  Transparencia, Acceso a la Información y Protección de Datos
+  Personales) y a los titulares afectados. Vale la pena tener un plan de
+  respuesta a incidentes por escrito antes de que haga falta, no después.
+
+### 6.2 Normativa sanitaria del expediente clínico (NOM-004-SSA3-2012)
+
+Esta es la norma oficial mexicana específica para expedientes clínicos —
+distinta de la protección de datos genérica, y la que más fácil se pasa
+por alto porque no es "legal" en el sentido usual, es normativa de salud.
+
+- **Retención mínima: 5 años** desde la fecha del último acto médico
+  registrado. El sistema ya está alineado con esto (el expediente clínico
+  se conserva aunque el doctor elimine su cuenta — ver el mensaje de
+  confirmación en `DoctorProfile.tsx`), pero confírmalo formalmente con un
+  abogado de salud: hay excepciones (ej. menores de edad, ciertos
+  padecimientos) donde el periodo es más largo.
+- **Contenido mínimo obligatorio** del expediente: la norma especifica
+  campos que debe tener (ficha de identificación, antecedentes,
+  exploración física, diagnósticos, notas de evolución, etc.). Vale la
+  pena que un especialista compare esto contra las "Notas de consulta
+  configurables" del sistema (`SettingsNotes`) para confirmar que un
+  doctor pueda cumplir la norma con la configuración que arme.
+- **Quién puede acceder**: la norma regula el acceso al expediente
+  (paciente, representante legal, autoridad competente). El sistema ya
+  aísla expedientes por doctor (un doctor no ve pacientes de otro) y
+  bloquea al personal del expediente clínico — vale la pena confirmar que
+  esto es suficiente o si se requiere algo más explícito (ej. un log de
+  quién accedió a qué expediente y cuándo).
+
+### 6.3 Términos y Condiciones — responsabilidad médica y de plataforma
+
+- **El punto más importante**: dejar clarísimo que ProPatient es una
+  **herramienta de gestión de consultorio**, no presta servicios médicos
+  ni sustituye el criterio clínico del doctor — la responsabilidad de la
+  atención médica es exclusivamente del doctor que la brinda, no de la
+  plataforma. Sin esta cláusula bien redactada, ProPatient queda expuesto
+  legalmente a reclamos que le corresponden al doctor (mala praxis,
+  errores de diagnóstico, etc.).
+- **Límites de responsabilidad técnica**: qué pasa si el sistema tiene una
+  caída y un doctor pierde acceso a una cita programada, o si un
+  recordatorio de WhatsApp no llega — cláusulas estándar de SaaS
+  (disponibilidad "best effort", no garantía de 100% uptime salvo que se
+  ofrezca un SLA formal).
+- **Política de cancelación de la cuenta/suscripción** y qué pasa con los
+  datos del doctor si cancela (ver también 6.1: el expediente clínico se
+  conserva por NOM-004 aunque la cuenta se cancele).
+
+### 6.4 PROFECO (protección al consumidor)
+
+Aplica porque cobras una **suscripción recurrente** a los doctores:
+
+- Precios claros y sin cargos sorpresa — el flujo de Stripe (checkout +
+  portal de cliente) ya muestra el precio antes de cobrar.
+- Derecho de cancelación — el portal de cliente de Stripe ya permite
+  cancelar, confirma que el texto de tus Términos lo describa
+  correctamente (cuándo deja de tener acceso, si hay reembolso parcial).
+- Si publicitas precios ("Mejoras... Publicidad" del checklist de
+  marketing), deben coincidir exactamente con lo que Stripe cobra.
+
+### 6.5 Menores de edad
+
+Si algún doctor de la plataforma es pediatra (o cualquier especialidad que
+atienda menores), el formulario público de agendar cita
+(`PublicDoctorProfile.tsx`) hoy no distingue si el paciente es mayor o
+menor de edad. Bajo la LFPDPPP y normativa de salud, tratar datos de un
+menor típicamente requiere consentimiento de quien ejerce la patria
+potestad o tutela — vale la pena preguntarle a tu abogado si:
+- Hace falta un campo/checkbox adicional específico para este caso, o
+- Basta con que el consentimiento general ya lo cubra si quien agenda la
+  cita declara ser el padre/tutor.
+
+### 6.6 Fiscal — CFDI y régimen (ver también la conversación sobre RESICO)
+
+- Emitir CFDI 4.0 por cada cobro de suscripción — Stripe no lo genera
+  automáticamente, se necesita un PAC (proveedor autorizado de
+  certificación) o la herramienta gratuita del SAT.
+- Confirmar el régimen fiscal correcto (RESICO código 626, o Actividad
+  Empresarial y Profesional código 612) antes de facturar el primer cobro
+  real — pendiente de tu firma electrónica.
+
+### 6.7 Cookies / almacenamiento local
+
+Sin ser tan estricto como el "cookie consent" de la Unión Europea, la
+LFPDPPP sí espera transparencia sobre qué se guarda en el navegador del
+usuario. El sistema usa `localStorage` (token de sesión, preferencia de
+tema) y, si se activan reCAPTCHA/Sentry, esos scripts también dejan sus
+propias cookies/almacenamiento. Vale la pena una línea en el Aviso de
+Privacidad mencionándolo, aunque sea breve.
+
+---
+
 ## Checklist rápido para marcar conforme avances
 
 - [ ] `SUPERADMIN_USERNAME` / `SUPERADMIN_PASSWORD`
@@ -290,8 +449,13 @@ dejarlo aquí porque varias piezas técnicas ya están listas para soportarla:
 - [x] Conectar `propatient.pro` en Render (DNS en Porkbun) y actualizar
       `FRONTEND_URL`/`VITE_API_URL`/Google OAuth con el dominio nuevo ✅
 - [ ] Base de datos y backend fuera del plan free de Render
-- [ ] Revisión legal de Privacidad/Términos
-- [ ] CFDI/facturación fiscal (si aplica)
+- [ ] Aviso de Privacidad completo y revisado por abogado (LFPDPPP, sección 6.1)
+- [ ] Transferencias internacionales de datos declaradas (Google, Twilio, Resend, Stripe, S3 — sección 6.1)
+- [ ] Retención de expediente clínico conforme a NOM-004-SSA3-2012 (sección 6.2)
+- [ ] Términos y Condiciones con deslinde de responsabilidad médica (sección 6.3)
+- [ ] Política de cancelación conforme a PROFECO (sección 6.4)
+- [ ] Consentimiento para menores de edad, si aplica (sección 6.5)
+- [ ] CFDI/facturación fiscal (sección 6.6)
 - [x] Consentimiento explícito de datos de salud en el booking público ✅
 - [x] CI automatizado ✅
 - [ ] `RECAPTCHA_SECRET_KEY` / `VITE_RECAPTCHA_SITE_KEY` (código ya listo, ver sección 1.6)
