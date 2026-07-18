@@ -97,7 +97,7 @@ export const BillingPage: React.FC = () => {
           </div>
         )}
 
-        <h1>Facturación</h1>
+        <h1>Suscripción</h1>
 
         {loading ? (
           <p className="billing-muted">Cargando...</p>

@@ -93,6 +93,15 @@
 
   .table-wrapper {
     overflow-x: auto;
+    transition: opacity 0.15s ease;
+
+    // Mientras busca o cambia de página, la tabla se atenúa un poco en su
+    // lugar en vez de desmontarse — así el campo de búsqueda nunca pierde
+    // el foco ni se destruye a medio escribir.
+    &.is-loading {
+      opacity: 0.5;
+      pointer-events: none;
+    }
   }
 
   .patients-table {

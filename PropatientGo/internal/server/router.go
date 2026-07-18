@@ -176,7 +176,6 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 			authRoutes.POST("/register", authLimiter.Middleware(), auth.RegisterDoctor(db))
 			authRoutes.POST("/google-login", authLimiter.Middleware(), auth.GoogleLoginHandler(db))
 			authRoutes.POST("/staff-login", authLimiter.Middleware(), handlers.StaffLoginHandler(db))
-			authRoutes.POST("/staff-login/select-doctor", authLimiter.Middleware(), handlers.SelectStaffDoctorHandler(db))
 			authRoutes.GET("/staff-invite/:token", handlers.GetStaffInvite(db))
 			authRoutes.POST("/staff-invite/:token", handlers.AcceptStaffInvite(db))
 			authRoutes.POST("/staff-password-reset/request", authLimiter.Middleware(), handlers.RequestStaffPasswordReset(db))
@@ -346,6 +345,15 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 				// doctor como su perfil o sus plantillas.
 				gated.GET("/doctor/schedule", handlers.GetDoctorSchedule(db))
 				gated.PUT("/doctor/schedule", handlers.SaveDoctorSchedule(db))
+
+				// Consultorios disponibles para la cuenta de personal de la
+				// sesión actual, y cambio de consultorio activo sin cerrar
+				// sesión (clínicas con personal compartido, ver
+				// GenerateStaffToken). A propósito fuera de RequireDoctorRole:
+				// son rutas de autoservicio del propio personal, no de
+				// gestión de personal por parte del doctor.
+				gated.GET("/staff/my-doctors", handlers.ListMyDoctors(db))
+				gated.POST("/staff/switch-doctor", handlers.SwitchStaffDoctor(db))
 
 				// Alta/gestión de cuentas de personal: solo el doctor.
 				staffRoutes := gated.Group("/staff")

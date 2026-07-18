@@ -713,7 +713,7 @@ export const DoctorProfile = () => {
     <ConfirmDialog
         isOpen={showDeleteConfirm}
         title="Eliminar mi cuenta"
-        message="Tu cuenta se desactivará y ya no podrás iniciar sesión. Los expedientes clínicos se conservan por obligación legal; contáctanos si necesitas su eliminación completa. Si tienes una suscripción activa, cancélala primero desde Facturación."
+        message="Tu cuenta se desactivará y ya no podrás iniciar sesión. Los expedientes clínicos se conservan por obligación legal; contáctanos si necesitas su eliminación completa. Si tienes una suscripción activa, cancélala primero desde Suscripción."
         confirmText="Eliminar mi cuenta"
         variant="danger"
         onConfirm={handleDeleteAccount}

@@ -374,7 +374,7 @@ export const AppointmentTracking: React.FC = () => {
                             ✓ Atendido
                           </span>
                         ) : (
-                          <div style={{ display: 'flex', gap: '8px' }}>
+                          <div style={{ display: 'inline-flex', gap: '8px' }}>
                             {!isStaff && (
                               <button className="btn-primary" onClick={() => handleStartConsultationClick(app)}>
                                 <span className="material-icons-outlined" style={{ fontSize: '16px' }}>play_arrow</span>

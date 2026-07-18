@@ -12,7 +12,14 @@ const PAGE_SIZE = 20;
 export const PatientList: React.FC = () => {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [loading, setLoading] = useState(true);
+  // initialLoading: solo la primerísima carga, antes de tener nada que
+  // mostrar — ahí sí tiene sentido reemplazar toda la pantalla.
+  // tableLoading: cualquier carga posterior (buscar, cambiar de página) —
+  // NUNCA debe desmontar la barra de búsqueda ni la tabla, solo atenuarlas
+  // un poco, para no destruir y recrear el <input> (perdía el foco y se
+  // sentía "rara" cada vez que se escribía algo, ver bug reportado).
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [tableLoading, setTableLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [patientToDelete, setPatientToDelete] = useState<Patient | null>(null);
@@ -22,7 +29,7 @@ export const PatientList: React.FC = () => {
   const isSearching = searchTerm.length > 0;
 
   const fetchPatients = async (query: string = '', targetPage: number = 1) => {
-    setLoading(true);
+    setTableLoading(true);
     try {
       if (query) {
         const response = await api.get(`/patients/search?query=${query}`);
@@ -36,7 +43,8 @@ export const PatientList: React.FC = () => {
     } catch (error) {
       console.error("Error cargando pacientes:", error);
     } finally {
-      setLoading(false);
+      setTableLoading(false);
+      setInitialLoading(false);
     }
   };
 
@@ -97,7 +105,7 @@ export const PatientList: React.FC = () => {
         </button>
       </header>
 
-      {loading ? (
+      {initialLoading ? (
         <div className="loading-state">
           <p>Cargando pacientes...</p>
         </div>
@@ -108,7 +116,6 @@ export const PatientList: React.FC = () => {
             <div className="search-wrapper">
               <span className="material-icons-outlined search-icon">search</span>
               <input
-                key="search-input"
                 type="text"
                 placeholder="Buscar por nombre, apellido o teléfono..."
                 value={searchTerm}
@@ -120,7 +127,7 @@ export const PatientList: React.FC = () => {
           </div>
 
           {/* TABLA DE PACIENTES */}
-          <div className="table-wrapper">
+          <div className={`table-wrapper ${tableLoading ? 'is-loading' : ''}`}>
             <table className="patients-table">
               <thead>
                 <tr>

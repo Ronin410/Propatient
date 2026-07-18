@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Footer } from '../components/Footer';
 import api from '../api/axios';
+import type { StaffDoctorOption } from '../types';
 import './DashboardLayout.scss';
 
 interface DashboardLayoutProps {
@@ -15,11 +16,42 @@ interface DashboardLayoutProps {
 }
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
-  const { logout, isStaff, doctorName: sessionDoctorName, setDoctorName } = useAuth();
+  const { logout, isStaff, doctorName: sessionDoctorName, setDoctorName, loginStaff } = useAuth();
   const { resolvedTheme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Consultorios a los que esta cuenta de personal tiene acceso activo, para
+  // el selector de "cambiar de consultorio" de abajo — solo se muestra si
+  // hay más de uno (clínica con personal compartido, ver ListMyDoctors).
+  const [staffDoctors, setStaffDoctors] = useState<StaffDoctorOption[]>([]);
+  const [switchingDoctor, setSwitchingDoctor] = useState(false);
+
+  useEffect(() => {
+    if (!isStaff) return;
+    api.get('/staff/my-doctors')
+      .then((res) => setStaffDoctors(res.data?.doctors || []))
+      .catch(() => {
+        // Sin red o error: simplemente no aparece el selector, no es crítico.
+      });
+  }, [isStaff]);
+
+  const handleSwitchDoctor = async (doctorId: number) => {
+    if (!doctorId || switchingDoctor) return;
+    setSwitchingDoctor(true);
+    try {
+      const res = await api.post('/staff/switch-doctor', { doctorId });
+      loginStaff(res.data.token, res.data.doctorName || '');
+      // Recarga completa (no solo navigate): evita que quede en memoria
+      // caché de pacientes/citas del consultorio anterior, mismo patrón
+      // que handleDeleteAccount en DoctorProfile.
+      window.location.href = '/inicio';
+    } catch {
+      setSwitchingDoctor(false);
+      window.alert('No se pudo cambiar de consultorio. Intenta de nuevo.');
+    }
+  };
 
   // Autocompletar el nombre si la sesión ya estaba abierta antes de que
   // login()/Perfil empezaran a guardarlo (o si por lo que sea nunca se
@@ -67,7 +99,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
     ...(!isStaff ? [
       { label: 'Personal', icon: 'badge', route: '/personal' },
       { label: 'Reseñas', icon: 'reviews', route: '/resenas' },
-      { label: 'Facturación', icon: 'credit_card', route: '/billing' },
+      { label: 'Suscripción', icon: 'credit_card', route: '/billing' },
       { label: 'Perfil', icon: 'settings', route: '/profile' },
       { label: 'Ajustes Notas', icon: 'tune', route: '/ajustes-notas' }
     ] : [])
@@ -149,6 +181,23 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
             </div>
             <p className="doctor-name">{doctorName}</p>
           </div>
+
+          {isStaff && staffDoctors.length > 1 && (
+            <div className="doctor-switcher">
+              <select
+                value=""
+                disabled={switchingDoctor}
+                aria-label="Cambiar de consultorio"
+                onChange={(e) => handleSwitchDoctor(Number(e.target.value))}
+              >
+                <option value="">{switchingDoctor ? 'Cambiando de consultorio...' : 'Cambiar de consultorio...'}</option>
+                {staffDoctors.map((doc) => (
+                  <option key={doc.doctorId} value={doc.doctorId}>{doc.doctorName}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <button
             className="theme-toggle-link"
             onClick={toggleTheme}

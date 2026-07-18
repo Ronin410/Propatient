@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"propatient-api/internal/auth"
 	"propatient-api/internal/models"
 	"propatient-api/internal/server"
 	"propatient-api/internal/testutil"
@@ -383,46 +382,63 @@ func TestStaff_SecondDoctorCanInviteSameEmail(t *testing.T) {
 	})
 	assert.Equal(t, http.StatusConflict, w.Code)
 
-	// El login ahora debe pedir elegir consultorio (2 vínculos activos).
+	// El login ahora entrega de una vez el JWT de sesión, escopado al
+	// primer consultorio activo (2 vínculos activos, pero ya no se pide
+	// elegir) — puede cambiar de consultorio después, sin cerrar sesión.
 	w = doRequest(t, router, http.MethodPost, "/api/auth/staff-login", "", map[string]any{
 		"email": "compartida@clinica.test", "password": "claveCompartida1",
 	})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	loginResp := decodeJSON(t, w)
-	assert.Equal(t, true, loginResp["needsDoctorSelection"])
-	selectionToken, _ := loginResp["selectionToken"].(string)
-	require.NotEmpty(t, selectionToken)
-	doctors, _ := loginResp["doctors"].([]any)
-	require.Len(t, doctors, 2)
+	assert.Nil(t, loginResp["needsDoctorSelection"])
+	staffToken, _ := loginResp["token"].(string)
+	require.NotEmpty(t, staffToken)
+	loginDoctorName, _ := loginResp["doctorName"].(string)
 
-	// Con el token de selección, elige el consultorio de A y recibe un JWT
-	// real, correctamente escopado a docA.
-	w = doRequest(t, router, http.MethodPost, "/api/auth/staff-login/select-doctor", "", map[string]any{
-		"selectionToken": selectionToken, "doctorId": docA.ID,
+	// Ve ambos consultorios disponibles en el selector del dashboard.
+	w = doRequest(t, router, http.MethodGet, "/api/staff/my-doctors", staffToken, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	myDoctorsResp := decodeJSON(t, w)
+	myDoctors, _ := myDoctorsResp["doctors"].([]any)
+	require.Len(t, myDoctors, 2)
+
+	// Determina cuál de los dos NO es el consultorio con el que entró, y
+	// cambia a ese sin cerrar sesión.
+	otherDoctorID, otherDoctorName := docB.ID, docB.FullName
+	otherDoctorToken := tokenB
+	firstDoctorToken := tokenA
+	if loginDoctorName == docB.FullName {
+		otherDoctorID, otherDoctorName = docA.ID, docA.FullName
+		otherDoctorToken = tokenA
+		firstDoctorToken = tokenB
+	}
+
+	w = doRequest(t, router, http.MethodPost, "/api/staff/switch-doctor", staffToken, map[string]any{
+		"doctorId": otherDoctorID,
 	})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	selectResp := decodeJSON(t, w)
-	assert.Equal(t, "Dra. A", selectResp["doctorName"])
-	staffToken, _ := selectResp["token"].(string)
-	require.NotEmpty(t, staffToken)
+	switchResp := decodeJSON(t, w)
+	assert.Equal(t, otherDoctorName, switchResp["doctorName"])
+	switchedToken, _ := switchResp["token"].(string)
+	require.NotEmpty(t, switchedToken)
 
-	// Ese token da acceso a los datos del consultorio de A.
-	w = doRequest(t, router, http.MethodPost, "/api/patients", staffToken, map[string]any{
+	// El nuevo token da acceso a los datos del consultorio al que cambió.
+	w = doRequest(t, router, http.MethodPost, "/api/patients", switchedToken, map[string]any{
 		"firstName": "Paciente", "lastName": "DeA", "email": "pacientea_share@test.local",
 	})
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 
-	w = doRequest(t, router, http.MethodGet, "/api/patients", tokenA, nil)
+	w = doRequest(t, router, http.MethodGet, "/api/patients", otherDoctorToken, nil)
 	require.Equal(t, http.StatusOK, w.Code)
-	patientsA := decodeJSON(t, w)
-	dataA, _ := patientsA["data"].([]any)
-	assert.Len(t, dataA, 1, "el paciente creado por el personal debe verse en el consultorio de A")
+	patientsOther := decodeJSON(t, w)
+	dataOther, _ := patientsOther["data"].([]any)
+	assert.Len(t, dataOther, 1, "el paciente creado tras cambiar de consultorio debe verse ahí")
 
-	w = doRequest(t, router, http.MethodGet, "/api/patients", tokenB, nil)
+	w = doRequest(t, router, http.MethodGet, "/api/patients", firstDoctorToken, nil)
 	require.Equal(t, http.StatusOK, w.Code)
-	patientsB := decodeJSON(t, w)
-	dataB, _ := patientsB["data"].([]any)
-	assert.Len(t, dataB, 0, "el consultorio de B no debe ver los pacientes creados en el de A")
+	patientsFirst := decodeJSON(t, w)
+	dataFirst, _ := patientsFirst["data"].([]any)
+	assert.Len(t, dataFirst, 0, "el otro consultorio no debe ver los pacientes creados tras el cambio")
 
 	// Desactivar el acceso desde el consultorio de B no debe afectar el
 	// acceso al consultorio de A.
@@ -449,36 +465,31 @@ func TestStaff_SecondDoctorCanInviteSameEmail(t *testing.T) {
 	assert.Equal(t, "Dra. A", loginAfterDeactivate["doctorName"])
 }
 
-// TestStaff_SelectDoctor_RejectsInvalidOrForeignSelectionToken cubre los
-// casos de rechazo del segundo paso del login: token inventado, y token
-// válido pero pidiendo un consultorio al que esa cuenta no tiene acceso.
-func TestStaff_SelectDoctor_RejectsInvalidOrForeignSelectionToken(t *testing.T) {
+// TestStaff_SwitchDoctor_RejectsForeignAccessAndDoctorRole cubre los casos
+// de rechazo de cambiar de consultorio sin cerrar sesión: un consultorio al
+// que esa cuenta de personal no tiene ningún vínculo, y una sesión que no
+// es de personal (la cuenta del doctor no tiene "consultorios" entre los
+// que cambiar).
+func TestStaff_SwitchDoctor_RejectsForeignAccessAndDoctorRole(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	router := server.NewRouter(db)
 
-	docA := testutil.CreateTestDoctor(t, db, "doc_select_a", "password123")
-	docOther := testutil.CreateTestDoctor(t, db, "doc_select_other", "password123")
-	staff := testutil.CreateTestStaff(t, db, docA.ID, "select_test@consultorio.test", "clave123456")
+	docA := testutil.CreateTestDoctor(t, db, "doc_switch_a", "password123")
+	docOther := testutil.CreateTestDoctor(t, db, "doc_switch_other", "password123")
+	staff := testutil.CreateTestStaff(t, db, docA.ID, "switch_test@consultorio.test", "clave123456")
 
-	w := doRequest(t, router, http.MethodPost, "/api/auth/staff-login/select-doctor", "", map[string]any{
-		"selectionToken": "token-inventado-no-existe", "doctorId": docA.ID,
-	})
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
-
-	// Un JWT de sesión normal de personal tampoco sirve como token de
-	// selección (roles distintos).
+	// Un consultorio al que esta cuenta de personal no tiene ningún vínculo.
 	staffToken := testutil.TokenForStaff(t, docA.ID, staff.ID, staff.Email)
-	w = doRequest(t, router, http.MethodPost, "/api/auth/staff-login/select-doctor", "", map[string]any{
-		"selectionToken": staffToken, "doctorId": docA.ID,
+	w := doRequest(t, router, http.MethodPost, "/api/staff/switch-doctor", staffToken, map[string]any{
+		"doctorId": docOther.ID,
 	})
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Equal(t, http.StatusForbidden, w.Code)
 
-	// Un token de selección real, pero pidiendo un consultorio al que no
-	// tiene ningún vínculo.
-	selectionToken, err := auth.GenerateStaffSelectionToken(staff.ID, staff.Email)
-	require.NoError(t, err)
-	w = doRequest(t, router, http.MethodPost, "/api/auth/staff-login/select-doctor", "", map[string]any{
-		"selectionToken": selectionToken, "doctorId": docOther.ID,
+	// La sesión del propio doctor (no de personal) no tiene "staffId" en
+	// el token, así que tampoco puede llamar este endpoint.
+	tokenA := testutil.TokenFor(t, docA.ID, docA.Username)
+	w = doRequest(t, router, http.MethodPost, "/api/staff/switch-doctor", tokenA, map[string]any{
+		"doctorId": docA.ID,
 	})
 	assert.Equal(t, http.StatusForbidden, w.Code)
 }

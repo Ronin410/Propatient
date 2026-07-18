@@ -4,7 +4,6 @@ import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 import { AuthLayout } from './AuthLayout';
 import { getErrorMessage } from '../utils/errorMessage';
-import type { StaffDoctorOption } from '../types';
 import './Login.scss';
 
 export const StaffLogin: React.FC = () => {
@@ -12,13 +11,6 @@ export const StaffLogin: React.FC = () => {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Cuando la cuenta tiene acceso activo a más de un consultorio, el login
-  // se resuelve en dos pasos: primero correo/contraseña (abajo), y si el
-  // backend responde needsDoctorSelection, se muestra esta pantalla extra
-  // para elegir con cuál consultorio entrar (ver SelectStaffDoctorHandler).
-  const [doctorOptions, setDoctorOptions] = useState<StaffDoctorOption[] | null>(null);
-  const [selectionToken, setSelectionToken] = useState<string | null>(null);
 
   const { loginStaff } = useAuth();
   const navigate = useNavigate();
@@ -28,12 +20,10 @@ export const StaffLogin: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
+      // Si la cuenta tiene acceso a más de un consultorio, el login entra
+      // directo al primero y puede cambiar de consultorio ya dentro del
+      // dashboard sin cerrar sesión (ver selector en DashboardLayout).
       const res = await api.post('/auth/staff-login', { email, password });
-      if (res.data.needsDoctorSelection) {
-        setDoctorOptions(res.data.doctors || []);
-        setSelectionToken(res.data.selectionToken);
-        return;
-      }
       loginStaff(res.data.token, res.data.doctorName || '');
       navigate('/inicio');
     } catch (err: unknown) {
@@ -42,90 +32,6 @@ export const StaffLogin: React.FC = () => {
       setIsLoading(false);
     }
   };
-
-  const handleSelectDoctor = async (doctorId: number) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const res = await api.post('/auth/staff-login/select-doctor', { selectionToken, doctorId });
-      loginStaff(res.data.token, res.data.doctorName || '');
-      navigate('/inicio');
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, 'No se pudo iniciar sesión. Intenta de nuevo.'));
-      setDoctorOptions(null);
-      setSelectionToken(null);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  if (doctorOptions) {
-    return (
-      <AuthLayout>
-        <div
-          className="card"
-          style={{
-            padding: '48px 35px 40px 35px',
-            backgroundColor: 'var(--bg)',
-            borderRadius: '24px',
-            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02)',
-            boxSizing: 'border-box',
-            width: '100%'
-          }}
-        >
-          <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-            <h1 style={{ fontSize: '26px', fontWeight: 700, color: 'var(--color-heading)', margin: 0, letterSpacing: '-0.5px' }}>
-              ¿Con cuál consultorio quieres entrar?
-            </h1>
-            <p style={{ fontSize: '14px', color: 'var(--color-secondary)', marginTop: '6px', fontWeight: 500 }}>
-              Tienes acceso activo a más de un consultorio
-            </p>
-          </div>
-
-          {error && (
-            <div
-              className="alert alert-danger"
-              style={{
-                marginBottom: '1rem',
-                padding: '12px 14px',
-                borderRadius: '8px',
-                backgroundColor: 'var(--color-danger-bg)',
-                color: 'var(--color-danger)',
-                fontSize: '13px',
-                border: '1px solid var(--color-danger-border)'
-              }}
-            >
-              {error}
-            </div>
-          )}
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {doctorOptions.map((doc) => (
-              <button
-                key={doc.doctorId}
-                type="button"
-                className="btn-primary login-button"
-                disabled={isLoading}
-                onClick={() => handleSelectDoctor(doc.doctorId)}
-              >
-                {doc.doctorName}
-              </button>
-            ))}
-          </div>
-
-          <p style={{ fontSize: '13px', color: 'var(--color-secondary)', textAlign: 'center', marginTop: '20px' }}>
-            <button
-              type="button"
-              onClick={() => { setDoctorOptions(null); setSelectionToken(null); }}
-              style={{ background: 'none', border: 'none', color: 'var(--color-primary)', fontWeight: 600, cursor: 'pointer', fontSize: '13px' }}
-            >
-              Regresar
-            </button>
-          </p>
-        </div>
-      </AuthLayout>
-    );
-  }
 
   return (
     <AuthLayout>

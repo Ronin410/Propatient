@@ -373,12 +373,12 @@ func activeDoctorsForStaff(db *gorm.DB, staffID uint) ([]staffDoctorOption, erro
 	return doctors, err
 }
 
-// StaffLoginHandler autentica una cuenta de personal por correo/contraseña.
-// Si tiene acceso activo a un solo consultorio, devuelve el JWT de sesión
-// de una vez (mismo comportamiento de siempre). Si tiene acceso a varios
-// (clínica con personal compartido), en vez de asumir uno devuelve un
-// token de selección de corta vida y la lista de consultorios, para que
-// el frontend pida elegir uno (ver SelectStaffDoctorHandler). Público.
+// StaffLoginHandler autentica una cuenta de personal por correo/contraseña
+// y emite de una vez el JWT de sesión, para el primer consultorio activo
+// (orden alfabético) al que tenga acceso. Si tiene acceso a más de uno
+// (clínica con personal compartido), puede cambiar de consultorio ya
+// dentro del dashboard sin volver a iniciar sesión (ver ListMyDoctors/
+// SwitchStaffDoctor). Público.
 func StaffLoginHandler(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req staffLoginRequest
@@ -412,56 +412,62 @@ func StaffLoginHandler(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		if len(doctors) == 1 {
-			token, err := auth.GenerateStaffToken(doctors[0].DoctorID, staff.ID, staff.Email)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al generar la sesión"})
-				return
-			}
-			c.JSON(http.StatusOK, gin.H{
-				"token":      token,
-				"fullName":   staff.FullName,
-				"doctorName": doctors[0].DoctorName,
-				"role":       "STAFF",
-			})
-			return
-		}
-
-		selectionToken, err := auth.GenerateStaffSelectionToken(staff.ID, staff.Email)
+		token, err := auth.GenerateStaffToken(doctors[0].DoctorID, staff.ID, staff.Email)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al generar la sesión"})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"needsDoctorSelection": true,
-			"selectionToken":       selectionToken,
-			"doctors":              doctors,
+			"token":      token,
+			"fullName":   staff.FullName,
+			"doctorName": doctors[0].DoctorName,
+			"role":       "STAFF",
 		})
 	}
 }
 
-type selectStaffDoctorRequest struct {
-	SelectionToken string `json:"selectionToken" binding:"required"`
-	DoctorID       uint   `json:"doctorId" binding:"required"`
-}
-
-// SelectStaffDoctorHandler es el segundo paso del login de personal
-// cuando tiene acceso activo a más de un consultorio: recibe el token de
-// selección emitido por StaffLoginHandler (prueba que la contraseña ya se
-// validó) y el doctorId elegido, y emite el JWT real de sesión para ESE
-// consultorio. Público — usa su propio token de corta vida, no un JWT de
-// sesión normal.
-func SelectStaffDoctorHandler(db *gorm.DB) gin.HandlerFunc {
+// ListMyDoctors devuelve los consultorios activos a los que tiene acceso
+// la cuenta de personal de la sesión actual, para el selector de "cambiar
+// de consultorio" del dashboard. Requiere sesión de personal (staffId en
+// el token) — a propósito fuera de RequireDoctorRole, es autoservicio.
+func ListMyDoctors(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var req selectStaffDoctorRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		staffIDVal, exists := c.Get("staffId")
+		if !exists {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Solo el personal tiene consultorios entre los que cambiar"})
 			return
 		}
+		staffID := staffIDVal.(uint)
 
-		staffID, err := auth.ValidateStaffSelectionToken(req.SelectionToken)
+		doctors, err := activeDoctorsForStaff(db, staffID)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Sesión de selección inválida o vencida. Inicia sesión de nuevo."})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al consultar los consultorios"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"doctors": doctors})
+	}
+}
+
+type switchStaffDoctorRequest struct {
+	DoctorID uint `json:"doctorId" binding:"required"`
+}
+
+// SwitchStaffDoctor reemite el JWT de sesión de personal para OTRO
+// consultorio al que ya tenga acceso activo, sin cerrar sesión ni volver
+// a pedir contraseña — la cuenta de personal (staffId) es la misma, solo
+// cambia el doctorID que llevan los claims.
+func SwitchStaffDoctor(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		staffIDVal, exists := c.Get("staffId")
+		if !exists {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Solo el personal puede cambiar de consultorio"})
+			return
+		}
+		staffID := staffIDVal.(uint)
+
+		var req switchStaffDoctorRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Datos inválidos"})
 			return
 		}
 
@@ -472,7 +478,7 @@ func SelectStaffDoctorHandler(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		var link models.DoctorStaff
-		err = db.Where("staff_id = ? AND doctor_id = ? AND active = ?", staffID, req.DoctorID, true).First(&link).Error
+		err := db.Where("staff_id = ? AND doctor_id = ? AND active = ?", staffID, req.DoctorID, true).First(&link).Error
 		if err != nil {
 			c.JSON(http.StatusForbidden, gin.H{"error": "No tienes acceso activo a ese consultorio."})
 			return
