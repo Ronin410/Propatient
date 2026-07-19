@@ -46,6 +46,7 @@ export const PatientDetail: React.FC = () => {
             <span className="material-icons-outlined">arrow_back</span>
           </button>
           <h1>{patient.firstName} {patient.lastName}</h1>
+          {patient.isMinor && <span className="minor-badge">Menor de edad</span>}
         </div>
         <div className="header-actions">
           <button className="btn-outline-sm" onClick={() => downloadPatientHistoryPDF(patient)}>
@@ -65,8 +66,8 @@ export const PatientDetail: React.FC = () => {
         <div className="main-info">
           <section className="card info-card">
             <h3>Información General</h3>
-            <p><strong>Teléfono:</strong> {patient.phone || 'N/A'}</p>
-            <p><strong>Email:</strong> {patient.email}</p>
+            <p><strong>Teléfono{patient.isMinor ? ' (padre/madre o tutor)' : ''}:</strong> {patient.phone || 'N/A'}</p>
+            <p><strong>Email{patient.isMinor ? ' (padre/madre o tutor)' : ''}:</strong> {patient.email}</p>
             <p><strong>F. Nacimiento:</strong> {patient.birthDate ? formatToLocalDate(patient.birthDate) : 'N/A'}</p>
           </section>
 

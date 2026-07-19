@@ -263,6 +263,21 @@
     a { color: var(--color-primary); font-weight: 600; }
   }
 
+  .minor-checkbox {
+    font-weight: 600;
+    color: var(--color-heading);
+    margin-top: -0.4rem;
+  }
+
+  .minor-hint {
+    margin: -0.4rem 0 0 0;
+    font-size: 0.8rem;
+    color: var(--color-secondary);
+    background: var(--bg-subtle);
+    border-radius: 8px;
+    padding: 0.6rem 0.8rem;
+  }
+
   .btn-primary-lg {
     background: var(--color-primary);
     color: #ffffff;

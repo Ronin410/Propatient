@@ -349,3 +349,39 @@ func TestPublicAppointment_RequiresDataConsent(t *testing.T) {
 	w = doRequest(t, router, http.MethodPost, "/api/public/appointments", "", baseBody)
 	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 }
+
+// TestPublicAppointment_MarksPatientAsMinor cubre el caso de un padre/madre
+// o tutor agendando para un paciente menor de edad: el teléfono/correo del
+// formulario son los del adulto (el menor no tiene los suyos propios), y
+// isMinorPatient debe quedar guardado en el expediente del paciente para
+// que el doctor sepa que el consentimiento lo dio su tutor, no el paciente.
+func TestPublicAppointment_MarksPatientAsMinor(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), nil)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_minor_patient", "password123")
+	require.NoError(t, db.Model(&doc).Updates(map[string]any{"public_listed": true, "public_slug": "dr-minor-1"}).Error)
+	docToken := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doRequest(t, router, http.MethodPost, "/api/public/appointments", "", map[string]any{
+		"doctorId":            doc.ID,
+		"appointmentDateTime": "2026-09-01T10:00:00Z",
+		"patientFirstName":    "Sofía",
+		"patientLastName":     "Niña",
+		"patientPhone":        "5559998888", // teléfono del padre/tutor, no del menor
+		"patientEmail":        "papa.de.sofia@test.local",
+		"dataConsent":         true,
+		"isMinorPatient":      true,
+	})
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+
+	w = doRequest(t, router, http.MethodGet, "/api/appointments?status=PENDING_CONFIRMATION", docToken, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	var requests []map[string]any
+	decodeJSONList(t, w, &requests)
+	require.Len(t, requests, 1)
+	patient, ok := requests[0]["patient"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, true, patient["isMinor"], "el paciente debe quedar marcado como menor de edad")
+}

@@ -216,6 +216,14 @@ type publicAppointmentRequest struct {
 	// poder devolver un mensaje en español en vez del error genérico de
 	// validación de Gin.
 	DataConsent bool `json:"dataConsent"`
+	// Si el paciente es menor de edad, el teléfono/correo de arriba son los
+	// del padre/madre o tutor (no puede tener los suyos propios) — el
+	// frontend cambia el texto del checkbox de consentimiento para que sea
+	// una declaración explícita de patria potestad/tutela en ese caso (ver
+	// PublicDoctorProfile.tsx). Se guarda en el expediente del paciente
+	// (Patient.IsMinor) para que quede documentado quién autorizó el
+	// tratamiento de sus datos.
+	IsMinorPatient bool `json:"isMinorPatient"`
 	// Token de reCAPTCHA v3 generado por el frontend. Opcional a nivel de
 	// request: si el backend no tiene RECAPTCHA_SECRET_KEY configurada,
 	// recaptcha.Verify no exige nada (ver ese paquete).
@@ -432,6 +440,7 @@ func findOrCreatePublicBookingPatient(db *gorm.DB, doctor models.Doctor, req pub
 		LastName:  req.PatientLastName,
 		Phone:     phone,
 		Email:     email,
+		IsMinor:   req.IsMinorPatient,
 	}
 	if err := db.Create(&patient).Error; err != nil {
 		return nil, false, err

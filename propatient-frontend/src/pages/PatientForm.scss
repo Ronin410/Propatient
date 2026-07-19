@@ -61,4 +61,18 @@
         width: 100%;
         margin-top: 1rem;
     }
+
+    .minor-checkbox {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin-bottom: 1.5rem;
+        font-weight: 600;
+        color: var(--color-dark);
+        cursor: pointer;
+
+        input {
+            width: auto;
+        }
+    }
 }

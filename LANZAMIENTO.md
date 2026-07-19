@@ -406,15 +406,22 @@ Aplica porque cobras una **suscripción recurrente** a los doctores:
 
 ### 6.5 Menores de edad
 
-Si algún doctor de la plataforma es pediatra (o cualquier especialidad que
-atienda menores), el formulario público de agendar cita
-(`PublicDoctorProfile.tsx`) hoy no distingue si el paciente es mayor o
-menor de edad. Bajo la LFPDPPP y normativa de salud, tratar datos de un
-menor típicamente requiere consentimiento de quien ejerce la patria
-potestad o tutela — vale la pena preguntarle a tu abogado si:
-- Hace falta un campo/checkbox adicional específico para este caso, o
-- Basta con que el consentimiento general ya lo cubra si quien agenda la
-  cita declara ser el padre/tutor.
+Ya implementado: el formulario público de agendar cita
+(`PublicDoctorProfile.tsx`) y el alta manual de pacientes
+(`PatientForm.tsx`) tienen un checkbox "El paciente es menor de edad".
+Al marcarlo:
+- Las etiquetas de teléfono/correo cambian para dejar claro que son los
+  datos de quien agenda (padre, madre o tutor), no los del menor.
+- El texto del checkbox de consentimiento cambia a una declaración
+  explícita ("Declaro ser el padre, madre o tutor legal del paciente...")
+  en vez del texto genérico.
+- Se guarda `Patient.isMinor` en el expediente, visible como una etiqueta
+  ("Menor de edad") en `PatientDetail.tsx`, para que quede documentado
+  quién autorizó el tratamiento de los datos.
+
+Sigue valiendo la pena confirmar con tu abogado si este nivel de
+consentimiento explícito es suficiente para tu caso de uso, o si además
+se requiere algo como una copia de identificación del tutor.
 
 ### 6.6 Fiscal — CFDI y régimen (ver también la conversación sobre RESICO)
 

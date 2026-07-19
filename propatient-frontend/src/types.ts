@@ -153,6 +153,10 @@ export interface Patient {
   phone: string;
   birthDate: string;
   gender: string;
+  // El teléfono/correo de un paciente menor de edad pertenecen a su
+  // padre/madre o tutor, no al propio paciente — ver PublicDoctorProfile.tsx
+  // (checkbox de agendado público) y PatientForm.tsx.
+  isMinor?: boolean;
   address?: string;
   updated_at?: string;
   medicalHistory?: MedicalHistory;

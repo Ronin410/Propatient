@@ -9,7 +9,6 @@ export const ValidateLicense = () => {
   const [licenseNumber, setLicenseNumber] = useState('');
   const [rfc, setRfc] = useState('');
   const [curp, setCurp] = useState('');
-  const [fee, setFee] = useState('0');
   const [ineFile, setIneFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +62,6 @@ export const ValidateLicense = () => {
       formData.append('licenseNumber', cleanLicense);
       formData.append('rfc', rfc.trim().toUpperCase());
       formData.append('curp', curp.trim().toUpperCase());
-      formData.append('baseConsultationFee', fee);
       formData.append('ineDocument', ineFile);
 
       await api.post('/user/update-license-full', formData, {
@@ -176,18 +174,7 @@ export const ValidateLicense = () => {
             </div>
           </div>
 
-          <div>
-            <label style={labelStyle}>Costo Base de Consulta ($ MXN)</label>
-            <input 
-              type="number" 
-              min="0" 
-              style={inputStyle} 
-              value={fee} 
-              onChange={(e) => setFee(e.target.value)} 
-            />
-          </div>
-
-          <div style={{ 
+          <div style={{
             background: 'var(--bg-subtle)', 
             padding: '20px', 
             borderRadius: '8px', 

@@ -200,6 +200,13 @@ type Patient struct {
 	LastName  string         `json:"lastName"`
 	BirthDate string         `json:"birthDate"`
 	Gender    string         `json:"gender"`
+	// El teléfono/correo de un paciente menor de edad pertenecen a quien
+	// ejerce su patria potestad o tutela, no al propio paciente — esta
+	// bandera lo deja explícito en el expediente (para el doctor) y en el
+	// registro de quién dio el consentimiento (ver CreatePublicAppointment,
+	// donde el checkbox de aceptación cambia de texto declarando ser
+	// padre/madre/tutor cuando se marca).
+	IsMinor bool `gorm:"default:false" json:"isMinor"`
 	// Sin "unique" a nivel de columna: un mismo paciente puede estar
 	// vinculado a varios doctores (many2many vía doctor_patients), así que
 	// la unicidad de correo se valida en el handler (CreatePatient), no en

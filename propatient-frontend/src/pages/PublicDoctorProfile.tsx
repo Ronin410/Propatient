@@ -80,6 +80,7 @@ interface BookingForm {
   patientPhone: string;
   patientEmail: string;
   dataConsent: boolean;
+  isMinorPatient: boolean;
 }
 
 const EMPTY_FORM: BookingForm = {
@@ -90,6 +91,7 @@ const EMPTY_FORM: BookingForm = {
   patientPhone: '',
   patientEmail: '',
   dataConsent: false,
+  isMinorPatient: false,
 };
 
 // Formato mínimo aceptado por <input type="datetime-local">: no se puede
@@ -139,6 +141,10 @@ export const PublicDoctorProfile: React.FC = () => {
     setForm((prev) => ({ ...prev, dataConsent: e.target.checked }));
   };
 
+  const handleMinorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setForm((prev) => ({ ...prev, isMinorPatient: e.target.checked }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!doctor) return;
@@ -166,6 +172,7 @@ export const PublicDoctorProfile: React.FC = () => {
         patientPhone: form.patientPhone,
         patientEmail: form.patientEmail,
         dataConsent: form.dataConsent,
+        isMinorPatient: form.isMinorPatient,
         recaptchaToken,
       });
       setSubmitted(true);
@@ -308,22 +315,34 @@ export const PublicDoctorProfile: React.FC = () => {
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label>Nombre(s)</label>
+                    <label>Nombre(s) del paciente</label>
                     <input type="text" name="patientFirstName" value={form.patientFirstName} onChange={handleChange} required />
                   </div>
                   <div className="form-group">
-                    <label>Apellido(s)</label>
+                    <label>Apellido(s) del paciente</label>
                     <input type="text" name="patientLastName" value={form.patientLastName} onChange={handleChange} required />
                   </div>
                 </div>
 
+                <label className="consent-checkbox minor-checkbox">
+                  <input type="checkbox" checked={form.isMinorPatient} onChange={handleMinorChange} />
+                  <span>El paciente es menor de edad</span>
+                </label>
+
+                {form.isMinorPatient && (
+                  <p className="minor-hint">
+                    Ingresa el teléfono y correo de quien agenda (padre, madre o tutor) — el consultorio
+                    los usará para contactarte sobre esta cita.
+                  </p>
+                )}
+
                 <div className="form-row">
                   <div className="form-group">
-                    <label>Teléfono</label>
+                    <label>{form.isMinorPatient ? 'Tu teléfono (padre/madre o tutor)' : 'Teléfono'}</label>
                     <input type="tel" name="patientPhone" value={form.patientPhone} onChange={handleChange} required />
                   </div>
                   <div className="form-group">
-                    <label>Correo electrónico</label>
+                    <label>{form.isMinorPatient ? 'Tu correo (padre/madre o tutor)' : 'Correo electrónico'}</label>
                     <input type="email" name="patientEmail" value={form.patientEmail} onChange={handleChange} required />
                   </div>
                 </div>
@@ -358,9 +377,20 @@ export const PublicDoctorProfile: React.FC = () => {
                 <label className="consent-checkbox">
                   <input type="checkbox" checked={form.dataConsent} onChange={handleConsentChange} required />
                   <span>
-                    Acepto que mis datos personales y de salud sean tratados conforme al{' '}
-                    <Link to="/privacidad" target="_blank" rel="noopener noreferrer">Aviso de Privacidad</Link>{' '}
-                    para agendar y dar seguimiento a esta cita.
+                    {form.isMinorPatient ? (
+                      <>
+                        Declaro ser el padre, madre o tutor legal del paciente y acepto que sus datos
+                        personales y de salud sean tratados conforme al{' '}
+                        <Link to="/privacidad" target="_blank" rel="noopener noreferrer">Aviso de Privacidad</Link>{' '}
+                        para agendar y dar seguimiento a esta cita.
+                      </>
+                    ) : (
+                      <>
+                        Acepto que mis datos personales y de salud sean tratados conforme al{' '}
+                        <Link to="/privacidad" target="_blank" rel="noopener noreferrer">Aviso de Privacidad</Link>{' '}
+                        para agendar y dar seguimiento a esta cita.
+                      </>
+                    )}
                   </span>
                 </label>
 

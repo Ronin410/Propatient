@@ -25,7 +25,8 @@ export const PatientForm: React.FC = () => {
     email: '',
     phone: '',
     birthDate: '',
-    gender: 'M'
+    gender: 'M',
+    isMinor: false
   });
 
   useEffect(() => {
@@ -40,7 +41,8 @@ export const PatientForm: React.FC = () => {
             email: p.email || '',
             phone: p.phone || '',
             birthDate: p.birthDate ? p.birthDate.split('T')[0] : '',
-            gender: p.gender || 'M'
+            gender: p.gender || 'M',
+            isMinor: !!p.isMinor
           });
         } catch (error) {
           console.error("Error al cargar datos del paciente:", error);
@@ -121,18 +123,27 @@ export const PatientForm: React.FC = () => {
           </div>
         </div>
 
+        <label className="minor-checkbox">
+          <input
+            type="checkbox"
+            checked={formData.isMinor}
+            onChange={e => setFormData({ ...formData, isMinor: e.target.checked })}
+          />
+          <span>Paciente menor de edad</span>
+        </label>
+
         <div className="form-group">
-          <label>Correo Electrónico (Opcional)</label>
-          <input 
-            type="email" 
-            value={formData.email} 
-            onChange={e => setFormData({...formData, email: e.target.value})} 
+          <label>Correo Electrónico {formData.isMinor ? '(del padre/madre o tutor, opcional)' : '(Opcional)'}</label>
+          <input
+            type="email"
+            value={formData.email}
+            onChange={e => setFormData({...formData, email: e.target.value})}
           />
         </div>
 
         <div className="form-row">
           <div className="form-group">
-            <label>Teléfono</label>
+            <label>Teléfono {formData.isMinor ? '(del padre/madre o tutor)' : ''}</label>
             <input
               type="tel"
               value={formData.phone}
@@ -142,10 +153,10 @@ export const PatientForm: React.FC = () => {
           </div>
           <div className="form-group">
             <label>Fecha de Nacimiento</label>
-            <input 
-              type="date" 
-              value={formData.birthDate} 
-              onChange={e => setFormData({...formData, birthDate: e.target.value})} 
+            <input
+              type="date"
+              value={formData.birthDate}
+              onChange={e => setFormData({...formData, birthDate: e.target.value})}
             />
           </div>
         </div>
