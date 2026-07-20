@@ -4,6 +4,7 @@ import api from '../api/axios';
 import { toAbsoluteFileUrl } from '../utils/fileUrl';
 import type { PublicDoctor } from '../types';
 import { Footer } from '../components/Footer';
+import { InstallPwaButton } from '../components/InstallPwaButton';
 import { useAuth } from '../context/AuthContext';
 import logo from '../assets/logo.png';
 import './Landing.scss';
@@ -52,6 +53,7 @@ export const Landing: React.FC = () => {
           </div>
           <nav>
             <Link to="/doctores" className="nav-link">Buscar doctor</Link>
+            <InstallPwaButton />
             {isAuthenticated ? (
               <Link to="/inicio" className="btn-nav-cta">Ir a mi panel</Link>
             ) : (

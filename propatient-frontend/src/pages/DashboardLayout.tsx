@@ -3,6 +3,7 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Footer } from '../components/Footer';
+import { InstallPwaButton } from '../components/InstallPwaButton';
 import api from '../api/axios';
 import type { StaffDoctorOption } from '../types';
 import logo from '../assets/logo.png';
@@ -196,6 +197,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
             </div>
           )}
 
+          <InstallPwaButton className="sidebar-install-btn" />
           <button
             className="theme-toggle-link"
             onClick={toggleTheme}

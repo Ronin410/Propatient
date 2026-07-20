@@ -240,6 +240,35 @@
         }
     }
 
+    /* El botón de instalar reutiliza InstallPwaButton.scss, pero ese
+       diseño (borde+texto en var(--color-primary)) se pierde sobre el
+       fondo teal oscuro del sidebar — lo alineamos con el resto del
+       footer (mismo estilo que theme-toggle-link). */
+    .sidebar-install-btn {
+        color: rgba(255, 255, 255, 0.85);
+        border: none;
+        background: none;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 12px;
+        padding: 10px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 500;
+        transition: background 0.2s;
+
+        .material-icons-outlined {
+            font-size: 20px;
+        }
+
+        &:hover {
+            background-color: rgba(255, 255, 255, 0.08);
+        }
+    }
+
     .logout-link {
         color: #ff6b6b;
         border: none;
