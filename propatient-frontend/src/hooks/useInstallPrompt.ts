@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { isStandalonePwa } from '../utils/platformDetection';
 
 // Chrome/Edge/Samsung Internet disparan este evento cuando consideran que
 // el sitio cumple los requisitos para instalarse (manifest + service
@@ -6,15 +7,6 @@ import { useCallback, useEffect, useState } from 'react';
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
-}
-
-function isStandalone(): boolean {
-  return (
-    window.matchMedia('(display-mode: standalone)').matches ||
-    // iOS Safari no tiene la media query de arriba, usa esta propiedad no
-    // estándar en su lugar.
-    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
-  );
 }
 
 interface UseInstallPromptResult {
@@ -34,7 +26,7 @@ interface UseInstallPromptResult {
 // siempre (ver el aviso alterno para iOS en InstallPwaButton.tsx).
 export function useInstallPrompt(): UseInstallPromptResult {
   const [deferredEvent, setDeferredEvent] = useState<BeforeInstallPromptEvent | null>(null);
-  const [installed, setInstalled] = useState(isStandalone());
+  const [installed, setInstalled] = useState(isStandalonePwa());
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: Event) => {

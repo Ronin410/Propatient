@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Footer } from '../components/Footer';
 import { InstallPwaButton } from '../components/InstallPwaButton';
+import { PwaInstallGuide } from '../components/PwaInstallGuide';
 import api from '../api/axios';
 import type { StaffDoctorOption } from '../types';
 import logo from '../assets/logo.png';
@@ -225,6 +226,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
             sí se estira normal, y la página adentro vuelve a centrarse
             como bloque normal, no como hijo flex. */}
         <div className="main-content-inner">
+          <PwaInstallGuide />
           {children ?? <Outlet />}
         </div>
         <Footer />

@@ -1,17 +1,7 @@
 import React, { useState } from 'react';
 import { useInstallPrompt } from '../hooks/useInstallPrompt';
+import { isIOSSafari } from '../utils/platformDetection';
 import './InstallPwaButton.scss';
-
-// Safari en iOS no dispara "beforeinstallprompt" (Apple no implementa ese
-// evento) — ahí no hay forma programática de ofrecer el instalador, solo
-// se puede indicarle al usuario el camino manual (Compartir → Agregar a
-// inicio).
-function isIOSSafari(): boolean {
-  const ua = window.navigator.userAgent;
-  const isIOS = /iPad|iPhone|iPod/.test(ua) && !(window as unknown as { MSStream?: unknown }).MSStream;
-  const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
-  return isIOS && isSafari;
-}
 
 interface InstallPwaButtonProps {
   className?: string;
