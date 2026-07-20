@@ -8,11 +8,49 @@ import { downloadPatientHistoryPDF } from '../utils/patientHistoryPdf';
 import { toAbsoluteFileUrl } from '../utils/fileUrl';
 import './PatientDetail.scss';
 
+interface AuditLogEntry {
+  id: number;
+  createdAt: string;
+  actorRole: 'MEDICO' | 'STAFF';
+  actorName: string;
+  action: 'created' | 'updated' | 'viewed' | 'deleted';
+  entityType: string;
+  details: string;
+  ipAddress: string;
+}
+
+const auditActionLabels: Record<AuditLogEntry['action'], string> = {
+  created: 'Creación',
+  updated: 'Modificación',
+  viewed: 'Consulta',
+  deleted: 'Eliminación',
+};
+
 export const PatientDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [isEditingHistory, setIsEditingHistory] = useState(false);
   const [editedHistory, setEditedHistory] = useState<MedicalHistory | null>(null);
+
+  const [showAuditLog, setShowAuditLog] = useState(false);
+  const [auditEntries, setAuditEntries] = useState<AuditLogEntry[] | null>(null);
+  const [auditLoading, setAuditLoading] = useState(false);
+
+  const handleToggleAuditLog = async () => {
+    const next = !showAuditLog;
+    setShowAuditLog(next);
+    if (next && auditEntries === null) {
+      setAuditLoading(true);
+      try {
+        const res = await api.get(`/patients/${id}/audit-log`);
+        setAuditEntries(res.data || []);
+      } catch {
+        setAuditEntries([]);
+      } finally {
+        setAuditLoading(false);
+      }
+    }
+  };
 
   // Endpoint: /api/patients/:id/history (definido en Go con Preloads)
   const { data: patient, loading, refetch } = useFetchData<Patient>(
@@ -189,6 +227,44 @@ export const PatientDetail: React.FC = () => {
                 <p className="empty-msg">No hay citas previas registradas.</p>
               )}
             </div>
+          </section>
+
+          <section className="card audit-log-card">
+            <div className="card-header-flex">
+              <h3>Bitácora de auditoría</h3>
+              <button className="btn-text" onClick={handleToggleAuditLog}>
+                {showAuditLog ? 'Ocultar' : 'Ver bitácora'}
+              </button>
+            </div>
+            <p className="audit-log-subtitle">
+              Quién accedió o modificó este expediente, cuándo y desde qué dirección — registro
+              exigido por la normativa de expedientes clínicos electrónicos (NOM-024).
+            </p>
+            {showAuditLog && (
+              auditLoading ? (
+                <p className="empty-msg">Cargando...</p>
+              ) : !auditEntries || auditEntries.length === 0 ? (
+                <p className="empty-msg">Sin eventos registrados todavía.</p>
+              ) : (
+                <ul className="audit-log-list">
+                  {auditEntries.map((entry) => (
+                    <li key={entry.id} className={`audit-log-item action-${entry.action}`}>
+                      <div className="audit-log-when">
+                        <span>{formatToLocalDate(entry.createdAt)}</span>
+                        <small>{formatToLocalTime(entry.createdAt)}</small>
+                      </div>
+                      <div className="audit-log-what">
+                        <strong>{auditActionLabels[entry.action]}</strong>
+                        <span> — {entry.details}</span>
+                        <div className="audit-log-actor">
+                          {entry.actorName || 'Cuenta eliminada'} ({entry.actorRole === 'STAFF' ? 'personal' : 'doctor'}) · IP {entry.ipAddress || 'desconocida'}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )
+            )}
           </section>
         </div>
       </div>

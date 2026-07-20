@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math"
 	"net/http"
+	"propatient-api/internal/audit"
 	"propatient-api/internal/models"
 	"propatient-api/internal/storage"
 	"strconv"
@@ -107,6 +108,8 @@ func UpdatePatient(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		audit.Log(db, c, doctorID, &patient.ID, audit.ActionUpdated, audit.EntityPatient, patient.ID, "Datos del paciente actualizados")
+
 		c.JSON(http.StatusOK, patient)
 	}
 }
@@ -184,6 +187,9 @@ func RemovePatientFromDoctor(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		patientID := castToUint(id)
+		audit.Log(db, c, doctorID, &patientID, audit.ActionDeleted, audit.EntityPatient, patientID, "Paciente desvinculado del consultorio")
+
 		c.JSON(http.StatusOK, gin.H{"message": "Paciente eliminado de tu lista"})
 	}
 }
@@ -246,6 +252,8 @@ func CreatePatient(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo registrar al paciente"})
 			return
 		}
+
+		audit.Log(db, c, doctorID, &patient.ID, audit.ActionCreated, audit.EntityPatient, patient.ID, "Paciente registrado")
 
 		c.JSON(http.StatusCreated, patient)
 	}
@@ -325,6 +333,8 @@ func GetPatientMedicalHistory(db *gorm.DB, storageClient storage.Client) gin.Han
 
 		presignAppointmentsFiles(c.Request.Context(), storageClient, patient.Appointments)
 
+		audit.Log(db, c, doctorID, &patient.ID, audit.ActionViewed, audit.EntityMedicalHistory, patient.ID, "Expediente clínico consultado")
+
 		c.JSON(http.StatusOK, patient)
 	}
 }
@@ -367,6 +377,8 @@ func UpdateMedicalHistory(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al guardar el historial médico"})
 			return
 		}
+
+		audit.Log(db, c, doctorID, &patientID, audit.ActionUpdated, audit.EntityMedicalHistory, history.ID, "Antecedentes clínicos actualizados")
 
 		c.JSON(http.StatusOK, gin.H{"message": "Historial médico actualizado", "history": history})
 	}
@@ -425,6 +437,32 @@ func GetPatientStats(db *gorm.DB) gin.HandlerFunc {
 			Row().Scan(&stats.LastVisit)
 
 		c.JSON(http.StatusOK, stats)
+	}
+}
+
+// GetPatientAuditLog devuelve la bitácora de auditoría de un paciente
+// (quién accedió/modificó su expediente, cuándo y desde qué IP — ver
+// internal/audit). Solo el doctor, nunca el personal: es información
+// sobre quién tocó el expediente clínico, no un dato operativo del día a
+// día. Al filtrar por DoctorID (el consultorio dueño del dato en el
+// momento de cada evento) no hace falta re-verificar el vínculo actual
+// con doctor_patients — un doctor nunca ve bitácora ajena porque nunca se
+// escribió con su DoctorID.
+func GetPatientAuditLog(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		patientID := castToUint(c.Param("id"))
+		doctorID := c.MustGet("doctorID").(uint)
+
+		var entries []models.AuditLog
+		if err := db.Where("doctor_id = ? AND patient_id = ?", doctorID, patientID).
+			Order("created_at DESC").
+			Limit(200).
+			Find(&entries).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo consultar la bitácora"})
+			return
+		}
+
+		c.JSON(http.StatusOK, entries)
 	}
 }
 

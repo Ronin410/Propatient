@@ -120,6 +120,10 @@
     }
 
     .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+
       .btn-outline-danger {
         background-color: var(--bg);
         border: 1px solid var(--color-danger);
@@ -133,6 +137,72 @@
 
         &:hover { background-color: var(--color-danger-bg); }
       }
+
+      .btn-outline-sm {
+        background-color: var(--bg);
+        border: 1px solid var(--color-primary);
+        color: var(--color-primary);
+        padding: 10px 16px;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 13px;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: all 0.2s ease;
+
+        &:hover { background-color: var(--color-primary); color: #ffffff; }
+      }
+    }
+  }
+
+  /* Historial de versiones anteriores de las notas clínicas (NOM-024) */
+  .note-history-panel {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+
+    .note-history-panel-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 12px;
+
+      .material-icons-outlined { font-size: 18px; color: var(--color-primary); margin-top: 2px; }
+      p { margin: 0; font-size: 13px; color: var(--color-secondary); }
+    }
+
+    .note-history-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+
+    .note-history-item {
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--bg-subtle);
+      font-size: 13px;
+
+      &:last-child { border-bottom: none; padding-bottom: 0; }
+
+      .note-history-meta {
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 6px;
+
+        strong { color: var(--color-heading); }
+        span { color: var(--color-secondary); }
+      }
+
+      p { margin: 0 0 4px 0; color: var(--color-dark, var(--color-heading)); white-space: pre-wrap; }
     }
   }
 

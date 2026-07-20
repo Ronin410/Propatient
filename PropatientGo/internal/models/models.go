@@ -399,3 +399,55 @@ type DoctorSchedule struct {
 	DoctorID  uint           `json:"doctorId" gorm:"uniqueIndex;not null"`
 	Days      datatypes.JSON `json:"days" gorm:"type:jsonb;not null"`
 }
+
+// AuditLog es la pista de auditoría del consultorio: quién accedió o
+// modificó qué dato clínico, cuándo y desde qué IP (ver internal/audit).
+// Append-only por diseño — ningún handler debe actualizar ni borrar una
+// fila ya escrita aquí, solo internal/audit.Log crea filas nuevas.
+// DoctorID identifica siempre al CONSULTORIO dueño del dato afectado
+// (para que el personal comparta la misma bitácora que su doctor), no a
+// quién hizo la acción — eso lo dicen ActorRole/ActorID/ActorName.
+// PatientID es opcional (nil en acciones que no son de un paciente en
+// particular, ej. login) — cuando aplica, permite consultar de un
+// vistazo toda la bitácora de un expediente sin importar si la entidad
+// tocada fue el propio paciente, su historial, una cita o un documento.
+type AuditLog struct {
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	CreatedAt  time.Time `gorm:"index" json:"createdAt"`
+	DoctorID   uint      `gorm:"index;not null" json:"doctorId"`
+	PatientID  *uint     `gorm:"index" json:"patientId"`
+	ActorRole  string    `json:"actorRole"` // "MEDICO" o "STAFF"
+	ActorID    uint      `json:"actorId"`
+	ActorName  string    `json:"actorName"` // snapshot: sigue siendo legible aunque la cuenta se borre después
+	Action     string    `json:"action"`    // "created" | "updated" | "viewed" | "deleted"
+	EntityType string    `json:"entityType"`
+	EntityID   uint      `json:"entityId"`
+	Details    string    `json:"details"`
+	IPAddress  string    `json:"ipAddress"`
+}
+
+// AppointmentNoteHistory preserva, de forma inmutable, el contenido
+// clínico de una cita justo ANTES de cada edición — así ninguna nota
+// firmada se pierde al corregirla, aunque la vista "actual" de la cita
+// (Appointment.Diagnosis/TreatmentPlan/Notes/DynamicNotes) siga siendo un
+// solo valor editable en vez de una lista de adendas. Ver
+// handlers.UpdateAppointment, que inserta una fila aquí ANTES de
+// sobreescribir, solo si el contenido clínico de verdad cambió.
+// Append-only: ningún handler debe actualizar ni borrar una fila ya
+// escrita.
+type AppointmentNoteHistory struct {
+	ID            uint      `gorm:"primaryKey" json:"id"`
+	CreatedAt     time.Time `gorm:"index" json:"createdAt"`
+	AppointmentID uint      `gorm:"index;not null" json:"appointmentId"`
+
+	// Snapshot del contenido clínico tal como estaba antes de este cambio.
+	PreviousDiagnosis     string `gorm:"type:text" json:"previousDiagnosis"`
+	PreviousTreatmentPlan string `gorm:"type:text" json:"previousTreatmentPlan"`
+	PreviousNotes         string `gorm:"type:text" json:"previousNotes"`
+	PreviousDynamicNotes  string `gorm:"type:text" json:"previousDynamicNotes"`
+
+	ChangedByRole string `json:"changedByRole"`
+	ChangedByID   uint   `json:"changedById"`
+	ChangedByName string `json:"changedByName"`
+	IPAddress     string `json:"ipAddress"`
+}

@@ -9,6 +9,16 @@ import { getErrorMessage } from '../utils/errorMessage';
 
 type FormSection = 'generalData' | 'medicalHistory';
 
+interface NoteHistoryEntry {
+  id: number;
+  createdAt: string;
+  previousDiagnosis: string;
+  previousTreatmentPlan: string;
+  previousNotes: string;
+  changedByRole: 'MEDICO' | 'STAFF';
+  changedByName: string;
+}
+
 export const ConsultationManager: React.FC = () => {
   const { appointmentId } = useParams<{ appointmentId: string }>();
   const navigate = useNavigate();
@@ -49,6 +59,10 @@ export const ConsultationManager: React.FC = () => {
   const [qrImageUrl, setQrImageUrl] = useState('');
   const [loadingQR, setLoadingQR] = useState(false);
   const [qrError, setQrError] = useState<string | null>(null);
+
+  const [showNoteHistory, setShowNoteHistory] = useState(false);
+  const [noteHistory, setNoteHistory] = useState<NoteHistoryEntry[] | null>(null);
+  const [noteHistoryLoading, setNoteHistoryLoading] = useState(false);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -105,6 +119,22 @@ export const ConsultationManager: React.FC = () => {
     }
   };
 
+  const toggleNoteHistory = async () => {
+    const next = !showNoteHistory;
+    setShowNoteHistory(next);
+    if (next && noteHistory === null) {
+      setNoteHistoryLoading(true);
+      try {
+        const res = await api.get(`/appointments/${appointmentId}/note-history`);
+        setNoteHistory(res.data || []);
+      } catch {
+        setNoteHistory([]);
+      } finally {
+        setNoteHistoryLoading(false);
+      }
+    }
+  };
+
   if (loading) {
     return (
       <div className="consultation-manager-container loading-state">
@@ -150,11 +180,53 @@ export const ConsultationManager: React.FC = () => {
           </div>
         </div>
         <div className="header-actions">
+          <button className="btn-outline-sm" onClick={toggleNoteHistory}>
+            {showNoteHistory ? 'Ocultar historial' : 'Historial de versiones'}
+          </button>
           <button className="btn-outline-danger" onClick={() => navigate(goBackTarget)}>
             {isCompleted ? 'Volver' : 'Pausar / Salir'}
           </button>
         </div>
       </header>
+
+      {showNoteHistory && (
+        <div className="note-history-panel">
+          <div className="note-history-panel-header">
+            <span className="material-icons-outlined">history</span>
+            <p>
+              Versiones anteriores del diagnóstico, tratamiento y notas de esta cita — ninguna
+              corrección borra el contenido previo, queda preservado aquí (NOM-024).
+            </p>
+          </div>
+          {noteHistoryLoading ? (
+            <p className="empty-msg">Cargando...</p>
+          ) : !noteHistory || noteHistory.length === 0 ? (
+            <p className="empty-msg">Todavía no hay versiones anteriores — esta cita no se ha corregido.</p>
+          ) : (
+            <ul className="note-history-list">
+              {noteHistory.map((entry) => (
+                <li key={entry.id} className="note-history-item">
+                  <div className="note-history-meta">
+                    <strong>{new Date(entry.createdAt).toLocaleString('es-MX')}</strong>
+                    <span>
+                      {entry.changedByName || 'Cuenta eliminada'} ({entry.changedByRole === 'STAFF' ? 'personal' : 'doctor'})
+                    </span>
+                  </div>
+                  {entry.previousDiagnosis && (
+                    <p><strong>Diagnóstico anterior:</strong> {entry.previousDiagnosis}</p>
+                  )}
+                  {entry.previousTreatmentPlan && (
+                    <p><strong>Tratamiento anterior:</strong> {entry.previousTreatmentPlan}</p>
+                  )}
+                  {entry.previousNotes && (
+                    <p><strong>Notas anteriores:</strong> {entry.previousNotes}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {isCompleted && (
         <div className="readonly-banner">

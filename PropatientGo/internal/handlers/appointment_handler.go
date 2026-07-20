@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"propatient-api/internal/audit"
 	"propatient-api/internal/auth"
 	"propatient-api/internal/googlecalendar"
 	"propatient-api/internal/models"
@@ -192,6 +193,8 @@ func CreateAppointment(db *gorm.DB, calClient googlecalendar.Client) gin.Handler
 
 		syncAppointmentToGoogleCalendar(c.Request.Context(), db, calClient, &appointment, patient)
 
+		audit.Log(db, c, doctorID, &patient.ID, audit.ActionCreated, audit.EntityAppointment, appointment.ID, "Cita agendada")
+
 		c.JSON(http.StatusCreated, appointment)
 	}
 }
@@ -252,6 +255,8 @@ func UploadDocuments(db *gorm.DB, storageClient storage.Client) gin.HandlerFunc 
 				storageClient.Delete(c.Request.Context(), storedRef)
 				continue
 			}
+
+			audit.Log(db, c, doctorID, &appointment.PatientID, audit.ActionCreated, audit.EntityMedicalDocument, doc.ID, "Documento clínico subido: "+doc.FileName)
 		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "Documentos guardados en servidor exitosamente"})
@@ -352,7 +357,37 @@ func GetAppointmentDetail(db *gorm.DB, storageClient storage.Client) gin.Handler
 
 		presignAppointmentFiles(c.Request.Context(), storageClient, &appointment)
 
+		audit.Log(db, c, doctorID, &appointment.PatientID, audit.ActionViewed, audit.EntityAppointment, appointment.ID, "Detalle clínico de la cita consultado")
+
 		c.JSON(http.StatusOK, appointment)
+	}
+}
+
+// GetAppointmentNoteHistory devuelve las versiones anteriores del
+// contenido clínico de una cita (diagnóstico/tratamiento/notas), tal como
+// quedaron preservadas justo antes de cada edición — ver
+// models.AppointmentNoteHistory y el guardado en UpdateAppointment. Solo
+// el doctor: es la misma información sensible que el detalle clínico.
+func GetAppointmentNoteHistory(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.Param("id")
+		doctorID := c.MustGet("doctorID").(uint)
+
+		var appointment models.Appointment
+		if err := db.Select("id").Where("id = ? AND doctor_id = ?", id, doctorID).First(&appointment).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Cita no encontrada"})
+			return
+		}
+
+		var history []models.AppointmentNoteHistory
+		if err := db.Where("appointment_id = ?", appointment.ID).
+			Order("created_at DESC").
+			Find(&history).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo consultar el historial de la cita"})
+			return
+		}
+
+		c.JSON(http.StatusOK, history)
 	}
 }
 
@@ -565,12 +600,27 @@ func UpdateAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient wh
 			t := *appointment.FollowUpDate
 			previousFollowUpDate = &t
 		}
+		// Snapshot del contenido clínico ANTES del bind — son strings (tipos
+		// valor), así que esta copia ya es independiente del appointment que
+		// ShouldBindJSON está a punto de sobreescribir. Se usa abajo para
+		// preservar la versión anterior en AppointmentNoteHistory si de
+		// verdad cambió algo (ver NOM-024: ninguna nota clínica se pierde al
+		// corregirla).
+		previousDiagnosis := appointment.Diagnosis
+		previousTreatmentPlan := appointment.TreatmentPlan
+		previousNotes := appointment.Notes
+		previousDynamicNotes := string(appointment.DynamicNotes)
 
 		// Leemos los cambios del Body (JSON)
 		if err := c.ShouldBindJSON(&appointment); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+
+		clinicalContentChanged := appointment.Diagnosis != previousDiagnosis ||
+			appointment.TreatmentPlan != previousTreatmentPlan ||
+			appointment.Notes != previousNotes ||
+			string(appointment.DynamicNotes) != previousDynamicNotes
 
 		// Solo se valida contra el horario laboral si de verdad se está
 		// moviendo la fecha/hora (reprogramar) — un PUT que solo guarda
@@ -582,12 +632,42 @@ func UpdateAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient wh
 			}
 		}
 
+		// Si el contenido clínico cambió, preservamos la versión anterior
+		// ANTES de sobreescribirla — append-only, nunca se actualiza ni
+		// borra una fila de AppointmentNoteHistory ya escrita (ver NOM-024:
+		// ninguna nota firmada se pierde al corregirla, queda como versión
+		// anterior consultable). Mejor esfuerzo: un fallo aquí no debe
+		// bloquear que el doctor guarde su nota.
+		if clinicalContentChanged {
+			role, actorID, actorName := audit.CurrentActor(db, c, doctorID)
+			history := models.AppointmentNoteHistory{
+				AppointmentID:         appointment.ID,
+				PreviousDiagnosis:     previousDiagnosis,
+				PreviousTreatmentPlan: previousTreatmentPlan,
+				PreviousNotes:         previousNotes,
+				PreviousDynamicNotes:  previousDynamicNotes,
+				ChangedByRole:         role,
+				ChangedByID:           actorID,
+				ChangedByName:         actorName,
+				IPAddress:             c.ClientIP(),
+			}
+			if err := db.Create(&history).Error; err != nil {
+				log.Printf("⚠️ No se pudo preservar la versión anterior de las notas de la cita %d: %v", appointment.ID, err)
+			}
+		}
+
 		// Revisar si GORM arroja algún error al guardar en Postgres
 		if err := db.Save(&appointment).Error; err != nil {
 			log.Printf("❌ Error de GORM al guardar: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo actualizar"})
 			return
 		}
+
+		auditDetails := "Cita actualizada"
+		if clinicalContentChanged {
+			auditDetails = "Contenido clínico de la cita actualizado (versión anterior preservada)"
+		}
+		audit.Log(db, c, doctorID, &appointment.PatientID, audit.ActionUpdated, audit.EntityAppointment, appointment.ID, auditDetails)
 
 		// Solo tocamos Google Calendar cuando de verdad se reprogramó la
 		// cita (cambió la fecha/hora) — no en cada PUT parcial (ej. marcar

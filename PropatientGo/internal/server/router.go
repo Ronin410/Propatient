@@ -335,6 +335,8 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 					// Historial clínico: solo el doctor.
 					patients.GET("/:id/history", auth.RequireDoctorRole(), handlers.GetPatientMedicalHistory(db, storageClient))
 					patients.PUT("/:id/medical-history", auth.RequireDoctorRole(), handlers.UpdateMedicalHistory(db))
+					// Bitácora de auditoría del expediente (NOM-024): solo el doctor.
+					patients.GET("/:id/audit-log", auth.RequireDoctorRole(), handlers.GetPatientAuditLog(db))
 				}
 
 				appointments := gated.Group("/appointments")
@@ -354,6 +356,8 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 					appointments.GET("/:id/upload-link", auth.RequireDoctorRole(), handlers.GetAppointmentUploadLink(db))
 					appointments.PUT("/:id/documents/:docId", auth.RequireDoctorRole(), handlers.UpdateAppointmentDocument(db))
 					appointments.POST("/:id/save-recipe-pdf", auth.RequireDoctorRole(), handlers.SaveRecipePDF(db, storageClient))
+					// Versiones anteriores del contenido clínico (NOM-024): solo el doctor.
+					appointments.GET("/:id/note-history", auth.RequireDoctorRole(), handlers.GetAppointmentNoteHistory(db))
 				}
 
 				// Perfil, plantillas y Google Calendar del doctor: nunca para el personal.
