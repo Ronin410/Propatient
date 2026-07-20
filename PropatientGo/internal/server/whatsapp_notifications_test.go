@@ -25,7 +25,7 @@ func TestPublicAppointment_NotifiesPatientAndDoctorByWhatsApp(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
 	wa := newMockWhatsAppClient()
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), wa)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), wa, nil)
 
 	doc := testutil.CreateTestDoctor(t, db, "doc_wa_booking", "password123")
 	require.NoError(t, db.Model(&doc).Updates(map[string]any{
@@ -55,7 +55,7 @@ func TestConfirmAppointment_NotifiesPatientByWhatsApp(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
 	wa := newMockWhatsAppClient()
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), wa)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), wa, nil)
 
 	doc := testutil.CreateTestDoctor(t, db, "doc_wa_confirm", "password123")
 	require.NoError(t, db.Model(&doc).Updates(map[string]any{"public_listed": true, "public_slug": "dr-wa-confirm-1"}).Error)
@@ -97,7 +97,7 @@ func TestCancelAppointment_NotifiesPatientOnlyWhenRejectingOnlineRequest(t *test
 	db := testutil.SetupTestDB(t)
 	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
 	wa := newMockWhatsAppClient()
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), wa)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), wa, nil)
 
 	doc := testutil.CreateTestDoctor(t, db, "doc_wa_reject", "password123")
 	require.NoError(t, db.Model(&doc).Updates(map[string]any{"public_listed": true, "public_slug": "dr-wa-reject-1"}).Error)
@@ -149,7 +149,7 @@ func TestUpdateAppointment_NotifiesPatientWhenFollowUpDateSet(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
 	wa := newMockWhatsAppClient()
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), wa)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), wa, nil)
 
 	doc := testutil.CreateTestDoctor(t, db, "doc_wa_followup", "password123")
 	docToken := testutil.TokenFor(t, doc.ID, doc.Username)

@@ -25,7 +25,7 @@ func TestUpdateCurrentDoctor_PublicListing_GeneratesSlugAndGeocodes(t *testing.T
 	db := testutil.SetupTestDB(t)
 	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
 	geo := newMockGeocodingClient()
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, geo, nil)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, geo, nil, nil)
 
 	doc := testutil.CreateTestDoctor(t, db, "doc_public_listing", "password123")
 	token := testutil.TokenFor(t, doc.ID, doc.Username)
@@ -70,7 +70,7 @@ func TestUpdateCurrentDoctor_PublicListing_GeneratesSlugAndGeocodes(t *testing.T
 func TestPublicDoctors_OnlyShowsOptedInAndActive(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), nil)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), nil, nil)
 
 	listedActive := testutil.CreateTestDoctor(t, db, "doc_listed_active", "password123")
 	require.NoError(t, db.Model(&listedActive).Updates(map[string]any{
@@ -102,7 +102,7 @@ func TestPublicAppointment_FullLifecycle(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
 	mockCal := newMockCalendarClient()
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, mockCal, testStorage, billing.Config{}, nil, newMockGeocodingClient(), nil)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, mockCal, testStorage, billing.Config{}, nil, newMockGeocodingClient(), nil, nil)
 
 	doc := testutil.CreateTestDoctor(t, db, "doc_public_booking", "password123")
 	require.NoError(t, db.Model(&doc).Updates(map[string]any{"public_listed": true, "public_slug": "dr-booking-1"}).Error)
@@ -154,7 +154,7 @@ func TestPublicAppointment_FullLifecycle(t *testing.T) {
 func TestPublicAppointment_RejectsDoctorNotListed(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), nil)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), nil, nil)
 
 	doc := testutil.CreateTestDoctor(t, db, "doc_not_public", "password123")
 
@@ -178,7 +178,7 @@ func TestPublicAppointment_RejectsDoctorNotListed(t *testing.T) {
 func TestPublicAppointment_HiddenFromCalendarAndTodaySummaryBeforeConfirmation(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), nil)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), nil, nil)
 
 	doc := testutil.CreateTestDoctor(t, db, "doc_hidden_pending", "password123")
 	require.NoError(t, db.Model(&doc).Updates(map[string]any{"public_listed": true, "public_slug": "dr-hidden-1"}).Error)
@@ -242,7 +242,7 @@ func TestPublicAppointment_HiddenFromCalendarAndTodaySummaryBeforeConfirmation(t
 func TestPublicAppointment_DedupesPatientByPhoneWhenAlreadyDoctorsPatient(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), nil)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), nil, nil)
 
 	doc := testutil.CreateTestDoctor(t, db, "doc_phone_dedupe", "password123")
 	require.NoError(t, db.Model(&doc).Updates(map[string]any{"public_listed": true, "public_slug": "dr-phone-dedupe-1"}).Error)
@@ -284,7 +284,7 @@ func TestPublicAppointment_DedupesPatientByPhoneWhenAlreadyDoctorsPatient(t *tes
 func TestPublicAppointment_DedupesPatientByEmail(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), nil)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), nil, nil)
 
 	doc := testutil.CreateTestDoctor(t, db, "doc_public_dedupe", "password123")
 	require.NoError(t, db.Model(&doc).Updates(map[string]any{"public_listed": true, "public_slug": "dr-dedupe-1"}).Error)
@@ -317,7 +317,7 @@ func TestPublicAppointment_DedupesPatientByEmail(t *testing.T) {
 func TestPublicAppointment_RequiresDataConsent(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), nil)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), nil, nil)
 
 	doc := testutil.CreateTestDoctor(t, db, "doc_consent_required", "password123")
 	require.NoError(t, db.Model(&doc).Updates(map[string]any{"public_listed": true, "public_slug": "dr-consent-1"}).Error)
@@ -358,7 +358,7 @@ func TestPublicAppointment_RequiresDataConsent(t *testing.T) {
 func TestPublicAppointment_MarksPatientAsMinor(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), nil)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), nil, nil)
 
 	doc := testutil.CreateTestDoctor(t, db, "doc_minor_patient", "password123")
 	require.NoError(t, db.Model(&doc).Updates(map[string]any{"public_listed": true, "public_slug": "dr-minor-1"}).Error)

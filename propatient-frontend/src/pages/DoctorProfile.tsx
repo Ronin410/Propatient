@@ -9,6 +9,7 @@ import { sanitizePhoneInput } from '../utils/phoneInput';
 import { LocationPicker } from '../components/LocationPicker';
 import { DoctorGallery } from '../components/DoctorGallery';
 import { useAuth } from '../context/AuthContext';
+import { usePushSubscription } from '../hooks/usePushSubscription';
 
 interface ProfileData {
   rfc: string;
@@ -88,6 +89,7 @@ export const DoctorProfile = () => {
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   const [connectingCalendar, setConnectingCalendar] = useState(false);
+  const pushSubscription = usePushSubscription();
 
   const [exportingData, setExportingData] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
@@ -690,6 +692,40 @@ export const DoctorProfile = () => {
             )}
           </div>
         </div>
+
+        {/* NOTIFICACIONES PUSH (PWA) — solo se muestra si el navegador las
+            soporta y hay una llave VAPID configurada (ver
+            usePushSubscription); nunca bloquea el guardado del perfil. */}
+        {pushSubscription.supported && (
+          <div className="profile-form-section">
+            <div className="section-title">
+              <h3>Notificaciones en este dispositivo</h3>
+              <p>Recibe un aviso aquí mismo cuando llegue una nueva solicitud de cita, además del WhatsApp/correo de siempre.</p>
+            </div>
+            <div className="calendar-integration-box">
+              <div className="calendar-status">
+                <span className={`material-icons-outlined ${pushSubscription.subscribed ? 'connected' : ''}`}>
+                  {pushSubscription.subscribed ? 'notifications_active' : 'notifications_off'}
+                </span>
+                <span>
+                  {pushSubscription.subscribed
+                    ? 'Las notificaciones están activas en este dispositivo.'
+                    : 'Las notificaciones están desactivadas en este dispositivo.'}
+                </span>
+              </div>
+              {pushSubscription.subscribed ? (
+                <button type="button" className="btn-outline-danger" onClick={pushSubscription.unsubscribe} disabled={pushSubscription.loading}>
+                  {pushSubscription.loading ? 'Desactivando...' : 'Desactivar'}
+                </button>
+              ) : (
+                <button type="button" className="btn-outline-sm" onClick={pushSubscription.subscribe} disabled={pushSubscription.loading}>
+                  {pushSubscription.loading ? 'Activando...' : 'Activar notificaciones'}
+                </button>
+              )}
+            </div>
+            {pushSubscription.error && <p className="field-error">{pushSubscription.error}</p>}
+          </div>
+        )}
 
         {/* ACCIONES */}
         <div className="actions-container">

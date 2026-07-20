@@ -160,6 +160,30 @@ errores/mes) alcanza sin problema para el tamaño de un piloto.
 doctor de prueba `medico`/`12345` con contraseña pública. Esa variable es
 solo para desarrollo local (docker-compose ya la activa ahí por defecto).
 
+### 1.9 Notificaciones push / PWA (opcional, recomendado)
+
+| Variable | Qué es |
+|---|---|
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` (backend) | Par de llaves Web Push, se generan una sola vez |
+| `VAPID_SUBJECT` (backend) | Un `mailto:` o URL que te identifica ante el navegador |
+| `VITE_VAPID_PUBLIC_KEY` (frontend) | La MISMA llave pública de arriba, no una distinta |
+
+La app ahora es instalable (PWA) desde el navegador en celular/tablet/iPad
+(ícono en pantalla de inicio, pantalla completa) y, si estas variables
+están configuradas, el doctor puede activar un toggle en su Perfil para
+recibir una notificación nativa cuando llega una nueva solicitud de cita
+pública — alternativa/complemento al aviso por WhatsApp de la sección 1.4.
+Cómo generar las llaves: ver la guía completa en `.env.example`.
+
+**Importante para iOS**: Apple solo entrega notificaciones push a una PWA
+si el doctor la **instaló a su pantalla de inicio primero** (Safari → ícono
+de compartir → "Agregar a inicio") y tiene **iOS 16.4 o más reciente** — no
+hay forma de pedir el permiso desde una pestaña normal del navegador en
+iPhone/iPad. En Android/Chrome sí funciona desde el navegador sin instalar.
+
+Sin estas variables, la app funciona exactamente igual — el toggle de
+notificaciones simplemente no aparece.
+
 ---
 
 ## 🔴 2. Fuera de Render (paneles externos)

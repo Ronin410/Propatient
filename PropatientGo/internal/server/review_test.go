@@ -27,7 +27,7 @@ func TestReview_FullLifecycle(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
 	mockWA := newMockWhatsAppClient()
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, geocoding.NewClient(), mockWA)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, geocoding.NewClient(), mockWA, nil)
 
 	doc := testutil.CreateTestDoctor(t, db, "doc_review_full", "password123")
 	require.NoError(t, db.Model(&doc).Updates(map[string]any{"public_listed": true, "public_slug": "dr-review-full"}).Error)

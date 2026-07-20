@@ -15,6 +15,7 @@ import (
 	"propatient-api/internal/handlers"
 	"propatient-api/internal/middleware"
 	"propatient-api/internal/storage"
+	"propatient-api/internal/webpush"
 	"propatient-api/internal/whatsapp"
 
 	sentrygin "github.com/getsentry/sentry-go/gin"
@@ -82,13 +83,26 @@ func NewRouter(db *gorm.DB) *gin.Engine {
 		log.Println("⚠️ WhatsApp (Twilio) NO configurado — faltan una o más de TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN/TWILIO_WHATSAPP_FROM. No se mandará ningún WhatsApp hasta que estén las tres.")
 	}
 
-	return NewRouterWithDeps(db, calendarConfig, googlecalendar.NewClient(calendarConfig), storageClient, billingConfig, billingClient, geoClient, whatsappClient)
+	// Cliente de notificaciones push (Web Push/VAPID): solo se construye si
+	// las tres variables están configuradas. Sin eso, el doctor
+	// simplemente no ve el toggle de activarlas en el frontend y el resto
+	// de la app funciona igual — mismo criterio que whatsappClient arriba.
+	webpushConfig := webpush.LoadConfigFromEnv()
+	var webpushClient webpush.Client
+	if webpushConfig.IsConfigured() {
+		webpushClient = webpush.NewClient(webpushConfig)
+		log.Println("✅ Notificaciones push (VAPID) configuradas.")
+	} else {
+		log.Println("⚠️ Notificaciones push (VAPID) NO configuradas — faltan una o más de VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY/VAPID_SUBJECT.")
+	}
+
+	return NewRouterWithDeps(db, calendarConfig, googlecalendar.NewClient(calendarConfig), storageClient, billingConfig, billingClient, geoClient, whatsappClient, webpushClient)
 }
 
 // NewRouterWithDeps es la variante inyectable de NewRouter: permite a los
 // tests de integración pasar un googlecalendar.Client y un storage.Client
 // simulados, sin hacer llamadas reales a Google ni a AWS.
-func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calendarClient googlecalendar.Client, storageClient storage.Client, billingConfig billing.Config, billingClient billing.Client, geoClient geocoding.Client, whatsappClient whatsapp.Client) *gin.Engine {
+func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calendarClient googlecalendar.Client, storageClient storage.Client, billingConfig billing.Config, billingClient billing.Client, geoClient geocoding.Client, whatsappClient whatsapp.Client, webpushClient webpush.Client) *gin.Engine {
 	r := gin.Default()
 
 	// Plantillas de WhatsApp aprobadas por Meta (categoría "utility"), una
@@ -224,7 +238,7 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 		{
 			public.GET("/doctors", handlers.GetPublicDoctors(db, storageClient))
 			public.GET("/doctors/:slug", handlers.GetPublicDoctorBySlug(db, storageClient))
-			public.POST("/appointments", publicBookingLimiter.Middleware(), handlers.CreatePublicAppointment(db, whatsappClient, whatsappTemplates))
+			public.POST("/appointments", publicBookingLimiter.Middleware(), handlers.CreatePublicAppointment(db, whatsappClient, whatsappTemplates, webpushClient))
 			// Reseña de una consulta: el link llega por WhatsApp al terminar
 			// la cita (ver UpdateAppointment). Mismo límite que agendar
 			// público — evita que alguien intente adivinar tokens a fuerza bruta.
@@ -343,6 +357,11 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 					doctorRoutes.GET("/gallery", handlers.ListGalleryImages(db, storageClient))
 					doctorRoutes.POST("/gallery", handlers.AddGalleryImage(db, storageClient))
 					doctorRoutes.DELETE("/gallery/:id", handlers.DeleteGalleryImage(db, storageClient))
+					// Notificaciones push (PWA): guardar/quitar la suscripción de
+					// este navegador/dispositivo. Solo el doctor las recibe hoy
+					// (aviso de nueva solicitud de cita), no el personal.
+					doctorRoutes.POST("/push-subscriptions", handlers.SavePushSubscription(db))
+					doctorRoutes.DELETE("/push-subscriptions", handlers.DeletePushSubscription(db))
 				}
 
 				// Reseñas de pacientes: solo el doctor las revisa/aprueba —

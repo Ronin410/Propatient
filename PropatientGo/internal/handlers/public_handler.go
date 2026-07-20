@@ -16,6 +16,7 @@ import (
 	"propatient-api/internal/models"
 	"propatient-api/internal/recaptcha"
 	"propatient-api/internal/storage"
+	"propatient-api/internal/webpush"
 	"propatient-api/internal/whatsapp"
 
 	"github.com/gin-gonic/gin"
@@ -235,7 +236,7 @@ type publicAppointmentRequest struct {
 // PENDING_CONFIRMATION: no aparece como una cita real hasta que el doctor
 // (o su personal) la confirma con ConfirmAppointment — así una solicitud
 // falsa o spam nunca reserva un horario de verdad sin que alguien la revise.
-func CreatePublicAppointment(db *gorm.DB, waClient whatsapp.Client, waTemplates whatsapp.Templates) gin.HandlerFunc {
+func CreatePublicAppointment(db *gorm.DB, waClient whatsapp.Client, waTemplates whatsapp.Templates, pushClient webpush.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req publicAppointmentRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -312,6 +313,7 @@ func CreatePublicAppointment(db *gorm.DB, waClient whatsapp.Client, waTemplates 
 			}()
 			sendPublicBookingEmails(doctor, patient, appointment)
 			sendPublicBookingWhatsApp(context.Background(), waClient, waTemplates, doctor, patient, appointment)
+			sendPublicBookingPush(context.Background(), db, pushClient, doctor, patient, appointment)
 		}(doctor, *patient, appointment)
 
 		c.JSON(http.StatusCreated, gin.H{
@@ -405,6 +407,41 @@ func sendPublicBookingWhatsApp(ctx context.Context, waClient whatsapp.Client, wa
 			log.Printf("⚠️ No se pudo enviar el WhatsApp de nueva solicitud al doctor %d: %v", doctor.ID, err)
 		}
 	}
+}
+
+// pushNotificationPayload es el JSON que recibe el service worker del
+// frontend en el evento "push" (ver propatient-frontend/src/sw.ts) — title/
+// body arman la notificación nativa, url es a dónde navega la app al
+// tocarla.
+type pushNotificationPayload struct {
+	Title string `json:"title"`
+	Body  string `json:"body"`
+	URL   string `json:"url"`
+}
+
+// sendPublicBookingPush avisa al doctor, por notificación push (PWA), de
+// una nueva solicitud de cita — el equivalente por push de
+// sendPublicBookingWhatsApp. Mejor esfuerzo, mismo criterio que el resto
+// de los avisos: nunca bloquea ni revierte la reserva si no hay
+// suscripciones o el envío falla.
+func sendPublicBookingPush(ctx context.Context, db *gorm.DB, pushClient webpush.Client, doctor models.Doctor, patient models.Patient, appointment models.Appointment) {
+	if pushClient == nil {
+		return
+	}
+	when := auth.FormatSpanishDateTime(appointment.AppointmentDateTime)
+	payload, err := json.Marshal(pushNotificationPayload{
+		Title: "Nueva solicitud de cita",
+		Body:  fmt.Sprintf("%s %s — %s", patient.FirstName, patient.LastName, when),
+		// "Solicitudes de Cita Nuevas" vive en el dashboard de inicio
+		// (AppointmentTracking.tsx, ruta "inicio" en App.tsx) — mismo
+		// destino que el mensaje de WhatsApp al doctor le indica ir a ver.
+		URL: "/inicio",
+	})
+	if err != nil {
+		log.Printf("⚠️ No se pudo armar el payload de la notificación push (cita %d): %v", appointment.ID, err)
+		return
+	}
+	webpush.SendToDoctor(ctx, db, pushClient, doctor.ID, payload)
 }
 
 // findOrCreatePublicBookingPatient decide a qué paciente pertenece una

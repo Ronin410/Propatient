@@ -94,6 +94,23 @@ type DoctorGalleryImage struct {
 	ImagePath string    `json:"imagePath"`
 }
 
+// PushSubscription es la suscripción de notificaciones push (Web Push/
+// VAPID) de un navegador/dispositivo concreto de un doctor — un doctor
+// puede tener varias (celular, tablet, distintos navegadores), por eso es
+// uno-a-muchos y no una columna en Doctor. Endpoint es único: volver a
+// suscribirse desde el mismo navegador actualiza la fila en vez de
+// duplicarla (ver handlers.SavePushSubscription). Se borra sola cuando
+// el proveedor push responde 404/410 (la suscripción ya expiró del lado
+// del navegador) — ver internal/webpush.SendToDoctor.
+type PushSubscription struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	DoctorID  uint      `gorm:"not null;index" json:"doctorId"`
+	Endpoint  string    `gorm:"not null;uniqueIndex" json:"endpoint"`
+	P256dhKey string    `gorm:"not null" json:"-"`
+	AuthKey   string    `gorm:"not null" json:"-"`
+}
+
 // Review es la reseña que un paciente deja de un doctor después de una
 // consulta ya completada. La fila nace en cuanto la cita pasa a
 // COMPLETED (ver UpdateAppointment), con Token pero sin calificación

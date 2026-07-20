@@ -105,6 +105,15 @@ services:
         sync: false
       - key: TWILIO_TEMPLATE_FOLLOWUP
         sync: false
+      # Notificaciones push / Web Push (PWA, ver .env.example para cómo
+      # generarlas). Sin estas tres, la app funciona igual — el toggle de
+      # activar notificaciones simplemente no aparece en el Perfil.
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
       # Panel interno de administración (revisión de cédula profesional,
       # ver .env.example). Sin estas dos, /admin/login queda inaccesible.
       - key: SUPERADMIN_USERNAME
@@ -127,6 +136,8 @@ services:
     envVars:
       - key: VITE_API_URL
         sync: false # pegar aquí la URL pública de propatient-api + "/api"
+      - key: VITE_VAPID_PUBLIC_KEY
+        sync: false # misma llave pública que VAPID_PUBLIC_KEY del backend
     routes:
       # SPA con react-router: cualquier ruta no encontrada sirve index.html
       - type: rewrite

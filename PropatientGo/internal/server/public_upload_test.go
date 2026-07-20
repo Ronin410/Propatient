@@ -32,7 +32,7 @@ func extractUploadToken(t *testing.T, uploadURL string) string {
 func TestPublicUpload_FullFlow(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	mockStorage := newMockStorageClient()
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mockStorage, billing.Config{}, nil, geocoding.NewClient(), nil)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mockStorage, billing.Config{}, nil, geocoding.NewClient(), nil, nil)
 
 	doc := testutil.CreateTestDoctor(t, db, "doc_public_upload", "password123")
 	doc.FullName = "Dra. Upload"
@@ -101,7 +101,7 @@ func TestPublicUpload_FullFlow(t *testing.T) {
 func TestPublicUpload_RejectsInvalidToken(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	mockStorage := newMockStorageClient()
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mockStorage, billing.Config{}, nil, geocoding.NewClient(), nil)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mockStorage, billing.Config{}, nil, geocoding.NewClient(), nil, nil)
 
 	w := doRequest(t, router, http.MethodGet, "/api/public/upload/token-inventado", "", nil)
 	assert.Equal(t, http.StatusNotFound, w.Code)
@@ -118,7 +118,7 @@ func TestPublicUpload_RejectsInvalidToken(t *testing.T) {
 func TestPublicUpload_StaffCannotGenerateLink(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	mockStorage := newMockStorageClient()
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mockStorage, billing.Config{}, nil, geocoding.NewClient(), nil)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mockStorage, billing.Config{}, nil, geocoding.NewClient(), nil, nil)
 
 	doc := testutil.CreateTestDoctor(t, db, "doc_public_upload_staff", "password123")
 	docToken := testutil.TokenFor(t, doc.ID, doc.Username)

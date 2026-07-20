@@ -20,7 +20,7 @@ import (
 func TestGallery_UploadListDelete(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	mockStorage := newMockStorageClient()
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mockStorage, billing.Config{}, nil, geocoding.NewClient(), nil)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mockStorage, billing.Config{}, nil, geocoding.NewClient(), nil, nil)
 
 	doc := testutil.CreateTestDoctor(t, db, "doc_gallery", "password123")
 	token := testutil.TokenFor(t, doc.ID, doc.Username)
@@ -52,7 +52,7 @@ func TestGallery_UploadListDelete(t *testing.T) {
 func TestGallery_EnforcesMaxImages(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	mockStorage := newMockStorageClient()
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mockStorage, billing.Config{}, nil, geocoding.NewClient(), nil)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mockStorage, billing.Config{}, nil, geocoding.NewClient(), nil, nil)
 
 	doc := testutil.CreateTestDoctor(t, db, "doc_gallery_max", "password123")
 	token := testutil.TokenFor(t, doc.ID, doc.Username)
@@ -73,7 +73,7 @@ func TestGallery_EnforcesMaxImages(t *testing.T) {
 func TestGallery_OnlyDoctorAccess(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	mockStorage := newMockStorageClient()
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mockStorage, billing.Config{}, nil, geocoding.NewClient(), nil)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mockStorage, billing.Config{}, nil, geocoding.NewClient(), nil, nil)
 
 	doc := testutil.CreateTestDoctor(t, db, "doc_gallery_staff", "password123")
 	staff := testutil.CreateTestStaff(t, db, doc.ID, "personal_gallery@test.local", "clave123456")
@@ -88,7 +88,7 @@ func TestGallery_OnlyDoctorAccess(t *testing.T) {
 func TestGallery_ShownOnPublicProfile(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	mockStorage := newMockStorageClient()
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mockStorage, billing.Config{}, nil, geocoding.NewClient(), nil)
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mockStorage, billing.Config{}, nil, geocoding.NewClient(), nil, nil)
 
 	doc := testutil.CreateTestDoctor(t, db, "doc_gallery_public", "password123")
 	require.NoError(t, db.Model(&doc).Updates(map[string]any{"public_listed": true, "public_slug": "dr-gallery-public"}).Error)
