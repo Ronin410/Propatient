@@ -115,11 +115,64 @@ func mapStripeSubscriptionStatus(s stripe.SubscriptionStatus) string {
 	}
 }
 
+// activateClinicSubscription confirma el pago del plan base de una clínica
+// nueva (ver handlers.CreateClinic, que deliberadamente no toca
+// Doctor.ClinicID hasta este punto) y cancela la suscripción individual del
+// dueño si tenía una — mismo criterio que AcceptClinicInvite, para que no le
+// sigan cobrando dos veces una vez que la clínica ya lo cubre.
+func activateClinicSubscription(c *gin.Context, db *gorm.DB, client billing.Client, clinicID uint, sess *stripe.CheckoutSession) {
+	updates := map[string]interface{}{"subscription_status": "active"}
+	if sess.Customer != nil {
+		updates["stripe_customer_id"] = sess.Customer.ID
+	}
+	if sess.Subscription != nil {
+		updates["stripe_subscription_id"] = sess.Subscription.ID
+	}
+	result := db.Model(&models.Clinic{}).Where("id = ?", clinicID).Updates(updates)
+	if result.Error != nil {
+		log.Printf("⚠️ Webhook checkout.session.completed: error al actualizar clínica %d: %v", clinicID, result.Error)
+		return
+	}
+	if result.RowsAffected == 0 {
+		log.Printf("⚠️ Webhook checkout.session.completed: no existe ninguna clínica con id %d", clinicID)
+		return
+	}
+
+	var clinic models.Clinic
+	if err := db.First(&clinic, clinicID).Error; err != nil {
+		log.Printf("⚠️ Webhook checkout.session.completed: no se pudo releer la clínica %d recién activada: %v", clinicID, err)
+		return
+	}
+	var owner models.Doctor
+	if err := db.First(&owner, clinic.OwnerDoctorID).Error; err != nil {
+		log.Printf("⚠️ Webhook checkout.session.completed: no se encontró al dueño (doctor %d) de la clínica %d: %v", clinic.OwnerDoctorID, clinicID, err)
+		return
+	}
+
+	if client != nil && owner.StripeSubscriptionID != "" {
+		if err := client.CancelSubscription(c.Request.Context(), owner.StripeSubscriptionID); err != nil {
+			log.Printf("⚠️ Webhook checkout.session.completed: no se pudo cancelar la suscripción individual del doctor %d al activar su clínica %d: %v", owner.ID, clinicID, err)
+		}
+	}
+
+	ownerUpdates := map[string]interface{}{
+		"clinic_id":              clinic.ID,
+		"is_clinic_owner":        true,
+		"subscription_status":    "active",
+		"stripe_subscription_id": "",
+	}
+	if err := db.Model(&owner).Updates(ownerUpdates).Error; err != nil {
+		log.Printf("⚠️ Webhook checkout.session.completed: error al vincular al dueño (doctor %d) con su clínica %d: %v", owner.ID, clinicID, err)
+		return
+	}
+	log.Printf("✅ Clínica %d activada, dueño = doctor %d", clinicID, owner.ID)
+}
+
 // StripeWebhook recibe los eventos que Stripe manda a medida que cambia el
 // estado de una suscripción. Ruta pública (Stripe la llama sin sesión de
 // usuario); la verificación de firma con el webhook signing secret es lo
 // único que confirma que la petición viene realmente de Stripe.
-func StripeWebhook(db *gorm.DB, cfg billing.Config) gin.HandlerFunc {
+func StripeWebhook(db *gorm.DB, client billing.Client, cfg billing.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if cfg.WebhookSecret == "" {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Webhook no configurado"})
@@ -160,6 +213,10 @@ func StripeWebhook(db *gorm.DB, cfg billing.Config) gin.HandlerFunc {
 				log.Printf("⚠️ Webhook checkout.session.completed: no se pudo decodificar el payload: %v", err)
 				break
 			}
+			if clinicID, ok := billing.ParseClinicClientReferenceID(sess.ClientReferenceID); ok {
+				activateClinicSubscription(c, db, client, clinicID, &sess)
+				break
+			}
 			doctorID, err := strconv.ParseUint(sess.ClientReferenceID, 10, 64)
 			if err != nil {
 				log.Printf("⚠️ Webhook checkout.session.completed: client_reference_id inválido (%q): %v", sess.ClientReferenceID, err)
@@ -191,10 +248,17 @@ func StripeWebhook(db *gorm.DB, cfg billing.Config) gin.HandlerFunc {
 			result := db.Model(&models.Doctor{}).
 				Where("stripe_subscription_id = ?", sub.ID).
 				Update("subscription_status", newStatus)
+			if result.Error == nil && result.RowsAffected == 0 {
+				// No es la suscripción individual de ningún doctor — puede
+				// ser la de una clínica (ver activateClinicSubscription).
+				result = db.Model(&models.Clinic{}).
+					Where("stripe_subscription_id = ?", sub.ID).
+					Update("subscription_status", newStatus)
+			}
 			if result.Error != nil {
 				log.Printf("⚠️ Webhook customer.subscription.updated: error al actualizar suscripción %s: %v", sub.ID, result.Error)
 			} else if result.RowsAffected == 0 {
-				log.Printf("⚠️ Webhook customer.subscription.updated: ningún doctor tiene stripe_subscription_id=%s", sub.ID)
+				log.Printf("⚠️ Webhook customer.subscription.updated: ningún doctor ni clínica tiene stripe_subscription_id=%s", sub.ID)
 			} else {
 				log.Printf("✅ Suscripción %s actualizada a %q", sub.ID, newStatus)
 			}
@@ -208,10 +272,15 @@ func StripeWebhook(db *gorm.DB, cfg billing.Config) gin.HandlerFunc {
 			result := db.Model(&models.Doctor{}).
 				Where("stripe_subscription_id = ?", sub.ID).
 				Update("subscription_status", "canceled")
+			if result.Error == nil && result.RowsAffected == 0 {
+				result = db.Model(&models.Clinic{}).
+					Where("stripe_subscription_id = ?", sub.ID).
+					Update("subscription_status", "canceled")
+			}
 			if result.Error != nil {
 				log.Printf("⚠️ Webhook customer.subscription.deleted: error al cancelar suscripción %s: %v", sub.ID, result.Error)
 			} else if result.RowsAffected == 0 {
-				log.Printf("⚠️ Webhook customer.subscription.deleted: ningún doctor tiene stripe_subscription_id=%s", sub.ID)
+				log.Printf("⚠️ Webhook customer.subscription.deleted: ningún doctor ni clínica tiene stripe_subscription_id=%s", sub.ID)
 			}
 		}
 

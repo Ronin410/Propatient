@@ -52,6 +52,8 @@ const DoctorProfile = lazy(() => import('./pages/DoctorProfile').then((m) => ({ 
 const SettingsNotes = lazy(() => import('./pages/SettingsNotes').then((m) => ({ default: m.SettingsNotes })));
 const StaffManagement = lazy(() => import('./pages/StaffManagement').then((m) => ({ default: m.StaffManagement })));
 const BillingPage = lazy(() => import('./pages/BillingPage').then((m) => ({ default: m.BillingPage })));
+const ClinicManagement = lazy(() => import('./pages/ClinicManagement').then((m) => ({ default: m.ClinicManagement })));
+const AcceptClinicInvite = lazy(() => import('./pages/AcceptClinicInvite').then((m) => ({ default: m.AcceptClinicInvite })));
 const WorkingHours = lazy(() => import('./pages/WorkingHours').then((m) => ({ default: m.WorkingHours })));
 const Reviews = lazy(() => import('./pages/Reviews').then((m) => ({ default: m.Reviews })));
 const SubmitReview = lazy(() => import('./pages/SubmitReview').then((m) => ({ default: m.SubmitReview })));
@@ -160,6 +162,16 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            {/* Aceptar invitación a clínica: a diferencia de la de personal,
+                requiere sesión iniciada (el invitado ya tiene cuenta propia) */}
+            <Route
+              path="/clinica/invitacion/:token"
+              element={
+                <ProtectedRoute>
+                  <AcceptClinicInvite />
+                </ProtectedRoute>
+              }
+            />
 
             {/* 💻 SISTEMA MÉDICO PRINCIPAL: Envuelto por el OnboardingGuard */}
             <Route element={<OnboardingGuard />}>
@@ -194,6 +206,9 @@ function App() {
                     sin prueba/suscripción, ambos roles terminan aquí (ver el
                     interceptor de 402 en src/api/axios.ts). */}
                 <Route path="billing" element={<BillingPage />} />
+                {/* Igual que "billing": accesible también para personal (el
+                    propio componente muestra un aviso si isStaff). */}
+                <Route path="clinica" element={<ClinicManagement />} />
               </Route>
             </Route>
 

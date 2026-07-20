@@ -116,6 +116,20 @@ mueve dinero real, pero tampoco factura a nadie). En el dashboard de
 Stripe, el switch "Test mode" debe estar apagado al generar estas tres
 llaves.
 
+**Plan de clínica (opcional):** además de la suscripción individual de
+arriba, crea dos Prices más en Stripe (mismo modo Live) para el plan de
+clínica — $5,000 MXN/mes fijo (cubre hasta 5 doctores) y $1,000 MXN/mes
+por cantidad (cada doctor adicional):
+
+| Variable | Qué es |
+|---|---|
+| `STRIPE_CLINIC_BASE_PRICE_ID` | Price ID del plan base de clínica ($5,000 MXN/mes, cantidad fija 1) |
+| `STRIPE_CLINIC_EXTRA_DOCTOR_PRICE_ID` | Price ID del cargo por doctor adicional ($1,000 MXN/mes, cantidad variable) |
+
+Sin estas dos, el resto de la app (incluida la suscripción individual)
+sigue funcionando igual — solo la pantalla "Mi Clínica" queda
+deshabilitada (503).
+
 ### 1.6 reCAPTCHA en el booking público (opcional, recomendado)
 
 | Variable | Qué es |

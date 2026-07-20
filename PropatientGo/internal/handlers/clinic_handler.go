@@ -1,0 +1,459 @@
+package handlers
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
+	"propatient-api/internal/auth"
+	"propatient-api/internal/billing"
+	"propatient-api/internal/models"
+
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+)
+
+const clinicInviteValidity = 72 * time.Hour
+
+// syncClinicDoctorCount recalcula cuántos doctores tiene la clínica y
+// sincroniza el concepto de "doctor extra" en Stripe (se crea/actualiza/
+// borra según cruce o no billing.ClinicBaseIncludedDoctors). Se llama
+// después de aceptar una invitación o de quitar a un doctor — los dos
+// únicos momentos en que el conteo cambia. client puede ser nil (Stripe
+// no configurado); en ese caso no hace nada, mismo criterio de mejor
+// esfuerzo que el resto de integraciones opcionales.
+func syncClinicDoctorCount(ctx context.Context, db *gorm.DB, client billing.Client, clinic *models.Clinic) error {
+	if client == nil || clinic.StripeSubscriptionID == "" {
+		return nil
+	}
+	var count int64
+	if err := db.Model(&models.Doctor{}).Where("clinic_id = ?", clinic.ID).Count(&count).Error; err != nil {
+		return err
+	}
+	var extra int64
+	if count > billing.ClinicBaseIncludedDoctors {
+		extra = count - billing.ClinicBaseIncludedDoctors
+	}
+	newItemID, err := client.SetClinicExtraDoctorQuantity(ctx, clinic.StripeSubscriptionID, clinic.StripeExtraItemID, extra)
+	if err != nil {
+		return err
+	}
+	if newItemID != clinic.StripeExtraItemID {
+		return db.Model(clinic).Update("stripe_extra_item_id", newItemID).Error
+	}
+	return nil
+}
+
+type createClinicRequest struct {
+	Name string `json:"name" binding:"required"`
+}
+
+// CreateClinic convierte al doctor autenticado en dueño de una clínica
+// nueva y arma el Checkout del plan base. A propósito NO toca todavía
+// Doctor.ClinicID/IsClinicOwner — eso solo se confirma cuando el webhook
+// de Stripe (checkout.session.completed) avisa que el pago se completó
+// (ver StripeWebhook). Si el doctor abandona el Checkout sin pagar, la
+// fila de Clinic queda huérfana en "incomplete" pero el doctor no pierde
+// nada de su cuenta individual — evita el caso feo de dejarlo sin acceso
+// por una compra que nunca terminó.
+func CreateClinic(db *gorm.DB, client billing.Client, cfg billing.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if client == nil || !cfg.IsClinicConfigured() {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "El plan de clínica no está configurado en el servidor."})
+			return
+		}
+
+		doctorID := c.MustGet("doctorID").(uint)
+		var doctor models.Doctor
+		if err := db.First(&doctor, doctorID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Doctor no encontrado"})
+			return
+		}
+		if doctor.ClinicID != nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "Ya perteneces a una clínica"})
+			return
+		}
+
+		var req createClinicRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		clinic := models.Clinic{Name: req.Name, OwnerDoctorID: doctorID, SubscriptionStatus: "incomplete"}
+		if err := db.Create(&clinic).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo crear la clínica"})
+			return
+		}
+
+		base := frontendRedirectBase()
+		url, err := client.CreateClinicCheckoutSession(c.Request.Context(), billing.ClinicCheckoutParams{
+			ClinicID:      clinic.ID,
+			CustomerEmail: doctor.Email,
+			SuccessURL:    base + "/clinica?checkout=success",
+			CancelURL:     base + "/clinica?checkout=cancelled",
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo iniciar el proceso de pago"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"url": url})
+	}
+}
+
+// CreateClinicPortalSession abre el Customer Portal de Stripe para la
+// clínica (cancelar, actualizar tarjeta) — mismo mecanismo que
+// CreatePortalSession para la suscripción individual, solo que apunta al
+// Customer de la clínica en vez del propio del doctor. Solo el dueño.
+func CreateClinicPortalSession(db *gorm.DB, client billing.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if client == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "El cobro de suscripción no está configurado en el servidor."})
+			return
+		}
+
+		doctorID := c.MustGet("doctorID").(uint)
+		var doctor models.Doctor
+		if err := db.First(&doctor, doctorID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Doctor no encontrado"})
+			return
+		}
+		if doctor.ClinicID == nil || !doctor.IsClinicOwner {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Solo el dueño de la clínica puede gestionar sus pagos"})
+			return
+		}
+
+		var clinic models.Clinic
+		if err := db.First(&clinic, *doctor.ClinicID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Clínica no encontrada"})
+			return
+		}
+		if clinic.StripeCustomerID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Aún no tienes una suscripción con la que abrir el portal de pagos."})
+			return
+		}
+
+		url, err := client.CreatePortalSession(c.Request.Context(), clinic.StripeCustomerID, frontendRedirectBase()+"/clinica")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo abrir el portal de facturación"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"url": url})
+	}
+}
+
+type clinicDoctorItem struct {
+	ID       uint   `json:"id"`
+	FullName string `json:"fullName"`
+	Email    string `json:"email"`
+	IsOwner  bool   `json:"isOwner"`
+}
+
+// GetClinic devuelve la clínica del doctor autenticado (dueño o miembro),
+// su lista de doctores, y un desglose informativo del costo — el cobro
+// real siempre lo decide Stripe, esto es solo para que el dueño vea de
+// un vistazo qué está pagando.
+func GetClinic(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		doctorID := c.MustGet("doctorID").(uint)
+
+		var self models.Doctor
+		if err := db.First(&self, doctorID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Doctor no encontrado"})
+			return
+		}
+		if self.ClinicID == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "No perteneces a ninguna clínica"})
+			return
+		}
+
+		var clinic models.Clinic
+		if err := db.First(&clinic, *self.ClinicID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Clínica no encontrada"})
+			return
+		}
+
+		var doctors []models.Doctor
+		if err := db.Where("clinic_id = ?", clinic.ID).Order("is_clinic_owner DESC, full_name ASC").Find(&doctors).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo cargar la lista de doctores"})
+			return
+		}
+
+		items := make([]clinicDoctorItem, 0, len(doctors))
+		for _, d := range doctors {
+			items = append(items, clinicDoctorItem{ID: d.ID, FullName: d.FullName, Email: d.Email, IsOwner: d.IsClinicOwner})
+		}
+
+		extraDoctors := 0
+		if len(doctors) > billing.ClinicBaseIncludedDoctors {
+			extraDoctors = len(doctors) - billing.ClinicBaseIncludedDoctors
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"id":                  clinic.ID,
+			"name":                clinic.Name,
+			"subscriptionStatus":  clinic.SubscriptionStatus,
+			"isOwner":             self.IsClinicOwner,
+			"doctors":             items,
+			"baseIncludedDoctors": billing.ClinicBaseIncludedDoctors,
+			"extraDoctors":        extraDoctors,
+			// Montos informativos (MXN/mes) — el cobro real vive en Stripe,
+			// esto es solo para que el dueño vea el desglose sin tener que
+			// entrar al portal de facturación.
+			"basePriceDisplay":  5000,
+			"extraPriceDisplay": 1000,
+		})
+	}
+}
+
+type inviteDoctorToClinicRequest struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+// InviteDoctorToClinic manda una invitación a un doctor que YA TIENE
+// cuenta en ProPatient (a diferencia de invitar personal, aquí no se crea
+// una cuenta nueva — el doctor invitado inicia sesión con la suya propia
+// y confirma que quiere unirse). Ruta protegida, solo el dueño de la
+// clínica puede invitar.
+func InviteDoctorToClinic(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ownerID := c.MustGet("doctorID").(uint)
+
+		var owner models.Doctor
+		if err := db.First(&owner, ownerID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Doctor no encontrado"})
+			return
+		}
+		if owner.ClinicID == nil || !owner.IsClinicOwner {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Solo el dueño de la clínica puede invitar doctores"})
+			return
+		}
+
+		var req inviteDoctorToClinicRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		email := strings.ToLower(strings.TrimSpace(req.Email))
+
+		var invitee models.Doctor
+		if err := db.Where("LOWER(email) = ?", email).First(&invitee).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "No existe una cuenta de doctor con ese correo en ProPatient. Pídele que se registre primero."})
+			return
+		}
+		if invitee.ID == ownerID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "No puedes invitarte a ti mismo"})
+			return
+		}
+		if invitee.ClinicID != nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "Ese doctor ya pertenece a una clínica"})
+			return
+		}
+
+		token, err := generateInviteToken()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo generar la invitación"})
+			return
+		}
+		expires := time.Now().UTC().Add(clinicInviteValidity)
+
+		err = db.Model(&invitee).Updates(map[string]interface{}{
+			"pending_clinic_id":              *owner.ClinicID,
+			"clinic_invite_token":            token,
+			"clinic_invite_token_expires_at": expires,
+		}).Error
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo guardar la invitación"})
+			return
+		}
+
+		var clinic models.Clinic
+		db.Select("name").First(&clinic, *owner.ClinicID)
+
+		inviteURL := fmt.Sprintf("%s/clinica/invitacion/%s", frontendRedirectBase(), token)
+		subject := "Te invitaron a unirte a una clínica en ProPatient"
+		body := fmt.Sprintf(`
+			<html>
+			<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+				<div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+					<h2 style="color: #002d42; text-align: center;">¡Hola, %s!</h2>
+					<p>%s te invitó a unirte a la clínica <strong>%s</strong> en ProPatient. Al aceptar, tu suscripción individual (si tenías una) se cancela y quedas cubierto por el plan de la clínica.</p>
+					<p style="text-align: center; margin: 28px 0;">
+						<a href="%s" style="background-color: #005073; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600;">Ver invitación</a>
+					</p>
+					<p style="font-size: 12px; color: #888;">Este link vence en 72 horas. Si no esperabas esta invitación, puedes ignorarla — no se hace ningún cambio hasta que la aceptes.</p>
+				</div>
+			</body>
+			</html>
+		`, invitee.FullName, owner.FullName, clinic.Name, inviteURL)
+
+		if err := auth.SendEmail(email, subject, body); err != nil {
+			c.JSON(http.StatusCreated, gin.H{"warning": "La invitación se guardó pero no se pudo enviar el correo."})
+			return
+		}
+
+		c.JSON(http.StatusCreated, gin.H{"message": "Invitación enviada"})
+	}
+}
+
+// GetClinicInvite muestra los datos de una invitación pendiente (nombre de
+// la clínica y de quien invitó) sin aceptarla todavía — así el frontend
+// puede mostrar "¿Quieres unirte a la clínica X?" antes de que el doctor
+// confirme con AcceptClinicInvite. Protegida (el token por sí solo no
+// alcanza, tiene que coincidir con el doctor autenticado) porque a
+// diferencia de una invitación de personal, aquí el invitado ya tiene
+// cuenta propia — no hace falta un flujo público sin sesión.
+func GetClinicInvite(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		doctorID := c.MustGet("doctorID").(uint)
+		token := c.Param("token")
+
+		var doctor models.Doctor
+		if err := db.First(&doctor, doctorID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Doctor no encontrado"})
+			return
+		}
+		if doctor.ClinicInviteToken == "" || doctor.ClinicInviteToken != token || doctor.PendingClinicID == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Invitación no válida"})
+			return
+		}
+		if doctor.ClinicInviteTokenExpiresAt == nil || doctor.ClinicInviteTokenExpiresAt.Before(time.Now().UTC()) {
+			c.JSON(http.StatusGone, gin.H{"error": "Esta invitación ya venció. Pide que te inviten de nuevo."})
+			return
+		}
+		if doctor.ClinicID != nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "Ya perteneces a una clínica"})
+			return
+		}
+
+		var clinic models.Clinic
+		if err := db.First(&clinic, *doctor.PendingClinicID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "La clínica ya no existe"})
+			return
+		}
+		var owner models.Doctor
+		db.Select("full_name").First(&owner, clinic.OwnerDoctorID)
+
+		c.JSON(http.StatusOK, gin.H{
+			"clinicName": clinic.Name,
+			"ownerName":  owner.FullName,
+		})
+	}
+}
+
+// AcceptClinicInvite confirma que el doctor autenticado (el propio
+// invitado, con su sesión normal) acepta unirse a la clínica que lo
+// invitó. Cancela su suscripción individual si tenía una activa (para
+// que no le sigan cobrando dos veces) y ajusta el concepto de "doctor
+// extra" de la clínica si hace falta.
+func AcceptClinicInvite(db *gorm.DB, client billing.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		doctorID := c.MustGet("doctorID").(uint)
+		token := c.Param("token")
+
+		var doctor models.Doctor
+		if err := db.First(&doctor, doctorID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Doctor no encontrado"})
+			return
+		}
+		if doctor.ClinicInviteToken == "" || doctor.ClinicInviteToken != token || doctor.PendingClinicID == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Invitación no válida"})
+			return
+		}
+		if doctor.ClinicInviteTokenExpiresAt == nil || doctor.ClinicInviteTokenExpiresAt.Before(time.Now().UTC()) {
+			c.JSON(http.StatusGone, gin.H{"error": "Esta invitación ya venció. Pide que te inviten de nuevo."})
+			return
+		}
+		if doctor.ClinicID != nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "Ya perteneces a una clínica"})
+			return
+		}
+
+		var clinic models.Clinic
+		if err := db.First(&clinic, *doctor.PendingClinicID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "La clínica ya no existe"})
+			return
+		}
+
+		// Mejor esfuerzo: si Stripe no está configurado o la cancelación
+		// falla, no bloqueamos que el doctor se una — solo se registra el
+		// aviso, igual que el resto de integraciones opcionales de la app.
+		if client != nil && doctor.StripeSubscriptionID != "" {
+			if err := client.CancelSubscription(c.Request.Context(), doctor.StripeSubscriptionID); err != nil {
+				fmt.Printf("⚠️ No se pudo cancelar la suscripción individual del doctor %d al unirse a la clínica %d: %v\n", doctor.ID, clinic.ID, err)
+			}
+		}
+
+		updates := map[string]interface{}{
+			"clinic_id":                      clinic.ID,
+			"is_clinic_owner":                false,
+			"pending_clinic_id":              nil,
+			"clinic_invite_token":            "",
+			"clinic_invite_token_expires_at": nil,
+			"subscription_status":            "active", // cubierto por la clínica, ya no depende de su propio trial/pago
+			"stripe_subscription_id":         "",
+		}
+		if err := db.Model(&doctor).Updates(updates).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo completar la unión a la clínica"})
+			return
+		}
+
+		if err := syncClinicDoctorCount(c.Request.Context(), db, client, &clinic); err != nil {
+			fmt.Printf("⚠️ No se pudo sincronizar el conteo de doctores de la clínica %d con Stripe: %v\n", clinic.ID, err)
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Te uniste a la clínica", "clinicName": clinic.Name})
+	}
+}
+
+// RemoveDoctorFromClinic saca a un doctor de la clínica (el dueño no
+// puede quitarse a sí mismo por aquí — cancelar la clínica completa se
+// hace desde el portal de Stripe). Ajusta el concepto de "doctor extra"
+// si el conteo baja de vuelta a billing.ClinicBaseIncludedDoctors o menos.
+func RemoveDoctorFromClinic(db *gorm.DB, client billing.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ownerID := c.MustGet("doctorID").(uint)
+		targetID := c.Param("id")
+
+		var owner models.Doctor
+		if err := db.First(&owner, ownerID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Doctor no encontrado"})
+			return
+		}
+		if owner.ClinicID == nil || !owner.IsClinicOwner {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Solo el dueño de la clínica puede quitar doctores"})
+			return
+		}
+
+		var target models.Doctor
+		if err := db.Where("id = ? AND clinic_id = ?", targetID, *owner.ClinicID).First(&target).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Ese doctor no pertenece a tu clínica"})
+			return
+		}
+		if target.IsClinicOwner {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "El dueño no puede quitarse a sí mismo — cancela la clínica desde el portal de facturación"})
+			return
+		}
+
+		if err := db.Model(&target).Updates(map[string]interface{}{
+			"clinic_id":           nil,
+			"subscription_status": "canceled",
+		}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo quitar al doctor de la clínica"})
+			return
+		}
+
+		var clinic models.Clinic
+		if err := db.First(&clinic, *owner.ClinicID).Error; err == nil {
+			if err := syncClinicDoctorCount(c.Request.Context(), db, client, &clinic); err != nil {
+				fmt.Printf("⚠️ No se pudo sincronizar el conteo de doctores de la clínica %d con Stripe: %v\n", clinic.ID, err)
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Doctor removido de la clínica"})
+	}
+}

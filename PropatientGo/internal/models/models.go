@@ -50,6 +50,23 @@ type Doctor struct {
 	StripeCustomerID     string     `json:"-"`
 	StripeSubscriptionID string     `json:"-"`
 
+	// Clínica (alternativa a la suscripción individual de arriba): si
+	// ClinicID no es nil, este doctor pertenece a una clínica y su acceso
+	// se valida contra la suscripción de ESA clínica, no la propia (ver
+	// billing.RequireActiveSubscription) — SubscriptionStatus/TrialEndsAt/
+	// Stripe* de arriba dejan de importar mientras dure. IsClinicOwner
+	// marca a quien la creó y a quien Stripe le cobra.
+	ClinicID      *uint `gorm:"index" json:"clinicId"`
+	IsClinicOwner bool  `gorm:"default:false" json:"isClinicOwner"`
+
+	// Invitación pendiente a una clínica, antes de aceptarla. A diferencia
+	// de Staff.InviteToken, aquí el doctor YA tiene cuenta y contraseña
+	// propias — el token solo confirma que de verdad quiere unirse (y no
+	// que alguien lo metió sin avisarle), ver handlers.AcceptClinicInvite.
+	PendingClinicID            *uint      `json:"pendingClinicId"`
+	ClinicInviteToken          string     `json:"-"`
+	ClinicInviteTokenExpiresAt *time.Time `json:"-"`
+
 	// Directorio público (landing page): el doctor decide si aparece
 	// (opt-in, PublicListed empieza en false). PublicSlug identifica su
 	// URL pública (/dr/:slug), Latitude/Longitude se calculan a partir de
@@ -109,6 +126,38 @@ type PushSubscription struct {
 	Endpoint  string    `gorm:"not null;uniqueIndex" json:"endpoint"`
 	P256dhKey string    `gorm:"not null" json:"-"`
 	AuthKey   string    `gorm:"not null" json:"-"`
+}
+
+// Clinic agrupa a varios doctores bajo una sola suscripción de Stripe —
+// alternativa a que cada uno pague la suya por separado. El dueño
+// (OwnerDoctorID) es quien la creó y a quien Stripe le factura; los demás
+// doctores se suman por invitación (ver handlers.InviteDoctorToClinic) y
+// dejan de depender de su propia suscripción mientras pertenezcan aquí.
+//
+// El precio son DOS conceptos en la misma suscripción de Stripe: un monto
+// fijo que cubre hasta billing.ClinicBaseIncludedDoctors doctores
+// (StripeBaseItemID), y un cargo por cantidad por cada doctor que la
+// sobrepase (StripeExtraItemID, vacío mientras la clínica tenga 5 o
+// menos — se crea en Stripe apenas se suma el sexto, y se borra si vuelve
+// a bajar a 5, ver billing.SetClinicExtraDoctorQuantity). Sin periodo de
+// prueba: a diferencia de un doctor individual, el cobro arranca en
+// cuanto se completa el Checkout.
+type Clinic struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	Name      string    `json:"name"`
+
+	OwnerDoctorID uint `gorm:"not null;index" json:"ownerDoctorId"`
+
+	// "incomplete" (creada pero el Checkout aún no se completó) |
+	// "active" | "past_due" | "canceled" — mismos cuatro estados que
+	// Doctor.SubscriptionStatus, sin "trialing" porque no aplica aquí.
+	SubscriptionStatus string `gorm:"default:'incomplete'" json:"subscriptionStatus"`
+
+	StripeCustomerID     string `json:"-"`
+	StripeSubscriptionID string `json:"-"`
+	StripeBaseItemID     string `json:"-"`
+	StripeExtraItemID    string `json:"-"`
 }
 
 // Review es la reseña que un paciente deja de un doctor después de una

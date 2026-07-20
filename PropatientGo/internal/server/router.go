@@ -229,7 +229,7 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 		// Webhook de Stripe: lo llama Stripe directamente (sin Authorization,
 		// sin sesión de usuario). La firma Stripe-Signature es lo único que
 		// autentica la petición, así que va fuera de /auth y del grupo protegido.
-		api.POST("/billing/webhook", handlers.StripeWebhook(db, billingConfig))
+		api.POST("/billing/webhook", handlers.StripeWebhook(db, billingClient, billingConfig))
 
 		// Directorio público (landing page): sin autenticación, para que
 		// cualquier visitante pueda ver doctores y agendar una solicitud de
@@ -266,6 +266,23 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 				billingRoutes.GET("/status", handlers.GetBillingStatus(db))
 				billingRoutes.POST("/checkout", handlers.CreateCheckoutSession(db, billingClient, billingConfig))
 				billingRoutes.POST("/portal", handlers.CreatePortalSession(db, billingClient))
+			}
+
+			// Clínica: también fuera de RequireActiveSubscription a propósito,
+			// mismo motivo que /billing — un doctor invitado a una clínica
+			// puede tener su propia prueba/suscripción vencida y aun así debe
+			// poder aceptar la invitación (eso es justo lo que le restaura el
+			// acceso). Solo el doctor la gestiona, nunca el personal.
+			clinicRoutes := protected.Group("/clinic")
+			clinicRoutes.Use(auth.RequireDoctorRole())
+			{
+				clinicRoutes.POST("", handlers.CreateClinic(db, billingClient, billingConfig))
+				clinicRoutes.GET("", handlers.GetClinic(db))
+				clinicRoutes.POST("/portal", handlers.CreateClinicPortalSession(db, billingClient))
+				clinicRoutes.POST("/invite", handlers.InviteDoctorToClinic(db))
+				clinicRoutes.GET("/invitations/:token", handlers.GetClinicInvite(db))
+				clinicRoutes.POST("/invitations/:token/accept", handlers.AcceptClinicInvite(db, billingClient))
+				clinicRoutes.DELETE("/doctors/:id", handlers.RemoveDoctorFromClinic(db, billingClient))
 			}
 
 			// Exportar/eliminar mi cuenta (derechos ARCO): también fuera de

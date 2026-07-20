@@ -208,6 +208,7 @@ tumba el servidor).
 | Correo (Resend) | `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | No se manda ningún correo (falla rápido, sin bloquear la petición) |
 | WhatsApp (Twilio) | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM` | No se manda ningún WhatsApp |
 | Cobros (Stripe) | `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET` | Rutas de facturación devuelven 503; el resto de la app funciona igual |
+| Plan de clínica (Stripe) | `STRIPE_CLINIC_BASE_PRICE_ID`, `STRIPE_CLINIC_EXTRA_DOCTOR_PRICE_ID` | Rutas `/api/clinic` devuelven 503; la suscripción individual sigue funcionando igual |
 | Google Calendar | `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALENDAR_REDIRECT_URI` | Botón "Conectar" queda deshabilitado |
 | Login del doctor | `GOOGLE_CLIENT_ID` | Trae un default funcional, no es opcional en la práctica |
 | Panel SUPERADMIN | `SUPERADMIN_USERNAME`, `SUPERADMIN_PASSWORD` | `/admin/login` existe pero no hay ninguna cuenta con la que entrar |

@@ -103,6 +103,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
       { label: 'Personal', icon: 'badge', route: '/personal' },
       { label: 'Reseñas', icon: 'reviews', route: '/resenas' },
       { label: 'Suscripción', icon: 'credit_card', route: '/billing' },
+      { label: 'Mi Clínica', icon: 'apartment', route: '/clinica' },
       { label: 'Perfil', icon: 'settings', route: '/profile' },
       { label: 'Ajustes Notas', icon: 'tune', route: '/ajustes-notas' }
     ] : [])
