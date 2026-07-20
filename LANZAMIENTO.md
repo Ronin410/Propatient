@@ -461,12 +461,12 @@ Privacidad mencionándolo, aunque sea breve.
 
 ## Checklist rápido para marcar conforme avances
 
-- [ ] `SUPERADMIN_USERNAME` / `SUPERADMIN_PASSWORD`
+- [x] `SUPERADMIN_USERNAME` / `SUPERADMIN_PASSWORD` ✅
 - [x] `AWS_S3_BUCKET` / `AWS_REGION` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` ✅
 - [x] `RESEND_API_KEY` / `RESEND_FROM_EMAIL` (dominio verificado) ✅
-- [ ] `TWILIO_*` con número de WhatsApp Business real (no sandbox)
+- [ ] `TWILIO_*` con número de WhatsApp Business real (no sandbox) + `TWILIO_TEMPLATE_*` (ver sección 1.4)
 - [ ] `STRIPE_*` en modo Live (no Test)
-- [ ] Verificar `JWT_SECRET`, `FRONTEND_URL`, `VITE_API_URL`
+- [x] Verificar `JWT_SECRET`, `FRONTEND_URL`, `VITE_API_URL` ✅
 - [x] Google OAuth fuera de modo "Testing" (login) ✅
 - [ ] Verificación de Google del scope de Calendar (ver `GOOGLE-CALENDAR-VERIFICACION.md`)
 - [x] Conectar `propatient.pro` en Render (DNS en Porkbun) y actualizar
@@ -481,8 +481,9 @@ Privacidad mencionándolo, aunque sea breve.
 - [ ] CFDI/facturación fiscal (sección 6.6)
 - [x] Consentimiento explícito de datos de salud en el booking público ✅
 - [x] CI automatizado ✅
-- [ ] `RECAPTCHA_SECRET_KEY` / `VITE_RECAPTCHA_SITE_KEY` (código ya listo, ver sección 1.6)
-- [ ] `SENTRY_DSN` / `VITE_SENTRY_DSN` (código ya listo, ver sección 1.7)
+- [x] `RECAPTCHA_SECRET_KEY` / `VITE_RECAPTCHA_SITE_KEY` ✅
+- [x] `SENTRY_DSN` / `VITE_SENTRY_DSN` ✅
 - [x] Sitemap dado de alta en Google Search Console ✅
+- [x] Contraseña de Gmail filtrada revocada ✅
 - [ ] Google Business Profile del/los consultorio(s) piloto
 - [ ] Canal de adquisición inicial decidido (Ads / redes / alianzas)
