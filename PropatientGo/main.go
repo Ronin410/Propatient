@@ -53,7 +53,7 @@ func main() {
 	}
 
 	// 3. Automigración y Seed
-	db.AutoMigrate(&models.Doctor{}, &models.Patient{}, &models.MedicalHistory{}, &models.Appointment{}, &models.MedicalDocument{}, &models.DoctorTemplate{}, &models.Staff{}, &models.DoctorStaff{}, &models.SuperAdmin{}, &models.DoctorSchedule{}, &models.DoctorGalleryImage{}, &models.Review{}, &models.PushSubscription{}, &models.Clinic{}, &models.AuditLog{}, &models.AppointmentNoteHistory{})
+	db.AutoMigrate(&models.Doctor{}, &models.Patient{}, &models.MedicalHistory{}, &models.Appointment{}, &models.MedicalDocument{}, &models.DoctorTemplate{}, &models.Staff{}, &models.DoctorStaff{}, &models.SuperAdmin{}, &models.DoctorSchedule{}, &models.DoctorGalleryImage{}, &models.Review{}, &models.PushSubscription{}, &models.Clinic{}, &models.AuditLog{}, &models.AppointmentNoteHistory{}, &models.Cie10Code{})
 
 	// Migración de compatibilidad: Staff dejó de pertenecer a un solo
 	// doctor (columnas doctor_id/active) y ahora se vincula a uno o más
@@ -108,6 +108,7 @@ func main() {
 
 	database.SeedDatabase(db)
 	database.SeedSuperAdmin(db)
+	database.SeedCie10Catalog(db)
 
 	// Cliente de WhatsApp (Twilio): solo se construye si las tres
 	// variables están configuradas. Sin eso, los workers de recordatorio

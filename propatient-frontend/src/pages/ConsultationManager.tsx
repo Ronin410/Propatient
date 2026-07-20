@@ -13,10 +13,17 @@ interface NoteHistoryEntry {
   id: number;
   createdAt: string;
   previousDiagnosis: string;
+  previousDiagnosisCode: string;
   previousTreatmentPlan: string;
   previousNotes: string;
   changedByRole: 'MEDICO' | 'STAFF';
   changedByName: string;
+}
+
+interface Cie10Result {
+  code: string;
+  name: string;
+  chapter: string;
 }
 
 export const ConsultationManager: React.FC = () => {
@@ -41,6 +48,10 @@ export const ConsultationManager: React.FC = () => {
     setFollowUpDays,
     patientForm,
     setPatientFormData,
+    diagnosisCode,
+    setDiagnosisCode,
+    diagnosisCodeLabel,
+    setDiagnosisCodeLabel,
     uploadedFiles,
     isSyncingFiles,
     showAutosaveToast,
@@ -63,6 +74,39 @@ export const ConsultationManager: React.FC = () => {
   const [showNoteHistory, setShowNoteHistory] = useState(false);
   const [noteHistory, setNoteHistory] = useState<NoteHistoryEntry[] | null>(null);
   const [noteHistoryLoading, setNoteHistoryLoading] = useState(false);
+
+  // --- Buscador de diagnóstico CIE-10 (catálogo oficial DGIS) ---
+  const [cie10SearchTerm, setCie10SearchTerm] = useState('');
+  const [cie10Results, setCie10Results] = useState<Cie10Result[]>([]);
+  const [cie10Searching, setCie10Searching] = useState(false);
+  const [cie10ShowResults, setCie10ShowResults] = useState(false);
+
+  useEffect(() => {
+    if (!cie10SearchTerm.trim() || cie10SearchTerm.trim().length < 2) {
+      setCie10Results([]);
+      return;
+    }
+    const delayDebounce = setTimeout(async () => {
+      setCie10Searching(true);
+      try {
+        const res = await api.get(`/utils/cie10?q=${encodeURIComponent(cie10SearchTerm.trim())}`);
+        setCie10Results(res.data || []);
+      } catch {
+        setCie10Results([]);
+      } finally {
+        setCie10Searching(false);
+      }
+    }, 350);
+    return () => clearTimeout(delayDebounce);
+  }, [cie10SearchTerm]);
+
+  const selectCie10Result = (result: Cie10Result) => {
+    setDiagnosisCode(result.code);
+    setDiagnosisCodeLabel(result.name);
+    setCie10SearchTerm('');
+    setCie10Results([]);
+    setCie10ShowResults(false);
+  };
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -214,6 +258,9 @@ export const ConsultationManager: React.FC = () => {
                   </div>
                   {entry.previousDiagnosis && (
                     <p><strong>Diagnóstico anterior:</strong> {entry.previousDiagnosis}</p>
+                  )}
+                  {entry.previousDiagnosisCode && (
+                    <p><strong>Código CIE-10 anterior:</strong> {entry.previousDiagnosisCode}</p>
                   )}
                   {entry.previousTreatmentPlan && (
                     <p><strong>Tratamiento anterior:</strong> {entry.previousTreatmentPlan}</p>
@@ -518,6 +565,61 @@ export const ConsultationManager: React.FC = () => {
             )}
             {isCompleted && uploadedFiles.length === 0 && (
               <p className="empty-msg">No se adjuntaron archivos en esta consulta.</p>
+            )}
+          </section>
+
+          {/* DIAGNÓSTICO ESTRUCTURADO (CATÁLOGO CIE-10) */}
+          <section className="form-card cie10-card">
+            <h3>
+              <span className="material-icons-outlined">medical_information</span>
+              Diagnóstico (CIE-10)
+            </h3>
+            <p className="cie10-subtitle">
+              Opcional — busca por código o por nombre para asociar un diagnóstico del catálogo
+              oficial a esta cita. El texto libre de "Notas de la Consulta" no cambia.
+            </p>
+            {!isCompleted && (
+              <div className="cie10-search-wrapper">
+                <span className="material-icons-outlined input-icon">search</span>
+                <input
+                  type="text"
+                  placeholder="Ej. J44.9 o &quot;diabetes&quot;"
+                  value={cie10SearchTerm}
+                  onChange={(e) => { setCie10SearchTerm(e.target.value); setCie10ShowResults(true); }}
+                  onFocus={() => setCie10ShowResults(true)}
+                  onBlur={() => setTimeout(() => setCie10ShowResults(false), 150)}
+                />
+                {cie10Searching && <div className="searching-loader">Buscando...</div>}
+                {cie10ShowResults && cie10Results.length > 0 && (
+                  <ul className="cie10-results">
+                    {cie10Results.map((r) => (
+                      <li key={r.code} onMouseDown={() => selectCie10Result(r)}>
+                        <strong>{r.code}</strong> — {r.name}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+            {diagnosisCode ? (
+              <div className="cie10-selected-chip">
+                <span className="material-icons-outlined">check_circle</span>
+                <div>
+                  <strong>{diagnosisCode}</strong>
+                  {diagnosisCodeLabel && <span> — {diagnosisCodeLabel}</span>}
+                </div>
+                {!isCompleted && (
+                  <button
+                    type="button"
+                    className="btn-close"
+                    onClick={() => { setDiagnosisCode(''); setDiagnosisCodeLabel(''); }}
+                  >
+                    <span className="material-icons-outlined">close</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <p className="empty-msg">Sin código CIE-10 asociado todavía.</p>
             )}
           </section>
 

@@ -679,6 +679,101 @@
   }
 }
 
+/* Buscador de diagnóstico CIE-10 (catálogo oficial DGIS) */
+.cie10-card {
+  .cie10-subtitle {
+    margin: -10px 0 16px 0;
+    font-size: 13px;
+    color: var(--color-secondary);
+  }
+
+  .cie10-search-wrapper {
+    position: relative;
+    margin-bottom: 14px;
+
+    .input-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--color-secondary);
+      font-size: 18px;
+    }
+
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 14px 10px 38px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      background: var(--bg);
+      color: var(--text);
+
+      &:focus { outline: none; border-color: var(--color-primary); }
+    }
+
+    .searching-loader {
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--color-secondary);
+    }
+
+    .cie10-results {
+      position: absolute;
+      z-index: 20;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      max-height: 260px;
+      overflow-y: auto;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+      list-style: none;
+      margin: 0;
+      padding: 4px 0;
+
+      li {
+        padding: 8px 14px;
+        font-size: 13px;
+        cursor: pointer;
+        color: var(--text);
+
+        &:hover { background: var(--bg-subtle); }
+
+        strong { color: var(--color-primary); }
+      }
+    }
+  }
+
+  .cie10-selected-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--bg-subtle);
+    border-radius: 8px;
+    padding: 12px 14px;
+
+    .material-icons-outlined:first-child { color: var(--color-success); }
+
+    div { flex: 1; font-size: 13px; color: var(--text); }
+    strong { color: var(--color-heading); }
+
+    .btn-close {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--color-secondary);
+      display: flex;
+      align-items: center;
+
+      &:hover { color: var(--color-danger); }
+    }
+  }
+}
+
 /* Malla de inputs de datos generales en ancho completo */
 .form-grid {
   display: grid;

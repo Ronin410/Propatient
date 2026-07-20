@@ -303,23 +303,28 @@ type MedicalHistory struct {
 
 // Appointment representa tu Appointment.java
 type Appointment struct {
-	ID                  uint              `gorm:"primaryKey" json:"id"`
-	CreatedAt           time.Time         `json:"created_at"`
-	UpdatedAt           time.Time         `json:"updated_at"`
-	DeletedAt           gorm.DeletedAt    `gorm:"index" json:"-"`
-	PatientID           uint              `json:"patientId"`
-	Patient             *Patient          `gorm:"foreignKey:PatientID" json:"patient"` // Volvemos al estándar 'patient'
-	DoctorID            uint              `json:"doctorId"`
-	AppointmentDateTime time.Time         `json:"appointmentDateTime"` // Asegurar que coincida con el .ts de Angular
-	Reason              string            `json:"reason"`
-	Status              string            `gorm:"default:'PENDING'" json:"status"`
-	Diagnosis           string            `gorm:"type:text" json:"diagnosis"`
-	TreatmentPlan       string            `gorm:"type:text" json:"treatmentPlan"`
-	DynamicNotes        datatypes.JSON    `json:"dynamic_notes" gorm:"type:jsonb"`
-	Notes               string            `gorm:"type:text" json:"notes"`
-	RegistrationStatus  string            `gorm:"default:'REGISTERED'" json:"registrationStatus"`
-	RecipePDFPath       string            `json:"recipePdfPath"`
-	MedicalDocuments    []MedicalDocument `gorm:"foreignKey:AppointmentID" json:"documents"`
+	ID                  uint           `gorm:"primaryKey" json:"id"`
+	CreatedAt           time.Time      `json:"created_at"`
+	UpdatedAt           time.Time      `json:"updated_at"`
+	DeletedAt           gorm.DeletedAt `gorm:"index" json:"-"`
+	PatientID           uint           `json:"patientId"`
+	Patient             *Patient       `gorm:"foreignKey:PatientID" json:"patient"` // Volvemos al estándar 'patient'
+	DoctorID            uint           `json:"doctorId"`
+	AppointmentDateTime time.Time      `json:"appointmentDateTime"` // Asegurar que coincida con el .ts de Angular
+	Reason              string         `json:"reason"`
+	Status              string         `gorm:"default:'PENDING'" json:"status"`
+	Diagnosis           string         `gorm:"type:text" json:"diagnosis"`
+	// Código CIE-10 elegido en el buscador (ver Cie10Code), opcional —
+	// Diagnosis sigue siendo el texto libre que se ve/imprime; este campo
+	// es la versión estructurada para catálogo/interoperabilidad futura
+	// (HL7), no reemplaza al texto. "" si el doctor no usó el buscador.
+	DiagnosisCode      string            `json:"diagnosisCode"`
+	TreatmentPlan      string            `gorm:"type:text" json:"treatmentPlan"`
+	DynamicNotes       datatypes.JSON    `json:"dynamic_notes" gorm:"type:jsonb"`
+	Notes              string            `gorm:"type:text" json:"notes"`
+	RegistrationStatus string            `gorm:"default:'REGISTERED'" json:"registrationStatus"`
+	RecipePDFPath      string            `json:"recipePdfPath"`
+	MedicalDocuments   []MedicalDocument `gorm:"foreignKey:AppointmentID" json:"documents"`
 	// Fecha sugerida de cita de control, marcada opcionalmente al finalizar
 	// la consulta. Puntero para poder distinguir "sin seguimiento" (nil) de
 	// una fecha real, y para poder limpiarla mandando JSON null.
@@ -442,6 +447,7 @@ type AppointmentNoteHistory struct {
 
 	// Snapshot del contenido clínico tal como estaba antes de este cambio.
 	PreviousDiagnosis     string `gorm:"type:text" json:"previousDiagnosis"`
+	PreviousDiagnosisCode string `json:"previousDiagnosisCode"`
 	PreviousTreatmentPlan string `gorm:"type:text" json:"previousTreatmentPlan"`
 	PreviousNotes         string `gorm:"type:text" json:"previousNotes"`
 	PreviousDynamicNotes  string `gorm:"type:text" json:"previousDynamicNotes"`
@@ -450,4 +456,21 @@ type AppointmentNoteHistory struct {
 	ChangedByID   uint   `json:"changedById"`
 	ChangedByName string `json:"changedByName"`
 	IPAddress     string `json:"ipAddress"`
+}
+
+// Cie10Code es el catálogo oficial de diagnósticos CIE-10 (DGIS/CENETEC,
+// actualización abril 2024), cargado una sola vez desde un CSV embebido en
+// el binario (ver internal/database.SeedCie10Catalog) — nunca se edita
+// desde la app, es de solo lectura para el buscador de diagnóstico. Solo
+// incluye códigos vigentes (VALID="SI" en el catálogo original): las
+// categorías de 3 caracteres sin subcategoría específica quedan fuera a
+// propósito, son demasiado genéricas para capturarse como diagnóstico
+// real (ver el comentario de importación en internal/database/seed.go).
+type Cie10Code struct {
+	ID             uint   `gorm:"primaryKey" json:"id"`
+	Code           string `gorm:"uniqueIndex;not null" json:"code"` // ej. "J449" (equivale a J44.9)
+	Name           string `gorm:"index;not null" json:"name"`
+	ChapterKey     string `json:"chapterKey"`
+	Chapter        string `json:"chapter"`
+	SexRestriction string `json:"sexRestriction"` // "H", "M", o "" sin restricción
 }

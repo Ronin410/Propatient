@@ -98,6 +98,13 @@ export function useConsultation(appointmentId: string | undefined) {
 
   const [patientForm, setPatientFormData] = useState<PatientFormState>(EMPTY_PATIENT_FORM);
 
+  // Diagnóstico estructurado (CIE-10, catálogo oficial DGIS): independiente
+  // del texto libre que el doctor escribe en "Notas de la Consulta" — ver
+  // el comentario en models.Appointment.DiagnosisCode. diagnosisCodeLabel
+  // es solo para mostrar el nombre oficial junto al código en la UI.
+  const [diagnosisCode, setDiagnosisCode] = useState('');
+  const [diagnosisCodeLabel, setDiagnosisCodeLabel] = useState('');
+
   const [uploadedFiles, setUploadedFiles] = useState<AppointmentFile[]>([]);
   const [isSyncingFiles, setIsSyncingFiles] = useState(false);
   const [showAutosaveToast, setShowAutosaveToast] = useState(false);
@@ -170,6 +177,18 @@ export function useConsultation(appointmentId: string | undefined) {
         initialNotes['subjetivo'] = data.notes;
       }
       setDynamicNotes(initialNotes);
+
+      setDiagnosisCode(data.diagnosisCode || '');
+      if (data.diagnosisCode) {
+        // Resuelve el nombre oficial del código ya guardado, solo para
+        // mostrarlo — mejor esfuerzo, si falla se ve el código a secas.
+        api.get(`/utils/cie10?q=${encodeURIComponent(data.diagnosisCode)}`)
+          .then((res) => {
+            const match = (res.data || []).find((c: { code: string }) => c.code === data.diagnosisCode);
+            if (match) setDiagnosisCodeLabel(match.name);
+          })
+          .catch(() => {});
+      }
 
       if (data.documents) {
         const mappedInitialFiles: AppointmentFile[] = data.documents.map((doc: any) => ({
@@ -503,6 +522,8 @@ export function useConsultation(appointmentId: string | undefined) {
         ...appointment,
         status: 'COMPLETED',
         dynamic_notes: dynamicNotes,
+        diagnosisCode,
+        ...(diagnosisCodeLabel ? { diagnosis: diagnosisCodeLabel } : {}),
         ...(followUpDate ? { followUpDate } : {}),
       });
 
@@ -543,6 +564,10 @@ export function useConsultation(appointmentId: string | undefined) {
     setFollowUpDays,
     patientForm,
     setPatientFormData,
+    diagnosisCode,
+    setDiagnosisCode,
+    diagnosisCodeLabel,
+    setDiagnosisCodeLabel,
     uploadedFiles,
     isSyncingFiles,
     showAutosaveToast,

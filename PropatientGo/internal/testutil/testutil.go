@@ -10,6 +10,7 @@ import (
 
 	"propatient-api/internal/auth"
 	"propatient-api/internal/billing"
+	"propatient-api/internal/database"
 	"propatient-api/internal/models"
 
 	"golang.org/x/crypto/bcrypt"
@@ -46,7 +47,7 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 		&models.Appointment{}, &models.MedicalDocument{}, &models.DoctorTemplate{},
 		&models.Staff{}, &models.DoctorStaff{}, &models.SuperAdmin{}, &models.DoctorSchedule{},
 		&models.DoctorGalleryImage{}, &models.Review{}, &models.PushSubscription{}, &models.Clinic{},
-		&models.AuditLog{}, &models.AppointmentNoteHistory{},
+		&models.AuditLog{}, &models.AppointmentNoteHistory{}, &models.Cie10Code{},
 	); err != nil {
 		t.Fatalf("Error en AutoMigrate de la DB de pruebas: %v", err)
 	}
@@ -74,6 +75,13 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 	}
 
 	os.Setenv("JWT_SECRET", TestJWTSecret)
+
+	// Catálogo de referencia, no datos de prueba por test: se carga una
+	// sola vez (idempotente, ver SeedCie10Catalog) y a propósito NO se
+	// trunca arriba — recargar ~12,500 filas antes de cada test dejaría
+	// la suite completa insoportablemente lenta para un dato que nunca
+	// cambia entre corridas.
+	database.SeedCie10Catalog(db)
 
 	return db
 }

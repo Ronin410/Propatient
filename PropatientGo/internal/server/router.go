@@ -424,6 +424,7 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 				utils := gated.Group("/utils")
 				{
 					utils.GET("/specialties", handlers.GetSpecialties)
+					utils.GET("/cie10", handlers.SearchCie10Codes(db))
 				}
 			}
 		}

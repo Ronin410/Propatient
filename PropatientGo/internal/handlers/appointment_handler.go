@@ -607,6 +607,7 @@ func UpdateAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient wh
 		// verdad cambió algo (ver NOM-024: ninguna nota clínica se pierde al
 		// corregirla).
 		previousDiagnosis := appointment.Diagnosis
+		previousDiagnosisCode := appointment.DiagnosisCode
 		previousTreatmentPlan := appointment.TreatmentPlan
 		previousNotes := appointment.Notes
 		previousDynamicNotes := string(appointment.DynamicNotes)
@@ -618,6 +619,7 @@ func UpdateAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient wh
 		}
 
 		clinicalContentChanged := appointment.Diagnosis != previousDiagnosis ||
+			appointment.DiagnosisCode != previousDiagnosisCode ||
 			appointment.TreatmentPlan != previousTreatmentPlan ||
 			appointment.Notes != previousNotes ||
 			string(appointment.DynamicNotes) != previousDynamicNotes
@@ -643,6 +645,7 @@ func UpdateAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient wh
 			history := models.AppointmentNoteHistory{
 				AppointmentID:         appointment.ID,
 				PreviousDiagnosis:     previousDiagnosis,
+				PreviousDiagnosisCode: previousDiagnosisCode,
 				PreviousTreatmentPlan: previousTreatmentPlan,
 				PreviousNotes:         previousNotes,
 				PreviousDynamicNotes:  previousDynamicNotes,

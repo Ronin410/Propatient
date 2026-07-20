@@ -134,6 +134,7 @@ export interface Appointment {
   patientId?: number;
   observations?: string;
   diagnosis?: string;
+  diagnosisCode?: string;
   treatmentPlan?: string;
   patient?: Patient;
   Patient?: Patient; // GORM preload default
