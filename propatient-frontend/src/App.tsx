@@ -46,6 +46,7 @@ const PatientForm = lazy(() => import('./pages/PatientForm').then((m) => ({ defa
 const AppointmentCalendar = lazy(() => import('./pages/AppointmentCalendar').then((m) => ({ default: m.AppointmentCalendar })));
 const AppointmentForm = lazy(() => import('./pages/AppointmentForm').then((m) => ({ default: m.AppointmentForm })));
 const ConsultationManager = lazy(() => import('./pages/ConsultationManager').then((m) => ({ default: m.ConsultationManager })));
+const AcceptTerms = lazy(() => import('./pages/AcceptTerms').then((m) => ({ default: m.AcceptTerms })));
 const CompleteProfile = lazy(() => import('./pages/CompleteProfile').then((m) => ({ default: m.CompleteProfile })));
 const ValidateLicense = lazy(() => import('./pages/ValidateLicense').then((m) => ({ default: m.ValidateLicense })));
 const DoctorProfile = lazy(() => import('./pages/DoctorProfile').then((m) => ({ default: m.DoctorProfile })));
@@ -146,6 +147,14 @@ function App() {
             />
 
             {/* 📑 SECCIÓN ONBOARDING: Totalmente independiente de la estructura del Dashboard */}
+            <Route
+              path="/registro/terminos"
+              element={
+                <ProtectedRoute>
+                  <AcceptTerms />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/registro/perfil"
               element={

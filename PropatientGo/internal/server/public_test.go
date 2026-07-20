@@ -385,3 +385,41 @@ func TestPublicAppointment_MarksPatientAsMinor(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, true, patient["isMinor"], "el paciente debe quedar marcado como menor de edad")
 }
+
+// TestPublicAppointment_RecordsConsentEvidence cubre el Caso 2 del análisis
+// legal: cuando el paciente (o su tutor) marca el checkbox de consentimiento
+// al agendar sin cuenta, debe quedar una fila de evidencia (ConsentRecord)
+// con la cita/paciente/doctor, la versión del aviso vigente y la IP desde
+// donde se aceptó — antes solo se validaba el checkbox sin guardar nada.
+func TestPublicAppointment_RecordsConsentEvidence(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), nil, nil)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_consent_evidence", "password123")
+	require.NoError(t, db.Model(&doc).Updates(map[string]any{"public_listed": true, "public_slug": "dr-consent-evidence"}).Error)
+
+	w := doRequest(t, router, http.MethodPost, "/api/public/appointments", "", map[string]any{
+		"doctorId":            doc.ID,
+		"appointmentDateTime": "2026-09-02T10:00:00Z",
+		"patientFirstName":    "Con",
+		"patientLastName":     "Evidencia",
+		"patientPhone":        "5551112222",
+		"patientEmail":        "con.evidencia@test.local",
+		"dataConsent":         true,
+		"isMinorPatient":      true,
+	})
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+
+	var record models.ConsentRecord
+	err := db.Where("doctor_id = ?", doc.ID).First(&record).Error
+	require.NoError(t, err, "debe existir una fila de evidencia de consentimiento")
+	assert.Equal(t, models.CurrentLegalNoticeVersion, record.NoticeVersion)
+	assert.True(t, record.AcceptedAsGuardian)
+	assert.NotZero(t, record.PatientID)
+	assert.NotZero(t, record.AppointmentID)
+
+	var appt models.Appointment
+	require.NoError(t, db.First(&appt, record.AppointmentID).Error)
+	assert.Equal(t, appt.PatientID, record.PatientID)
+}

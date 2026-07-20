@@ -292,6 +292,23 @@ func CreatePublicAppointment(db *gorm.DB, waClient whatsapp.Client, waTemplates 
 			return
 		}
 
+		// Evidencia del consentimiento (LFPDPPP, dato de salud sensible):
+		// req.DataConsent ya se validó como obligatorio arriba, pero antes
+		// de esto la aceptación en sí no quedaba registrada en ningún lado,
+		// solo el hecho de que la cita existiera. No se aborta la petición
+		// si esto falla (la cita ya se guardó y el paciente no tiene por
+		// qué ver un error por esto) — solo se deja constancia en el log.
+		if err := db.Create(&models.ConsentRecord{
+			PatientID:          patient.ID,
+			AppointmentID:      appointment.ID,
+			DoctorID:           doctor.ID,
+			AcceptedAsGuardian: req.IsMinorPatient,
+			NoticeVersion:      models.CurrentLegalNoticeVersion,
+			IPAddress:          c.ClientIP(),
+		}).Error; err != nil {
+			log.Printf("⚠️ No se pudo guardar la evidencia de consentimiento de la cita %d: %v", appointment.ID, err)
+		}
+
 		// Correos y WhatsApp de aviso: en segundo plano, nunca deben poder
 		// retrasar ni tumbar la respuesta al paciente — la solicitud ya se
 		// guardó. Van en su propia goroutine (no en la petición HTTP) porque

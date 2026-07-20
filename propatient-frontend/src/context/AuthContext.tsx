@@ -4,6 +4,11 @@ import React, { createContext, useContext, useState } from 'react';
 interface UserStatus {
   profileCompleted: boolean;
   cedulaValidated: 'PENDIENTE' | 'CAPTURADA' | 'VALIDADA';
+  // Aceptación obligatoria de Términos y Condiciones + Aviso de Privacidad
+  // (ver AcceptTerms.tsx / OnboardingGuard.tsx). Opcional en el tipo para
+  // no romper sesiones ya guardadas en localStorage de antes de este
+  // campo — se trata como `false` si no viene definido.
+  termsAccepted?: boolean;
 }
 
 type Role = 'MEDICO' | 'STAFF';

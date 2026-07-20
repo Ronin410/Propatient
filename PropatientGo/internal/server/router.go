@@ -294,6 +294,7 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 			{
 				accountRoutes.GET("/export-data", handlers.ExportMyData(db))
 				accountRoutes.DELETE("/account", handlers.DeleteMyAccount(db))
+				accountRoutes.POST("/accept-terms", auth.AcceptTermsHandler(db))
 			}
 
 			// Todo lo demás requiere prueba vigente o suscripción activa. El

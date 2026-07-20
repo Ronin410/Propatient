@@ -109,9 +109,39 @@ func GoogleLoginHandler(db *gorm.DB) gin.HandlerFunc {
 			"token":    token,
 			"fullName": doctor.FullName,
 			"userStatus": gin.H{
-				"perfilCompletado": doctor.ProfileCompleted,
-				"cedulaValidada":   doctor.CedulaValidated,
+				"perfilCompletado":  doctor.ProfileCompleted,
+				"cedulaValidada":    doctor.CedulaValidated,
+				"terminosAceptados": doctor.TermsAcceptedAt != nil,
 			},
+		})
+	}
+}
+
+// AcceptTermsHandler registra que el doctor autenticado aceptó los Términos
+// y Condiciones + el Aviso de Privacidad. Fuera de RequireActiveSubscription
+// a propósito (ver router.go, mismo criterio que ExportMyData/DeleteMyAccount):
+// un doctor con la prueba vencida debe poder seguir aceptando/consultando
+// esto sin depender de tener una suscripción activa. Idempotente: si ya
+// había aceptado antes, simplemente actualiza la evidencia (versión/IP/
+// fecha) a la aceptación más reciente, nunca la borra.
+func AcceptTermsHandler(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		doctorID, _ := c.Get("doctorID")
+
+		now := time.Now().UTC()
+		err := db.Model(&models.Doctor{}).Where("id = ?", doctorID).Updates(map[string]interface{}{
+			"terms_accepted_at":      now,
+			"terms_accepted_version": models.CurrentLegalNoticeVersion,
+			"terms_accepted_ip":      c.ClientIP(),
+		}).Error
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo registrar tu aceptación"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"termsAcceptedAt":      now,
+			"termsAcceptedVersion": models.CurrentLegalNoticeVersion,
 		})
 	}
 }

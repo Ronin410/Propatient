@@ -7,6 +7,15 @@ import (
 	"gorm.io/gorm"
 )
 
+// CurrentLegalNoticeVersion identifica el texto vigente de los Términos y
+// Condiciones + Aviso de Privacidad (hoy tratados como un solo bloque de
+// aceptación, ver Doctor.TermsAcceptedVersion y ConsentRecord.NoticeVersion).
+// Se guarda junto con cada aceptación para poder acreditar exactamente qué
+// versión aceptó cada quien; si el contenido de /terminos o /privacidad
+// cambia de forma material, este valor debe subir para que las nuevas
+// aceptaciones no se confundan con las anteriores.
+const CurrentLegalNoticeVersion = "2026-07-20"
+
 // Doctor representa la entidad DOCTOR_USER (Tu Doctor.java)
 type Doctor struct {
 	ID               uint           `gorm:"primaryKey" json:"id"`
@@ -95,6 +104,18 @@ type Doctor struct {
 	TiktokUrl    string `json:"tiktokUrl"`
 	YoutubeUrl   string `json:"youtubeUrl"`
 	WebsiteUrl   string `json:"websiteUrl"`
+
+	// Aceptación obligatoria de Términos y Condiciones + Aviso de
+	// Privacidad: ningún doctor puede entrar al dashboard sin haberla
+	// dado (ver OnboardingGuard.tsx en el frontend y
+	// auth.AcceptTermsHandler). TermsAcceptedAt nil = no aceptados
+	// todavía. Version/IP quedan como evidencia de qué texto exacto
+	// aceptó y desde dónde, para el mismo tipo de trazabilidad que ya
+	// usa internal/audit — IP no se expone al frontend, no aporta nada
+	// ahí y es un dato personal en sí mismo.
+	TermsAcceptedAt      *time.Time `json:"termsAcceptedAt"`
+	TermsAcceptedVersion string     `json:"termsAcceptedVersion"`
+	TermsAcceptedIP      string     `json:"-"`
 
 	Patients []Patient `gorm:"many2many:doctor_patients;" json:"-"`
 }
@@ -456,6 +477,30 @@ type AppointmentNoteHistory struct {
 	ChangedByID   uint   `json:"changedById"`
 	ChangedByName string `json:"changedByName"`
 	IPAddress     string `json:"ipAddress"`
+}
+
+// ConsentRecord es la evidencia de que un paciente (o su padre/madre/tutor,
+// ver IsMinor) aceptó el tratamiento de sus datos de salud al agendar una
+// cita pública sin cuenta (ver handlers.CreatePublicAppointment). El
+// checkbox de consentimiento ya era obligatorio para poder enviar el
+// formulario, pero antes esa aceptación no quedaba registrada en ningún
+// lado — solo el hecho de que la cita existiera. Con este modelo queda
+// quién aceptó (vía el paciente/cita creados), cuándo, desde qué IP y qué
+// versión del Aviso de Privacidad aceptó, para poder acreditarlo ante una
+// eventual revisión (LFPDPPP). Append-only, igual que AuditLog/
+// AppointmentNoteHistory: nunca se actualiza ni se borra una fila ya
+// escrita aquí.
+type ConsentRecord struct {
+	ID            uint      `gorm:"primaryKey" json:"id"`
+	CreatedAt     time.Time `gorm:"index" json:"createdAt"`
+	PatientID     uint      `gorm:"index;not null" json:"patientId"`
+	AppointmentID uint      `gorm:"index;not null" json:"appointmentId"`
+	DoctorID      uint      `gorm:"index;not null" json:"doctorId"`
+	// true si quien aceptó lo hizo declarando ser padre/madre/tutor de un
+	// paciente menor de edad (ver publicAppointmentRequest.IsMinorPatient).
+	AcceptedAsGuardian bool   `json:"acceptedAsGuardian"`
+	NoticeVersion      string `json:"noticeVersion"`
+	IPAddress          string `json:"ipAddress"`
 }
 
 // Cie10Code es el catálogo oficial de diagnósticos CIE-10 (DGIS/CENETEC,
