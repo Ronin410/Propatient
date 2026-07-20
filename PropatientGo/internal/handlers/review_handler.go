@@ -52,7 +52,7 @@ func createReviewInviteIfMissing(db *gorm.DB, doctorID, patientID, appointmentID
 // sendReviewRequestWhatsApp avisa al paciente, por WhatsApp, que puede
 // dejar una reseña de su consulta recién terminada. Mejor esfuerzo, igual
 // que el resto de los avisos de WhatsApp de esta app.
-func sendReviewRequestWhatsApp(ctx context.Context, waClient whatsapp.Client, doctor models.Doctor, patient models.Patient, token string) {
+func sendReviewRequestWhatsApp(ctx context.Context, waClient whatsapp.Client, waTemplates whatsapp.Templates, doctor models.Doctor, patient models.Patient, token string) {
 	if waClient == nil || patient.Phone == "" {
 		return
 	}
@@ -61,7 +61,8 @@ func sendReviewRequestWhatsApp(ctx context.Context, waClient whatsapp.Client, do
 		"Hola %s, gracias por tu consulta con Dr(a). %s. ¿Nos regalas unos segundos para calificarla? %s — ProPatient",
 		patient.FirstName, doctor.FullName, link,
 	)
-	if err := waClient.SendMessage(ctx, patient.Phone, body); err != nil {
+	vars := map[string]string{"1": patient.FirstName, "2": doctor.FullName, "3": link}
+	if err := whatsapp.SendWithFallback(ctx, waClient, patient.Phone, waTemplates.ReviewRequest, vars, body); err != nil {
 		log.Printf("⚠️ No se pudo enviar el WhatsApp de solicitud de reseña al paciente %d: %v", patient.ID, err)
 	}
 }

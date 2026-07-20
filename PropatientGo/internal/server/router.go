@@ -90,6 +90,15 @@ func NewRouter(db *gorm.DB) *gin.Engine {
 // simulados, sin hacer llamadas reales a Google ni a AWS.
 func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calendarClient googlecalendar.Client, storageClient storage.Client, billingConfig billing.Config, billingClient billing.Client, geoClient geocoding.Client, whatsappClient whatsapp.Client) *gin.Engine {
 	r := gin.Default()
+
+	// Plantillas de WhatsApp aprobadas por Meta (categoría "utility"), una
+	// por tipo de aviso — ver whatsapp.Templates. Los ContentSid se leen
+	// directo del entorno (mismo criterio que FRONTEND_URL más abajo, en
+	// vez de recibirse como parámetro) para no tener que tocar cada test
+	// que llama a NewRouterWithDeps: sin las variables configuradas, todas
+	// quedan vacías y whatsapp.SendWithFallback usa el texto libre de
+	// siempre — comportamiento idéntico al de antes de este cambio.
+	whatsappTemplates := whatsapp.LoadTemplatesFromEnv()
 	r.MaxMultipartMemory = 8 << 20 // 8 MiB por request de carga de archivos
 
 	// Reporta panics/errores de cada request a Sentry. Repanic:true para
@@ -215,7 +224,7 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 		{
 			public.GET("/doctors", handlers.GetPublicDoctors(db, storageClient))
 			public.GET("/doctors/:slug", handlers.GetPublicDoctorBySlug(db, storageClient))
-			public.POST("/appointments", publicBookingLimiter.Middleware(), handlers.CreatePublicAppointment(db, whatsappClient))
+			public.POST("/appointments", publicBookingLimiter.Middleware(), handlers.CreatePublicAppointment(db, whatsappClient, whatsappTemplates))
 			// Reseña de una consulta: el link llega por WhatsApp al terminar
 			// la cita (ver UpdateAppointment). Mismo límite que agendar
 			// público — evita que alguien intente adivinar tokens a fuerza bruta.
@@ -305,11 +314,11 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 					// sin ver el contenido clínico de la consulta).
 					appointments.GET("", handlers.GetAppointments(db, storageClient))
 					appointments.POST("", handlers.CreateAppointment(db, calendarClient))
-					appointments.PUT("/:id/cancel", handlers.CancelAppointment(db, calendarClient, whatsappClient))
-					appointments.PUT("/:id/confirm", handlers.ConfirmAppointment(db, calendarClient, whatsappClient))
+					appointments.PUT("/:id/cancel", handlers.CancelAppointment(db, calendarClient, whatsappClient, whatsappTemplates))
+					appointments.PUT("/:id/confirm", handlers.ConfirmAppointment(db, calendarClient, whatsappClient, whatsappTemplates))
 					// Contenido clínico de la consulta: solo el doctor.
 					appointments.GET("/:id", auth.RequireDoctorRole(), handlers.GetAppointmentDetail(db, storageClient))
-					appointments.PUT("/:id", auth.RequireDoctorRole(), handlers.UpdateAppointment(db, calendarClient, whatsappClient))
+					appointments.PUT("/:id", auth.RequireDoctorRole(), handlers.UpdateAppointment(db, calendarClient, whatsappClient, whatsappTemplates))
 					appointments.POST("/:id/upload-document", auth.RequireDoctorRole(), handlers.UploadDocuments(db, storageClient))
 					appointments.GET("/:id/upload-link", auth.RequireDoctorRole(), handlers.GetAppointmentUploadLink(db))
 					appointments.PUT("/:id/documents/:docId", auth.RequireDoctorRole(), handlers.UpdateAppointmentDocument(db))

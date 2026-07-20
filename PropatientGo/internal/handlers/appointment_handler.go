@@ -358,7 +358,7 @@ func GetAppointmentDetail(db *gorm.DB, storageClient storage.Client) gin.Handler
 
 // CancelAppointment marca la cita como CANCELLED en vez de borrarla, para
 // conservar el historial clínico (misma cita, distinto estado).
-func CancelAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient whatsapp.Client) gin.HandlerFunc {
+func CancelAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient whatsapp.Client, waTemplates whatsapp.Templates) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		doctorID := c.MustGet("doctorID").(uint)
@@ -402,7 +402,7 @@ func CancelAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient wh
 						}
 					}()
 					sendAppointmentDecisionEmail(doctor, patient, appointment, false)
-					sendAppointmentDecisionWhatsApp(context.Background(), waClient, doctor, patient, appointment, false)
+					sendAppointmentDecisionWhatsApp(context.Background(), waClient, waTemplates, doctor, patient, appointment, false)
 				}(doctor, patient, appointment)
 			}
 		}
@@ -416,7 +416,7 @@ func CancelAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient wh
 // una cita normal. Solo el doctor/personal del consultorio puede
 // confirmarla, y solo si de verdad estaba pendiente de confirmación
 // (evita "confirmar" por error una cita ya cancelada o completada).
-func ConfirmAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient whatsapp.Client) gin.HandlerFunc {
+func ConfirmAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient whatsapp.Client, waTemplates whatsapp.Templates) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		doctorID := c.MustGet("doctorID").(uint)
@@ -451,7 +451,7 @@ func ConfirmAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient w
 					}
 				}()
 				sendAppointmentDecisionEmail(doctor, patient, appointment, true)
-				sendAppointmentDecisionWhatsApp(context.Background(), waClient, doctor, patient, appointment, true)
+				sendAppointmentDecisionWhatsApp(context.Background(), waClient, waTemplates, doctor, patient, appointment, true)
 			}(doctor, patient, appointment)
 		}
 
@@ -463,25 +463,27 @@ func ConfirmAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient w
 // solicitud de cita en línea fue aceptada o rechazada por el consultorio.
 // Mejor esfuerzo: nunca bloquea ni revierte la confirmación/cancelación en
 // sí si Twilio no está configurado o falla.
-func sendAppointmentDecisionWhatsApp(ctx context.Context, waClient whatsapp.Client, doctor models.Doctor, patient models.Patient, appointment models.Appointment, confirmed bool) {
+func sendAppointmentDecisionWhatsApp(ctx context.Context, waClient whatsapp.Client, waTemplates whatsapp.Templates, doctor models.Doctor, patient models.Patient, appointment models.Appointment, confirmed bool) {
 	if waClient == nil || patient.Phone == "" {
 		return
 	}
 
-	var body string
+	when := auth.FormatSpanishDateTime(appointment.AppointmentDateTime)
+	vars := map[string]string{"1": doctor.FullName, "2": when}
+
+	var body, contentSID string
 	if confirmed {
-		body = fmt.Sprintf(
-			"¡Tu cita con Dr(a). %s quedó confirmada para el %s! — ProPatient",
-			doctor.FullName, auth.FormatSpanishDateTime(appointment.AppointmentDateTime),
-		)
+		body = fmt.Sprintf("¡Tu cita con Dr(a). %s quedó confirmada para el %s! — ProPatient", doctor.FullName, when)
+		contentSID = waTemplates.AppointmentConfirmed
 	} else {
 		body = fmt.Sprintf(
 			"El consultorio de Dr(a). %s no pudo aceptar tu solicitud de cita para el %s. Puedes intentar con otro horario desde el directorio de ProPatient.",
-			doctor.FullName, auth.FormatSpanishDateTime(appointment.AppointmentDateTime),
+			doctor.FullName, when,
 		)
+		contentSID = waTemplates.AppointmentRejected
 	}
 
-	if err := waClient.SendMessage(ctx, patient.Phone, body); err != nil {
+	if err := whatsapp.SendWithFallback(ctx, waClient, patient.Phone, contentSID, vars, body); err != nil {
 		log.Printf("⚠️ No se pudo enviar el WhatsApp de %s al paciente (cita %d): %v",
 			map[bool]string{true: "confirmación", false: "rechazo"}[confirmed], appointment.ID, err)
 	}
@@ -521,7 +523,7 @@ func sendAppointmentDecisionEmail(doctor models.Doctor, patient models.Patient, 
 	}
 }
 
-func UpdateAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient whatsapp.Client) gin.HandlerFunc {
+func UpdateAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient whatsapp.Client, waTemplates whatsapp.Templates) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		doctorID := c.MustGet("doctorID").(uint)
@@ -615,7 +617,7 @@ func UpdateAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient wh
 							log.Printf("⚠️ Pánico recuperado al mandar el WhatsApp de seguimiento del paciente %d: %v", patient.ID, r)
 						}
 					}()
-					sendFollowUpWhatsApp(context.Background(), waClient, doctor, patient, followUpDate)
+					sendFollowUpWhatsApp(context.Background(), waClient, waTemplates, doctor, patient, followUpDate)
 				}(doctor, patient, followUpDate)
 			}
 		}
@@ -640,7 +642,7 @@ func UpdateAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient wh
 								log.Printf("⚠️ Pánico recuperado al mandar el WhatsApp de solicitud de reseña del paciente %d: %v", patient.ID, r)
 							}
 						}()
-						sendReviewRequestWhatsApp(context.Background(), waClient, doctor, patient, token)
+						sendReviewRequestWhatsApp(context.Background(), waClient, waTemplates, doctor, patient, token)
 					}(doctor, patient, review.Token)
 				}
 			}
@@ -653,15 +655,17 @@ func UpdateAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient wh
 // sendFollowUpWhatsApp avisa al paciente, por WhatsApp, cuando el doctor
 // marca que le toca agendar una cita de seguimiento/control al terminar una
 // consulta (ver ConsultationManager.tsx). Mejor esfuerzo.
-func sendFollowUpWhatsApp(ctx context.Context, waClient whatsapp.Client, doctor models.Doctor, patient models.Patient, followUpDate time.Time) {
+func sendFollowUpWhatsApp(ctx context.Context, waClient whatsapp.Client, waTemplates whatsapp.Templates, doctor models.Doctor, patient models.Patient, followUpDate time.Time) {
 	if waClient == nil || patient.Phone == "" {
 		return
 	}
+	when := auth.FormatSpanishDateTime(followUpDate)
 	body := fmt.Sprintf(
 		"Hola %s, Dr(a). %s sugiere agendar tu cita de seguimiento para el %s. Escríbele al consultorio para confirmar el horario. — ProPatient",
-		patient.FirstName, doctor.FullName, auth.FormatSpanishDateTime(followUpDate),
+		patient.FirstName, doctor.FullName, when,
 	)
-	if err := waClient.SendMessage(ctx, patient.Phone, body); err != nil {
+	vars := map[string]string{"1": patient.FirstName, "2": doctor.FullName, "3": when}
+	if err := whatsapp.SendWithFallback(ctx, waClient, patient.Phone, waTemplates.FollowUp, vars, body); err != nil {
 		log.Printf("⚠️ No se pudo enviar el WhatsApp de seguimiento al paciente %d: %v", patient.ID, err)
 	}
 }

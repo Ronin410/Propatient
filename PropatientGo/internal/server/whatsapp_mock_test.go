@@ -31,6 +31,18 @@ func (m *mockWhatsAppClient) SendMessage(ctx context.Context, toPhone, body stri
 	return nil
 }
 
+// SendTemplate no lo ejercita ningún test hoy (ninguno configura
+// TWILIO_TEMPLATE_*), pero tiene que existir para cumplir whatsapp.Client.
+// Registra la llamada igual que SendMessage, usando el ContentSid como
+// "Body" — suficiente para poder verificarlo si algún test lo necesita más
+// adelante.
+func (m *mockWhatsAppClient) SendTemplate(ctx context.Context, toPhone, contentSID string, variables map[string]string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.calls = append(m.calls, mockWhatsAppCall{To: toPhone, Body: contentSID})
+	return nil
+}
+
 func (m *mockWhatsAppClient) callCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()

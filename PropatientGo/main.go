@@ -125,9 +125,14 @@ func main() {
 		whatsappClient = whatsapp.NewClient(whatsappConfig)
 	}
 
+	whatsappTemplates := whatsapp.LoadTemplatesFromEnv()
+
 	workers.StartNightClosureWorker(db)
-	workers.StartAppointmentReminderWorker(db, auth.SendEmail, whatsappClient)
-	workers.StartDoctorReminderWorker(db, whatsappClient)
+	workers.StartAppointmentReminderWorker(db, auth.SendEmail, whatsappClient, whatsappTemplates)
+	// Recordatorio al doctor: por correo, no WhatsApp — el doctor ya tiene
+	// que entrar a la app para iniciar la consulta, ver el comentario en
+	// workers.StartDoctorReminderWorker.
+	workers.StartDoctorReminderWorker(db, auth.SendEmail)
 
 	// 4. Configuración del Router (rutas, CORS, health check en internal/server)
 	r := server.NewRouter(db)

@@ -76,7 +76,17 @@ error 63015 que impedía la entrega incluso después del "join".
    número de WhatsApp Business (requiere verificar tu negocio ante Meta —
    puede tardar días).
 2. Una vez aprobado, actualiza `TWILIO_WHATSAPP_FROM` con ese número.
-3. Prueba el flujo completo (solicitud de cita, confirmación, recordatorios,
+3. **Da de alta las plantillas de mensaje** (`TWILIO_TEMPLATE_*`, ver
+   `.env.example`) y pide que Meta las apruebe como categoría "utility".
+   Esto no es opcional: fuera del sandbox, Meta rechaza cualquier mensaje
+   que el negocio inicia (todos los que manda esta app) si no va por una
+   plantilla pre-aprobada — el texto libre que se usa hoy solo funciona en
+   el sandbox o dentro de una sesión de 24h que el paciente abrió primero.
+   Mientras una plantilla no esté aprobada, ese aviso se sigue mandando
+   por texto libre (no bloquea el lanzamiento, pero probablemente no
+   entregue nada con un número real hasta que la plantilla correspondiente
+   esté activa). De paso, "utility" cuesta menos que "marketing".
+4. Prueba el flujo completo (solicitud de cita, confirmación, recordatorios,
    **y ahora también la invitación a calificar la consulta**) con un número
    real que no haya hecho "join" a nada — así confirmas que ya no depende
    del sandbox.
@@ -85,6 +95,12 @@ Esto es aún más importante que antes: la función de **reseñas de pacientes**
 (sección 3) depende 100% de que este WhatsApp llegue de verdad — sin un
 número real, el link para calificar nunca le llega al paciente y esa
 función queda invisible aunque el código funcione perfecto.
+
+**Nota de costo:** el recordatorio al doctor 60 minutos antes de la cita ya
+no va por WhatsApp — se movió a correo (gratis, vía Resend), porque el
+doctor ya tiene que entrar a la app para iniciar la consulta y no
+justificaba el gasto de ese canal. La invitación a reseña se queda en
+WhatsApp a propósito (decisión explícita, no se movió a correo).
 
 ### 1.5 Cobros (Stripe)
 

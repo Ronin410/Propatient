@@ -87,6 +87,24 @@ services:
         sync: false
       - key: TWILIO_WHATSAPP_FROM
         sync: false
+      # Plantillas de WhatsApp (Content API de Twilio, ver .env.example
+      # para el detalle). Sin ellas, los avisos siguen mandándose por
+      # texto libre (funciona en sandbox y dentro de una sesión de 24h);
+      # actívalas en cuanto Meta apruebe cada plantilla.
+      - key: TWILIO_TEMPLATE_BOOKING_PATIENT
+        sync: false
+      - key: TWILIO_TEMPLATE_BOOKING_DOCTOR
+        sync: false
+      - key: TWILIO_TEMPLATE_APPOINTMENT_CONFIRMED
+        sync: false
+      - key: TWILIO_TEMPLATE_APPOINTMENT_REJECTED
+        sync: false
+      - key: TWILIO_TEMPLATE_REMINDER_PATIENT
+        sync: false
+      - key: TWILIO_TEMPLATE_REVIEW_REQUEST
+        sync: false
+      - key: TWILIO_TEMPLATE_FOLLOWUP
+        sync: false
       # Panel interno de administración (revisión de cédula profesional,
       # ver .env.example). Sin estas dos, /admin/login queda inaccesible.
       - key: SUPERADMIN_USERNAME

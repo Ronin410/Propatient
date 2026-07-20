@@ -235,7 +235,7 @@ type publicAppointmentRequest struct {
 // PENDING_CONFIRMATION: no aparece como una cita real hasta que el doctor
 // (o su personal) la confirma con ConfirmAppointment — así una solicitud
 // falsa o spam nunca reserva un horario de verdad sin que alguien la revise.
-func CreatePublicAppointment(db *gorm.DB, waClient whatsapp.Client) gin.HandlerFunc {
+func CreatePublicAppointment(db *gorm.DB, waClient whatsapp.Client, waTemplates whatsapp.Templates) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req publicAppointmentRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -311,7 +311,7 @@ func CreatePublicAppointment(db *gorm.DB, waClient whatsapp.Client) gin.HandlerF
 				}
 			}()
 			sendPublicBookingEmails(doctor, patient, appointment)
-			sendPublicBookingWhatsApp(context.Background(), waClient, doctor, patient, appointment)
+			sendPublicBookingWhatsApp(context.Background(), waClient, waTemplates, doctor, patient, appointment)
 		}(doctor, *patient, appointment)
 
 		c.JSON(http.StatusCreated, gin.H{
@@ -366,7 +366,7 @@ func sendPublicBookingEmails(doctor models.Doctor, patient models.Patient, appoi
 // esfuerzo" (no interrumpe la reserva si Twilio no está configurado o
 // falla). waClient es nil si Twilio no está configurado (mismo patrón que
 // calClient en googlecalendar) — en ese caso no hace nada.
-func sendPublicBookingWhatsApp(ctx context.Context, waClient whatsapp.Client, doctor models.Doctor, patient models.Patient, appointment models.Appointment) {
+func sendPublicBookingWhatsApp(ctx context.Context, waClient whatsapp.Client, waTemplates whatsapp.Templates, doctor models.Doctor, patient models.Patient, appointment models.Appointment) {
 	if waClient == nil {
 		return
 	}
@@ -377,12 +377,17 @@ func sendPublicBookingWhatsApp(ctx context.Context, waClient whatsapp.Client, do
 			"Hola %s, recibimos tu solicitud de cita con Dr(a). %s para el %s. El consultorio la revisará y te confirmará pronto — tu cita todavía no está agendada hasta entonces. — ProPatient",
 			patient.FirstName, doctor.FullName, when,
 		)
-		if err := waClient.SendMessage(ctx, patient.Phone, body); err != nil {
+		vars := map[string]string{"1": patient.FirstName, "2": doctor.FullName, "3": when}
+		if err := whatsapp.SendWithFallback(ctx, waClient, patient.Phone, waTemplates.BookingPatient, vars, body); err != nil {
 			log.Printf("⚠️ No se pudo enviar el WhatsApp de confirmación al paciente (cita %d): %v", appointment.ID, err)
 		}
 	}
 
 	if doctor.Phone != "" {
+		reason := appointment.Reason
+		if reason == "" {
+			reason = "Sin motivo especificado"
+		}
 		reasonPart := ""
 		if appointment.Reason != "" {
 			reasonPart = fmt.Sprintf(" Motivo: %s.", appointment.Reason)
@@ -391,7 +396,12 @@ func sendPublicBookingWhatsApp(ctx context.Context, waClient whatsapp.Client, do
 			"Nueva solicitud de cita: %s %s, %s.%s Revísala en tu panel de ProPatient, en \"Solicitudes de Cita Nuevas\".",
 			patient.FirstName, patient.LastName, when, reasonPart,
 		)
-		if err := waClient.SendMessage(ctx, doctor.Phone, body); err != nil {
+		vars := map[string]string{
+			"1": fmt.Sprintf("%s %s", patient.FirstName, patient.LastName),
+			"2": when,
+			"3": reason,
+		}
+		if err := whatsapp.SendWithFallback(ctx, waClient, doctor.Phone, waTemplates.BookingDoctor, vars, body); err != nil {
 			log.Printf("⚠️ No se pudo enviar el WhatsApp de nueva solicitud al doctor %d: %v", doctor.ID, err)
 		}
 	}
