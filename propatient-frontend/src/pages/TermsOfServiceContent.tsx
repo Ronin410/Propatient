@@ -12,6 +12,11 @@ import './LegalPage.scss';
 // las dos que se subieron), rellenada con datos reales de cómo funciona
 // la plataforma hoy (precio de prueba, plan de clínica, cancelación vía
 // Stripe, etc.) en vez de dejarlo como texto genérico.
+//
+// A petición del usuario, sin el aviso de "borrador pendiente de abogado"
+// visible en la página (fase de prueba con doctores reales antes de mandar
+// el documento a revisión legal) — ver la conversación para el detalle de
+// qué puntos siguen pendientes de validar con un especialista.
 export const TermsOfServiceContent: React.FC = () => {
   return (
     <div className="legal-body">
@@ -19,16 +24,6 @@ export const TermsOfServiceContent: React.FC = () => {
         <span className="material-icons-outlined">arrow_back</span>
         Volver al inicio
       </Link>
-
-      <div className="legal-draft-banner">
-        <span className="material-icons-outlined">warning</span>
-        <p>
-          <strong>Pendiente de revisión por un abogado.</strong> El contenido refleja con precisión
-          cómo funciona la plataforma hoy, pero la cláusula de límite de responsabilidad y la política
-          de reembolsos (secciones 10 y 7) todavía deben validarse con un especialista antes de
-          considerarse exigibles ante un tribunal.
-        </p>
-      </div>
 
       <h1>Términos y Condiciones</h1>
       <p className="legal-updated">Última actualización: 21 de julio de 2026</p>
@@ -158,8 +153,7 @@ export const TermsOfServiceContent: React.FC = () => {
           cualquier consecuencia derivada del ejercicio profesional del doctor. Salvo negligencia
           grave comprobada de la plataforma, la responsabilidad económica total de ProPatient frente
           al doctor, por cualquier concepto, queda limitada al importe efectivamente pagado por su
-          suscripción en los tres meses previos al reclamo. [Pendiente de validar la exigibilidad de
-          este límite con un abogado antes de considerarlo definitivo.]
+          suscripción en los tres meses previos al reclamo.
         </p>
       </section>
 
@@ -207,8 +201,9 @@ export const TermsOfServiceContent: React.FC = () => {
       <section>
         <h2>15. Ley aplicable y contacto</h2>
         <p>
-          Estos Términos se rigen por las leyes federales de los Estados Unidos Mexicanos. [Pendiente
-          de definir con un abogado la jurisdicción específica según el domicilio fiscal final.] Para
+          Estos Términos se rigen por las leyes federales de los Estados Unidos Mexicanos, y cualquier
+          controversia derivada de ellos se someterá a los tribunales competentes en territorio
+          mexicano, renunciando las partes a cualquier otro fuero que pudiera corresponderles. Para
           dudas sobre estos Términos, escribe a{' '}
           <a href="mailto:alejandrobuenomendoza@gmail.com">alejandrobuenomendoza@gmail.com</a>.
         </p>

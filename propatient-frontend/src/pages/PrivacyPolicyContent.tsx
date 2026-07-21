@@ -12,6 +12,11 @@ import './LegalPage.scss';
 // aplicaba a como funciona ProPatient de verdad (ej. el borrador de
 // Cookies decía que se usan cookies para autenticación; la sesión en
 // realidad se guarda como JWT en localStorage, no en una cookie propia).
+//
+// A petición del usuario, sin el aviso de "borrador pendiente de abogado"
+// visible en la página (fase de prueba con doctores reales antes de mandar
+// el documento a revisión legal) — ver la conversación para el detalle de
+// qué puntos siguen pendientes de validar con un especialista.
 export const PrivacyPolicyContent: React.FC = () => {
   return (
     <div className="legal-body">
@@ -19,18 +24,6 @@ export const PrivacyPolicyContent: React.FC = () => {
         <span className="material-icons-outlined">arrow_back</span>
         Volver al inicio
       </Link>
-
-      <div className="legal-draft-banner">
-        <span className="material-icons-outlined">warning</span>
-        <p>
-          <strong>Pendiente de revisión por un abogado.</strong> El contenido de este aviso refleja
-          con precisión cómo funciona la plataforma hoy (qué datos se recaban, con qué proveedores se
-          comparten, qué medidas de seguridad existen), pero aún no ha sido validado por un
-          especialista en protección de datos — sobre todo el domicilio fiscal del responsable, el
-          plazo exacto de respuesta a solicitudes ARCO y si el régimen fiscal actual (persona física)
-          es el adecuado para operar a mayor escala.
-        </p>
-      </div>
 
       <h1>Aviso de Privacidad</h1>
       <p className="legal-updated">Última actualización: 21 de julio de 2026</p>
@@ -40,11 +33,10 @@ export const PrivacyPolicyContent: React.FC = () => {
         <p>
           El responsable del tratamiento de los datos personales recabados a través de ProPatient es
           Alejandro Bueno Mendoza, operando actualmente como persona física con actividad empresarial
-          conforme a las leyes de México. [Completar: domicilio fiscal completo para efectos de
-          notificación.] Para cualquier duda o solicitud relacionada con este aviso, puedes escribir a{' '}
-          <a href="mailto:alejandrobuenomendoza@gmail.com">alejandrobuenomendoza@gmail.com</a>{' '}
-          (recomendamos configurar un correo dedicado, ej. <code>privacidad@propatient.pro</code>,
-          antes de operar con pacientes reales).
+          conforme a las leyes de México. El domicilio del responsable, para efectos de este aviso,
+          está disponible previa solicitud a través del siguiente correo de contacto. Para cualquier
+          duda o solicitud relacionada con este aviso, puedes escribir a{' '}
+          <a href="mailto:alejandrobuenomendoza@gmail.com">alejandrobuenomendoza@gmail.com</a>.
         </p>
       </section>
 
