@@ -91,6 +91,19 @@
       color: var(--color-primary);
       text-decoration: underline;
     }
+
+    ul {
+      margin: 0 0 0.8rem 0;
+      padding-left: 1.3rem;
+
+      li { margin-bottom: 0.4rem; }
+    }
+
+    h3 {
+      color: var(--color-heading);
+      font-size: 0.95rem;
+      margin: 1rem 0 0.4rem 0;
+    }
   }
 }
 

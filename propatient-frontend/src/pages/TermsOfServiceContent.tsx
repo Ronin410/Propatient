@@ -5,6 +5,13 @@ import './LegalPage.scss';
 // Cuerpo de los Términos y Condiciones, compartido entre la página pública
 // standalone (TermsOfService.tsx) y la vista dentro del dashboard cuando
 // hay sesión iniciada (App.tsx). Mismo patrón que PrivacyPolicyContent.
+//
+// Combina el borrador original con el contenido útil de los seis
+// documentos de referencia subidos en julio 2026 — en especial la
+// estructura de PRO_Terminos_ProPatient.docx (la versión más completa de
+// las dos que se subieron), rellenada con datos reales de cómo funciona
+// la plataforma hoy (precio de prueba, plan de clínica, cancelación vía
+// Stripe, etc.) en vez de dejarlo como texto genérico.
 export const TermsOfServiceContent: React.FC = () => {
   return (
     <div className="legal-body">
@@ -16,97 +23,195 @@ export const TermsOfServiceContent: React.FC = () => {
       <div className="legal-draft-banner">
         <span className="material-icons-outlined">warning</span>
         <p>
-          <strong>Este es un borrador.</strong> Todavía no ha sido revisado por un abogado y no debe
-          considerarse válido legalmente. Antes de publicarlo de forma definitiva, un especialista
-          debe revisarlo y completar los datos pendientes — sobre todo lo relativo a responsabilidad
-          médica, cancelaciones y condiciones de la suscripción.
+          <strong>Pendiente de revisión por un abogado.</strong> El contenido refleja con precisión
+          cómo funciona la plataforma hoy, pero la cláusula de límite de responsabilidad y la política
+          de reembolsos (secciones 10 y 7) todavía deben validarse con un especialista antes de
+          considerarse exigibles ante un tribunal.
         </p>
       </div>
 
       <h1>Términos y Condiciones</h1>
-      <p className="legal-updated">Última actualización: pendiente</p>
+      <p className="legal-updated">Última actualización: 21 de julio de 2026</p>
 
       <section>
-        <h2>1. Aceptación de los términos</h2>
+        <h2>1. Identidad del responsable y aceptación</h2>
         <p>
-          Al crear una cuenta o usar ProPatient (como doctor, personal de consultorio o paciente que
-          agenda una cita), aceptas estos Términos y Condiciones. [Completar: nombre o razón social
-          responsable del servicio, domicilio, datos de contacto.]
+          ProPatient es una plataforma de software como servicio (SaaS) operada por Alejandro Bueno
+          Mendoza en México. Al crear una cuenta como doctor, ProPatient te pide aceptar
+          explícitamente estos Términos y el <Link to="/privacidad">Aviso de Privacidad</Link> antes
+          de poder usar la plataforma; al agendar una cita como paciente desde el directorio público,
+          se te pide aceptar el tratamiento de tus datos de salud conforme al Aviso de Privacidad.
         </p>
       </section>
 
       <section>
-        <h2>2. Descripción del servicio</h2>
+        <h2>2. Definiciones</h2>
+        <ul>
+          <li><strong>Usuario:</strong> el doctor o el personal de consultorio autorizado por él.</li>
+          <li><strong>Paciente:</strong> la persona cuyos datos clínicos se gestionan en la plataforma.</li>
+          <li><strong>Plataforma:</strong> el sitio web y la aplicación de ProPatient.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>3. Descripción del servicio</h2>
         <p>
           ProPatient es una plataforma de gestión de consultorios médicos: agenda de citas,
-          expediente clínico digital, recetas electrónicas y un directorio público donde los
-          pacientes pueden encontrar doctores y solicitar citas sin crear una cuenta.
+          expediente clínico digital, recetas electrónicas, catálogo de diagnósticos CIE-10, y un
+          directorio público donde los pacientes pueden encontrar doctores y solicitar citas sin
+          crear una cuenta.
         </p>
       </section>
 
       <section>
-        <h2>3. ProPatient no presta servicios médicos</h2>
+        <h2>4. ProPatient no presta servicios médicos</h2>
         <p>
-          ProPatient es una herramienta administrativa. <strong>No brinda diagnóstico, tratamiento
-          ni consejo médico</strong>, y no es responsable por la atención médica que el doctor le
-          brinde al paciente. La relación médico-paciente y la responsabilidad profesional son
-          exclusivas del doctor. [Completar el alcance exacto de este deslinde con un abogado.]
+          ProPatient es una herramienta administrativa y de soporte documental. <strong>No brinda
+          diagnóstico, tratamiento ni consejo médico</strong>, no evalúa la idoneidad de una receta ni
+          interviene en ninguna decisión clínica. La relación médico-paciente y la responsabilidad
+          profesional del acto médico son exclusivas del doctor, conforme a la NOM-004-SSA3-2012 y
+          demás normatividad sanitaria aplicable.
         </p>
       </section>
 
       <section>
-        <h2>4. Cuentas y responsabilidad del doctor</h2>
+        <h2>5. Cuentas y responsabilidad del usuario</h2>
         <p>
           El doctor es responsable de la veracidad de su cédula profesional y demás datos
-          proporcionados, de mantener segura su contraseña, y de las acciones que realice el
-          personal de consultorio al que le dé acceso. [Completar el proceso de validación de
-          cédula y las consecuencias de proporcionar información falsa.]
+          proporcionados durante el registro, de mantener segura su contraseña y su sesión de Google,
+          y de las acciones que realice cualquier persona de su personal (staff) a la que le dé acceso
+          a la plataforma — incluida cualquier filtración o uso indebido derivado de credenciales que
+          él mismo compartió o dejó expuestas.
         </p>
       </section>
 
       <section>
-        <h2>5. Suscripción y pagos</h2>
+        <h2>6. Validación de la cédula profesional</h2>
         <p>
-          [Completar: duración de la prueba gratuita, precio de la suscripción, periodicidad de
-          cobro, política de cancelación y reembolsos, qué pasa con los datos del consultorio si la
-          suscripción vence o se cancela.]
+          Antes de poder usar la plataforma con normalidad, todo doctor debe capturar su cédula
+          profesional y una identificación oficial, que un administrador revisa manualmente. Si la
+          información proporcionada resulta falsa o no puede verificarse, ProPatient puede rechazar o
+          suspender la cuenta sin responsabilidad alguna de su parte.
         </p>
       </section>
 
       <section>
-        <h2>6. Citas agendadas por pacientes</h2>
+        <h2>7. Suscripción y pagos</h2>
+        <p>Todo doctor nuevo cuenta con 14 días de prueba gratuita. Al concluir ese periodo:</p>
+        <ul>
+          <li>
+            <strong>Plan individual:</strong> se cobra automáticamente el precio vigente de forma
+            mensual y recurrente a través de Stripe (pasarela de pago externa; ProPatient nunca ve ni
+            almacena el número de tarjeta). Puedes cancelar en cualquier momento desde el Portal de
+            Cliente de Stripe — la cancelación detiene los cobros futuros, pero no genera reembolso
+            de periodos ya cobrados.
+          </li>
+          <li>
+            <strong>Plan de clínica:</strong> tarifa base de $5,000.00 MXN mensuales (incluye hasta 5
+            doctores vinculados), más $1,000.00 MXN mensuales por cada doctor adicional. Este plan no
+            tiene periodo de prueba.
+          </li>
+          <li>
+            Si tu suscripción vence o se cancela, tu cuenta queda inhabilitada para iniciar sesión,
+            pero el expediente clínico de tus pacientes se conserva conforme a la sección 13 — no se
+            pierde ni se borra de forma automática.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>8. Citas agendadas por pacientes</h2>
         <p>
-          Un paciente puede solicitar una cita desde el directorio público sin crear una cuenta; esa
-          solicitud queda sujeta a la confirmación del doctor. [Completar la política de
-          cancelación/reprogramación y qué se le comunica al paciente por correo o WhatsApp.]
+          Un paciente (o su padre, madre o tutor, si es menor de edad) puede solicitar una cita desde
+          el directorio público sin crear una cuenta. Esa solicitud queda pendiente hasta que el
+          doctor o su personal la confirme o la rechace — no se considera una cita agendada en firme
+          hasta ese momento. La cancelación o reprogramación de una cita ya confirmada se maneja
+          directamente entre el consultorio y el paciente.
         </p>
       </section>
 
       <section>
-        <h2>7. Protección de datos</h2>
+        <h2>9. Disponibilidad del servicio</h2>
         <p>
-          El tratamiento de datos personales y de salud se rige por el{' '}
-          <Link to="/privacidad">Aviso de Privacidad</Link>, que forma parte de estos Términos.
+          ProPatient se ofrece "tal como está" ("as is"), sin garantía de disponibilidad
+          ininterrumpida. En particular, ProPatient no es responsable por:
         </p>
+        <ul>
+          <li>
+            La falta de entrega de un recordatorio o aviso por fallas de un proveedor externo
+            (WhatsApp/Twilio, correo/Resend).
+          </li>
+          <li>
+            La pérdida de sincronización con Google Calendar si el propio doctor desconectó la
+            integración o Google interrumpe su servicio.
+          </li>
+          <li>
+            Caídas generales de la infraestructura en la nube provista por el proveedor de hosting.
+          </li>
+        </ul>
       </section>
 
       <section>
-        <h2>8. Limitación de responsabilidad</h2>
+        <h2>10. Limitación de responsabilidad</h2>
         <p>
-          [Completar con un abogado: límites de responsabilidad de ProPatient por interrupciones del
-          servicio, pérdida de datos, o fallas de los proveedores externos (correo, WhatsApp, pagos)
-          que usa la plataforma.]
+          ProPatient no es responsable por decisiones médicas, diagnósticos, tratamientos ni por
+          cualquier consecuencia derivada del ejercicio profesional del doctor. Salvo negligencia
+          grave comprobada de la plataforma, la responsabilidad económica total de ProPatient frente
+          al doctor, por cualquier concepto, queda limitada al importe efectivamente pagado por su
+          suscripción en los tres meses previos al reclamo. [Pendiente de validar la exigibilidad de
+          este límite con un abogado antes de considerarlo definitivo.]
         </p>
       </section>
 
       <section>
-        <h2>9. Cambios a estos términos</h2>
-        <p>[Completar el procedimiento para notificar cambios a estos Términos y Condiciones.]</p>
+        <h2>11. Propiedad intelectual</h2>
+        <p>
+          El software, el diseño y la marca ProPatient son propiedad de su operador. El doctor
+          conserva la titularidad de la información clínica que él mismo genera sobre sus pacientes;
+          ProPatient solo la trata como encargado, conforme al <Link to="/privacidad">Aviso de
+          Privacidad</Link>.
+        </p>
       </section>
 
       <section>
-        <h2>10. Contacto</h2>
-        <p>[Completar: correo o medio de contacto para dudas sobre estos términos.]</p>
+        <h2>12. Terminación</h2>
+        <p>
+          ProPatient puede suspender o cancelar una cuenta que incumpla estos Términos, use la
+          plataforma para fines ilícitos, o proporcione información falsa durante el registro o la
+          validación de cédula. El doctor puede cancelar su propia cuenta en cualquier momento desde
+          su Perfil, siempre que no tenga una suscripción activa sin cancelar primero.
+        </p>
+      </section>
+
+      <section>
+        <h2>13. Retención de datos tras la cancelación</h2>
+        <p>
+          Cancelar la cuenta desactiva el acceso de inmediato, pero no borra en cascada los datos de
+          los pacientes ni el expediente clínico — se conservan por el plazo mínimo que exige la
+          normatividad sanitaria (ver <Link to="/privacidad">Aviso de Privacidad</Link>, sección de
+          conservación de datos). La eliminación física definitiva solo procede a solicitud expresa y
+          por escrito, una vez cumplido ese plazo.
+        </p>
+      </section>
+
+      <section>
+        <h2>14. Modificaciones a estos términos</h2>
+        <p>
+          Estos Términos pueden actualizarse por cambios en la plataforma o en la legislación
+          aplicable. Cualquier cambio relevante se publicará en esta misma página con su fecha de
+          actualización; si el cambio es sustancial, se te pedirá aceptarlo de nuevo antes de seguir
+          usando la plataforma.
+        </p>
+      </section>
+
+      <section>
+        <h2>15. Ley aplicable y contacto</h2>
+        <p>
+          Estos Términos se rigen por las leyes federales de los Estados Unidos Mexicanos. [Pendiente
+          de definir con un abogado la jurisdicción específica según el domicilio fiscal final.] Para
+          dudas sobre estos Términos, escribe a{' '}
+          <a href="mailto:alejandrobuenomendoza@gmail.com">alejandrobuenomendoza@gmail.com</a>.
+        </p>
       </section>
     </div>
   );

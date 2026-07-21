@@ -14,7 +14,7 @@ import (
 // versión aceptó cada quien; si el contenido de /terminos o /privacidad
 // cambia de forma material, este valor debe subir para que las nuevas
 // aceptaciones no se confundan con las anteriores.
-const CurrentLegalNoticeVersion = "2026-07-20"
+const CurrentLegalNoticeVersion = "2026-07-21"
 
 // Doctor representa la entidad DOCTOR_USER (Tu Doctor.java)
 type Doctor struct {
