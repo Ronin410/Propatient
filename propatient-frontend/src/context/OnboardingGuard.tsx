@@ -1,8 +1,32 @@
+import { useEffect } from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import api from '../api/axios';
 
 export const OnboardingGuard = () => {
-  const { isAuthenticated, isStaff, userStatus } = useAuth();
+  const { isAuthenticated, isStaff, userStatus, updateUserStatus } = useAuth();
+
+  // Una sesión que ya estaba abierta cuando el aviso legal cambió de
+  // versión no se entera hasta el siguiente login (login es la única otra
+  // fuente de userStatus) — este chequeo, una sola vez por sesión montada,
+  // cierra ese hueco: si el backend dice que la aceptación guardada ya no
+  // corresponde a la versión vigente (ver models.CurrentLegalNoticeVersion
+  // y GetCurrentDoctor "termsUpToDate"), se baja la bandera local para que
+  // el guard de abajo redirija a /registro/terminos igual que si nunca
+  // hubiera aceptado.
+  useEffect(() => {
+    if (!isAuthenticated || isStaff || !userStatus?.termsAccepted) return;
+    api.get('/doctor/me')
+      .then((res) => {
+        if (res.data?.termsUpToDate === false) {
+          updateUserStatus({ termsAccepted: false });
+        }
+      })
+      .catch(() => {
+        // Sin red o suscripción vencida: no hacemos nada, se revisará en
+        // el próximo login o la próxima vez que haya conexión.
+      });
+  }, [isAuthenticated, isStaff, userStatus?.termsAccepted, updateUserStatus]);
 
   // 1. Si ni siquiera está logueado, al login de cabeza
   if (!isAuthenticated) {
@@ -18,7 +42,8 @@ export const OnboardingGuard = () => {
   // Si aún está cargando el estado del usuario, puedes retornar un spinner breve
   if (!userStatus) return <div>Cargando datos de verificación...</div>;
 
-  // 2. Si NO ha aceptado los Términos y Condiciones + Aviso de Privacidad,
+  // 2. Si NO ha aceptado los Términos y Condiciones + Aviso de Privacidad
+  // (o los aceptó pero de una versión anterior, ver el efecto de arriba),
   // no puede pasar de ahí — es el primer paso, antes que el perfil.
   if (!userStatus.termsAccepted) {
     return <Navigate to="/registro/terminos" replace />;

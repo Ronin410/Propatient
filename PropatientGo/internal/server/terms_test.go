@@ -3,6 +3,7 @@ package server_test
 import (
 	"net/http"
 	"testing"
+	"time"
 
 	"propatient-api/internal/models"
 	"propatient-api/internal/server"
@@ -71,4 +72,40 @@ func TestAcceptTerms_ExposedInGetCurrentDoctor(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	body = decodeJSON(t, w)
 	assert.NotNil(t, body["termsAcceptedAt"], "después de aceptar, /doctor/me debe reflejarlo")
+}
+
+// TestAcceptTerms_StaleVersionRequiresReacceptance cubre la promesa escrita
+// en /terminos y /privacidad de que un cambio sustancial de versión pide
+// aceptar de nuevo: un doctor que aceptó una versión anterior del aviso
+// legal debe verse como "no aceptado" (termsUpToDate=false en /doctor/me,
+// terminosAceptados=false en el login) hasta que acepte la versión
+// vigente, aunque su TermsAcceptedAt no sea nil.
+func TestAcceptTerms_StaleVersionRequiresReacceptance(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_stale_terms", "password123")
+	staleAt := time.Now().UTC().Add(-24 * time.Hour)
+	require.NoError(t, db.Model(&doc).Updates(map[string]any{
+		"terms_accepted_at":      staleAt,
+		"terms_accepted_version": "2000-01-01", // versión vieja, ya no vigente
+		"terms_accepted_ip":      "127.0.0.1",
+	}).Error)
+	token := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doRequest(t, router, http.MethodGet, "/api/doctor/me", token, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	body := decodeJSON(t, w)
+	assert.NotNil(t, body["termsAcceptedAt"], "sí aceptó alguna vez")
+	assert.Equal(t, false, body["termsUpToDate"], "pero la versión aceptada ya no es la vigente")
+
+	// Vuelve a aceptar: ahora sí debe quedar al corriente con la versión actual.
+	w = doRequest(t, router, http.MethodPost, "/api/user/accept-terms", token, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	w = doRequest(t, router, http.MethodGet, "/api/doctor/me", token, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	body = decodeJSON(t, w)
+	assert.Equal(t, true, body["termsUpToDate"])
+	assert.Equal(t, models.CurrentLegalNoticeVersion, body["termsAcceptedVersion"])
 }

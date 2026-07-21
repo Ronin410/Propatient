@@ -109,9 +109,15 @@ func GoogleLoginHandler(db *gorm.DB) gin.HandlerFunc {
 			"token":    token,
 			"fullName": doctor.FullName,
 			"userStatus": gin.H{
-				"perfilCompletado":  doctor.ProfileCompleted,
-				"cedulaValidada":    doctor.CedulaValidated,
-				"terminosAceptados": doctor.TermsAcceptedAt != nil,
+				"perfilCompletado": doctor.ProfileCompleted,
+				"cedulaValidada":   doctor.CedulaValidated,
+				// No basta con haber aceptado alguna vez: si el aviso
+				// legal cambió de versión desde entonces (ver
+				// models.CurrentLegalNoticeVersion), se cuenta como no
+				// aceptado hasta que vuelva a aceptar la versión vigente
+				// — ver AcceptTerms.tsx y el mismo cálculo en
+				// handlers.GetCurrentDoctor (campo "termsUpToDate").
+				"terminosAceptados": doctor.TermsAcceptedAt != nil && doctor.TermsAcceptedVersion == models.CurrentLegalNoticeVersion,
 			},
 		})
 	}

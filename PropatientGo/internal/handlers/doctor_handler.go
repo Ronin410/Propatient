@@ -15,11 +15,19 @@ import (
 )
 
 // GetCurrentDoctor devuelve el perfil del doctor autenticado
-// doctorWithCalendarStatus agrega un campo calculado (nunca el token en sí)
-// para que el frontend sepa si mostrar "Conectar" o "Desconectar".
+// doctorWithCalendarStatus agrega campos calculados (nunca el token en sí)
+// para que el frontend sepa si mostrar "Conectar" o "Desconectar", y si la
+// aceptación de términos que ya tiene guardada sigue vigente.
 type doctorWithCalendarStatus struct {
 	models.Doctor
 	GoogleCalendarConnected bool `json:"googleCalendarConnected"`
+	// TermsUpToDate es false si el doctor aceptó los Términos/Aviso de
+	// Privacidad alguna vez, pero el aviso legal cambió de versión desde
+	// entonces (ver models.CurrentLegalNoticeVersion). Una sesión ya
+	// abierta usa esto (ver OnboardingGuard.tsx) para detectar que debe
+	// volver a pedir aceptación sin esperar al siguiente login — mismo
+	// cálculo que auth.GoogleLoginHandler hace al iniciar sesión.
+	TermsUpToDate bool `json:"termsUpToDate"`
 }
 
 func GetCurrentDoctor(db *gorm.DB, storageClient storage.Client) gin.HandlerFunc {
@@ -39,6 +47,7 @@ func GetCurrentDoctor(db *gorm.DB, storageClient storage.Client) gin.HandlerFunc
 		c.JSON(http.StatusOK, doctorWithCalendarStatus{
 			Doctor:                  doctor,
 			GoogleCalendarConnected: doctor.GoogleCalendarRefreshToken != "",
+			TermsUpToDate:           doctor.TermsAcceptedAt != nil && doctor.TermsAcceptedVersion == models.CurrentLegalNoticeVersion,
 		})
 	}
 }
