@@ -100,8 +100,8 @@ export const TermsOfServiceContent: React.FC = () => {
         <p>Todo doctor nuevo cuenta con 14 días de prueba gratuita. Al concluir ese periodo:</p>
         <ul>
           <li>
-            <strong>Plan individual:</strong> se cobra automáticamente el precio vigente de forma
-            mensual y recurrente a través de Stripe (pasarela de pago externa; ProPatient nunca ve ni
+            <strong>Plan individual:</strong> $1,200.00 MXN mensuales, cobrados automáticamente de
+            forma recurrente a través de Stripe (pasarela de pago externa; ProPatient nunca ve ni
             almacena el número de tarjeta). Puedes cancelar en cualquier momento desde el Portal de
             Cliente de Stripe — la cancelación detiene los cobros futuros, pero no genera reembolso
             de periodos ya cobrados.
