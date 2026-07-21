@@ -445,7 +445,7 @@ func sendPublicBookingPush(ctx context.Context, db *gorm.DB, pushClient webpush.
 	if pushClient == nil {
 		return
 	}
-	when := auth.FormatSpanishDateTime(appointment.AppointmentDateTime)
+	when := auth.FormatSpanishDateTimeShort(appointment.AppointmentDateTime)
 	payload, err := json.Marshal(pushNotificationPayload{
 		Title: "Nueva solicitud de cita",
 		Body:  fmt.Sprintf("%s %s — %s", patient.FirstName, patient.LastName, when),

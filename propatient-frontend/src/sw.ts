@@ -15,6 +15,10 @@ interface PushPayload {
   url: string;
 }
 
+// El lib.dom/webworker de TS todavía no tipa "vibrate" en NotificationOptions
+// aunque sí es parte del estándar y Chrome/Edge en Android lo soportan.
+type ShowNotificationOptions = NotificationOptions & { vibrate?: number[] };
+
 // Notificación de "nueva solicitud de cita" (ver internal/webpush en el
 // backend, función sendPublicBookingPush). Si el payload no trae algo
 // reconocible, se muestra un texto genérico en vez de fallar en silencio.
@@ -32,14 +36,22 @@ self.addEventListener('push', (event: PushEvent) => {
     self.registration.showNotification(payload.title, {
       body: payload.body,
       icon: '/pwa-192x192.png',
-      badge: '/pwa-192x192.png',
+      // badge-192x192.png es una silueta blanca sobre fondo transparente
+      // (generada desde el logo), no el ícono a color de arriba: Android
+      // usa esta imagen como máscara para el ícono chico de la barra de
+      // estado y la repinta con su propio color — pasarle el ícono a
+      // color se ve borroso/manchado ahí.
+      badge: '/badge-192x192.png',
+      vibrate: [200, 100, 200],
       data: { url: payload.url },
-    })
+      actions: [{ action: 'view', title: 'Ver solicitud' }],
+    } as ShowNotificationOptions)
   );
 });
 
-// Al tocar la notificación: si ya hay una pestaña de la app abierta, la
-// enfoca y navega ahí en vez de abrir una ventana nueva.
+// Al tocar la notificación (o su botón "Ver solicitud"): si ya hay una
+// pestaña de la app abierta, la enfoca y navega ahí en vez de abrir una
+// ventana nueva.
 self.addEventListener('notificationclick', (event: NotificationEvent) => {
   event.notification.close();
   const targetUrl = (event.notification.data?.url as string) || '/inicio';

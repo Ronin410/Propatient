@@ -37,3 +37,34 @@ func TestFormatSpanishDateTime_HandlesDayBoundaryCrossing(t *testing.T) {
 		t.Errorf("FormatSpanishDateTime(%v) = %q, want %q", utcTime, got, want)
 	}
 }
+
+// TestFormatSpanishDateTimeShort_UsesHoyMananaOrFallsBack cubre el texto
+// corto usado en la notificación push (ver
+// handlers.sendPublicBookingPush): "Hoy"/"Mañana" cuando aplica, y el
+// formato largo de siempre para cualquier otra fecha. Se calcula "hoy" y
+// "mañana" en tiempo de ejecución (no fechas fijas) para que el test no
+// dependa de cuándo se corra.
+func TestFormatSpanishDateTimeShort_UsesHoyMananaOrFallsBack(t *testing.T) {
+	loc, err := time.LoadLocation(AppTimeZone)
+	if err != nil {
+		t.Fatalf("no se pudo cargar %s: %v", AppTimeZone, err)
+	}
+	now := time.Now().In(loc)
+
+	today := time.Date(now.Year(), now.Month(), now.Day(), 10, 30, 0, 0, loc)
+	if got, want := FormatSpanishDateTimeShort(today.UTC()), "Hoy, 10:30 a.m."; got != want {
+		t.Errorf("FormatSpanishDateTimeShort(hoy) = %q, want %q", got, want)
+	}
+
+	tomorrow := today.AddDate(0, 0, 1)
+	if got, want := FormatSpanishDateTimeShort(tomorrow.UTC()), "Mañana, 10:30 a.m."; got != want {
+		t.Errorf("FormatSpanishDateTimeShort(mañana) = %q, want %q", got, want)
+	}
+
+	nextWeek := today.AddDate(0, 0, 7)
+	got := FormatSpanishDateTimeShort(nextWeek.UTC())
+	want := FormatSpanishDateTime(nextWeek.UTC())
+	if got != want {
+		t.Errorf("FormatSpanishDateTimeShort(en una semana) = %q, want el formato largo %q", got, want)
+	}
+}
