@@ -328,8 +328,13 @@ func CreatePublicAppointment(db *gorm.DB, waClient whatsapp.Client, waTemplates 
 					log.Printf("⚠️ Pánico recuperado al mandar avisos de la solicitud de cita %d: %v", appointment.ID, r)
 				}
 			}()
-			sendPublicBookingEmails(doctor, patient, appointment)
-			sendPublicBookingWhatsApp(context.Background(), waClient, waTemplates, doctor, patient, appointment)
+			// El WhatsApp al paciente va primero: si se logra entregar, el
+			// correo al paciente (mismo contenido) se salta para no
+			// duplicarlo — ver sendPublicBookingWhatsApp/
+			// sendPublicBookingEmails. El correo al DOCTOR no se toca,
+			// siempre se manda por los dos canales.
+			patientNotifiedByWhatsApp := sendPublicBookingWhatsApp(context.Background(), waClient, waTemplates, doctor, patient, appointment)
+			sendPublicBookingEmails(doctor, patient, appointment, patientNotifiedByWhatsApp)
 			sendPublicBookingPush(context.Background(), db, pushClient, doctor, patient, appointment)
 		}(doctor, *patient, appointment)
 
@@ -342,10 +347,14 @@ func CreatePublicAppointment(db *gorm.DB, waClient whatsapp.Client, waTemplates 
 // sendPublicBookingEmails avisa por correo tanto al paciente (confirmación
 // de que su solicitud se recibió, todavía sin confirmar) como al doctor
 // (aviso de que tiene una solicitud nueva por revisar en su panel).
-func sendPublicBookingEmails(doctor models.Doctor, patient models.Patient, appointment models.Appointment) {
+// skipPatientEmail es true cuando el mismo aviso ya se le entregó al
+// paciente por WhatsApp (ver sendPublicBookingWhatsApp) — evita mandarle
+// el mismo aviso dos veces por canales distintos. El correo al doctor
+// nunca se salta, sin importar si su WhatsApp se envió o no.
+func sendPublicBookingEmails(doctor models.Doctor, patient models.Patient, appointment models.Appointment, skipPatientEmail bool) {
 	when := auth.FormatSpanishDateTime(appointment.AppointmentDateTime)
 
-	if patient.Email != "" {
+	if patient.Email != "" && !skipPatientEmail {
 		subject := "Recibimos tu solicitud de cita con Dr(a). " + doctor.FullName
 		body := fmt.Sprintf(
 			`<p>Hola %s,</p>
@@ -384,12 +393,15 @@ func sendPublicBookingEmails(doctor models.Doctor, patient models.Patient, appoi
 // sendPublicBookingEmails: mismo contenido, mismo criterio de "mejor
 // esfuerzo" (no interrumpe la reserva si Twilio no está configurado o
 // falla). waClient es nil si Twilio no está configurado (mismo patrón que
-// calClient en googlecalendar) — en ese caso no hace nada.
-func sendPublicBookingWhatsApp(ctx context.Context, waClient whatsapp.Client, waTemplates whatsapp.Templates, doctor models.Doctor, patient models.Patient, appointment models.Appointment) {
+// calClient en googlecalendar) — en ese caso no hace nada. Devuelve true si
+// el paciente (no el doctor) quedó notificado por este canal, para que el
+// llamador decida si todavía hace falta mandarle el correo equivalente.
+func sendPublicBookingWhatsApp(ctx context.Context, waClient whatsapp.Client, waTemplates whatsapp.Templates, doctor models.Doctor, patient models.Patient, appointment models.Appointment) bool {
 	if waClient == nil {
-		return
+		return false
 	}
 	when := auth.FormatSpanishDateTime(appointment.AppointmentDateTime)
+	patientNotified := false
 
 	if patient.Phone != "" {
 		body := fmt.Sprintf(
@@ -399,6 +411,8 @@ func sendPublicBookingWhatsApp(ctx context.Context, waClient whatsapp.Client, wa
 		vars := map[string]string{"1": patient.FirstName, "2": doctor.FullName, "3": when}
 		if err := whatsapp.SendWithFallback(ctx, waClient, patient.Phone, waTemplates.BookingPatient, vars, body); err != nil {
 			log.Printf("⚠️ No se pudo enviar el WhatsApp de confirmación al paciente (cita %d): %v", appointment.ID, err)
+		} else {
+			patientNotified = true
 		}
 	}
 
@@ -424,6 +438,8 @@ func sendPublicBookingWhatsApp(ctx context.Context, waClient whatsapp.Client, wa
 			log.Printf("⚠️ No se pudo enviar el WhatsApp de nueva solicitud al doctor %d: %v", doctor.ID, err)
 		}
 	}
+
+	return patientNotified
 }
 
 // pushNotificationPayload es el JSON que recibe el service worker del

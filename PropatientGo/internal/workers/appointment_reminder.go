@@ -72,7 +72,24 @@ func SendDueAppointmentReminders(db *gorm.DB, sendEmail EmailSender, waClient wh
 		when := auth.FormatSpanishDateTime(appt.AppointmentDateTime)
 		notified := false
 
-		if appt.Patient.Email != "" {
+		// WhatsApp va primero: si se logra entregar, el correo (mismo
+		// contenido) se salta para no duplicar el recordatorio — el correo
+		// queda como respaldo solo si Twilio no está configurado, el
+		// paciente no tiene teléfono, o el envío falla.
+		if waClient != nil && appt.Patient.Phone != "" {
+			body := fmt.Sprintf(
+				"Hola %s, te recordamos tu cita con Dr(a). %s el %s. — ProPatient",
+				appt.Patient.FirstName, doctor.FullName, when,
+			)
+			vars := map[string]string{"1": appt.Patient.FirstName, "2": doctor.FullName, "3": when}
+			if err := whatsapp.SendWithFallback(context.Background(), waClient, appt.Patient.Phone, waTemplates.ReminderPatient, vars, body); err != nil {
+				log.Printf("⚠️ No se pudo enviar el recordatorio por WhatsApp de la cita %d: %v", appt.ID, err)
+			} else {
+				notified = true
+			}
+		}
+
+		if !notified && appt.Patient.Email != "" {
 			subject := "Recordatorio: tu cita con Dr(a). " + doctor.FullName
 			body := fmt.Sprintf(
 				`<p>Hola %s,</p>
@@ -82,19 +99,6 @@ func SendDueAppointmentReminders(db *gorm.DB, sendEmail EmailSender, waClient wh
 			)
 			if err := sendEmail(appt.Patient.Email, subject, body); err != nil {
 				log.Printf("⚠️ No se pudo enviar el recordatorio por correo de la cita %d: %v", appt.ID, err)
-			} else {
-				notified = true
-			}
-		}
-
-		if waClient != nil && appt.Patient.Phone != "" {
-			body := fmt.Sprintf(
-				"Hola %s, te recordamos tu cita con Dr(a). %s el %s. — ProPatient",
-				appt.Patient.FirstName, doctor.FullName, when,
-			)
-			vars := map[string]string{"1": appt.Patient.FirstName, "2": doctor.FullName, "3": when}
-			if err := whatsapp.SendWithFallback(context.Background(), waClient, appt.Patient.Phone, waTemplates.ReminderPatient, vars, body); err != nil {
-				log.Printf("⚠️ No se pudo enviar el recordatorio por WhatsApp de la cita %d: %v", appt.ID, err)
 			} else {
 				notified = true
 			}

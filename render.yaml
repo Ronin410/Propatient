@@ -106,11 +106,17 @@ services:
         sync: false
       - key: TWILIO_TEMPLATE_APPOINTMENT_REJECTED
         sync: false
+      - key: TWILIO_TEMPLATE_APPOINTMENT_CANCELLED
+        sync: false
+      - key: TWILIO_TEMPLATE_APPOINTMENT_RESCHEDULED
+        sync: false
       - key: TWILIO_TEMPLATE_REMINDER_PATIENT
         sync: false
       - key: TWILIO_TEMPLATE_REVIEW_REQUEST
         sync: false
       - key: TWILIO_TEMPLATE_FOLLOWUP
+        sync: false
+      - key: TWILIO_TEMPLATE_DOCUMENT_UPLOADED
         sync: false
       # Notificaciones push / Web Push (PWA, ver .env.example para cómo
       # generarlas). Sin estas tres, la app funciona igual — el toggle de

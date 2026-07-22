@@ -54,24 +54,30 @@ func (c Config) IsConfigured() bool {
 // avisos) cuestan notablemente menos que "marketing" en el cobro de Meta —
 // por eso vale la pena darlas de alta aunque el texto libre "funcione" hoy.
 type Templates struct {
-	BookingPatient       string // TWILIO_TEMPLATE_BOOKING_PATIENT
-	BookingDoctor        string // TWILIO_TEMPLATE_BOOKING_DOCTOR
-	AppointmentConfirmed string // TWILIO_TEMPLATE_APPOINTMENT_CONFIRMED
-	AppointmentRejected  string // TWILIO_TEMPLATE_APPOINTMENT_REJECTED
-	ReminderPatient      string // TWILIO_TEMPLATE_REMINDER_PATIENT
-	ReviewRequest        string // TWILIO_TEMPLATE_REVIEW_REQUEST
-	FollowUp             string // TWILIO_TEMPLATE_FOLLOWUP
+	BookingPatient         string // TWILIO_TEMPLATE_BOOKING_PATIENT
+	BookingDoctor          string // TWILIO_TEMPLATE_BOOKING_DOCTOR
+	AppointmentConfirmed   string // TWILIO_TEMPLATE_APPOINTMENT_CONFIRMED
+	AppointmentRejected    string // TWILIO_TEMPLATE_APPOINTMENT_REJECTED
+	AppointmentCancelled   string // TWILIO_TEMPLATE_APPOINTMENT_CANCELLED
+	AppointmentRescheduled string // TWILIO_TEMPLATE_APPOINTMENT_RESCHEDULED
+	ReminderPatient        string // TWILIO_TEMPLATE_REMINDER_PATIENT
+	ReviewRequest          string // TWILIO_TEMPLATE_REVIEW_REQUEST
+	FollowUp               string // TWILIO_TEMPLATE_FOLLOWUP
+	DocumentUploaded       string // TWILIO_TEMPLATE_DOCUMENT_UPLOADED
 }
 
 func LoadTemplatesFromEnv() Templates {
 	return Templates{
-		BookingPatient:       os.Getenv("TWILIO_TEMPLATE_BOOKING_PATIENT"),
-		BookingDoctor:        os.Getenv("TWILIO_TEMPLATE_BOOKING_DOCTOR"),
-		AppointmentConfirmed: os.Getenv("TWILIO_TEMPLATE_APPOINTMENT_CONFIRMED"),
-		AppointmentRejected:  os.Getenv("TWILIO_TEMPLATE_APPOINTMENT_REJECTED"),
-		ReminderPatient:      os.Getenv("TWILIO_TEMPLATE_REMINDER_PATIENT"),
-		ReviewRequest:        os.Getenv("TWILIO_TEMPLATE_REVIEW_REQUEST"),
-		FollowUp:             os.Getenv("TWILIO_TEMPLATE_FOLLOWUP"),
+		BookingPatient:         os.Getenv("TWILIO_TEMPLATE_BOOKING_PATIENT"),
+		BookingDoctor:          os.Getenv("TWILIO_TEMPLATE_BOOKING_DOCTOR"),
+		AppointmentConfirmed:   os.Getenv("TWILIO_TEMPLATE_APPOINTMENT_CONFIRMED"),
+		AppointmentRejected:    os.Getenv("TWILIO_TEMPLATE_APPOINTMENT_REJECTED"),
+		AppointmentCancelled:   os.Getenv("TWILIO_TEMPLATE_APPOINTMENT_CANCELLED"),
+		AppointmentRescheduled: os.Getenv("TWILIO_TEMPLATE_APPOINTMENT_RESCHEDULED"),
+		ReminderPatient:        os.Getenv("TWILIO_TEMPLATE_REMINDER_PATIENT"),
+		ReviewRequest:          os.Getenv("TWILIO_TEMPLATE_REVIEW_REQUEST"),
+		FollowUp:               os.Getenv("TWILIO_TEMPLATE_FOLLOWUP"),
+		DocumentUploaded:       os.Getenv("TWILIO_TEMPLATE_DOCUMENT_UPLOADED"),
 	}
 }
 

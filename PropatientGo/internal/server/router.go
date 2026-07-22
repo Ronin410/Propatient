@@ -249,7 +249,7 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 			// → toggleQR). Mismo límite que agendar público en la subida, para
 			// no permitir spamear archivos con un link real interceptado.
 			public.GET("/upload/:token", handlers.GetPublicUploadInfo(db))
-			public.POST("/upload/:token", publicBookingLimiter.Middleware(), handlers.PublicUploadDocuments(db, storageClient))
+			public.POST("/upload/:token", publicBookingLimiter.Middleware(), handlers.PublicUploadDocuments(db, storageClient, whatsappClient, whatsappTemplates))
 		}
 
 		// --- RUTAS PROTEGIDAS ---

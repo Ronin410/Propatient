@@ -153,10 +153,11 @@ func TestSendDueAppointmentReminders_RetriesAfterSendFailure(t *testing.T) {
 	assert.Equal(t, 1, workingSender.count(), "debe reintentar en la siguiente pasada")
 }
 
-// TestSendDueAppointmentReminders_SendsWhatsAppWhenConfigured confirma que,
-// con un cliente de WhatsApp configurado, el recordatorio también sale por
-// ese canal (no solo por correo).
-func TestSendDueAppointmentReminders_SendsWhatsAppWhenConfigured(t *testing.T) {
+// TestSendDueAppointmentReminders_SkipsEmailWhenWhatsAppSucceeds confirma
+// que, con un cliente de WhatsApp configurado y funcionando, el recordatorio
+// sale SOLO por WhatsApp — el correo se salta para no duplicar el aviso
+// (WhatsApp es el canal principal, el correo queda como respaldo).
+func TestSendDueAppointmentReminders_SkipsEmailWhenWhatsAppSucceeds(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	doc := testutil.CreateTestDoctor(t, db, "doc_reminder_wa", "password123")
 
@@ -167,27 +168,26 @@ func TestSendDueAppointmentReminders_SendsWhatsAppWhenConfigured(t *testing.T) {
 	wa := &recordingWhatsApp{}
 	workers.SendDueAppointmentReminders(db, sender.send, wa, whatsapp.Templates{})
 
-	assert.Equal(t, 1, sender.count())
+	assert.Equal(t, 0, sender.count(), "el correo no debe mandarse si el WhatsApp ya se entregó")
 	assert.Equal(t, 1, wa.count())
 	assert.Equal(t, "5550001111", wa.calls[0])
 }
 
-// TestSendDueAppointmentReminders_MarksSentIfOnlyOneChannelSucceeds cubre
-// el caso mixto: si el correo falla pero el WhatsApp sí sale (o viceversa),
-// el paciente sí recibió el aviso por al menos un canal, así que no debe
-// reintentarse.
-func TestSendDueAppointmentReminders_MarksSentIfOnlyOneChannelSucceeds(t *testing.T) {
+// TestSendDueAppointmentReminders_FallsBackToEmailWhenWhatsAppFails cubre
+// el caso en que WhatsApp se intenta pero falla: el correo debe usarse como
+// respaldo para que el paciente sí reciba el recordatorio por algún canal.
+func TestSendDueAppointmentReminders_FallsBackToEmailWhenWhatsAppFails(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	doc := testutil.CreateTestDoctor(t, db, "doc_reminder_mixed", "password123")
 
-	apptID := createReminderTestAppointment(t, db, doc.ID, "correo-falla@test.local",
+	apptID := createReminderTestAppointment(t, db, doc.ID, "correo-respaldo@test.local",
 		time.Now().UTC().Add(10*time.Hour), "PENDING")
 
-	failingSender := &recordingSender{fail: true}
-	wa := &recordingWhatsApp{}
-	workers.SendDueAppointmentReminders(db, failingSender.send, wa, whatsapp.Templates{})
+	sender := &recordingSender{}
+	wa := &recordingWhatsApp{fail: true}
+	workers.SendDueAppointmentReminders(db, sender.send, wa, whatsapp.Templates{})
 
-	assert.Equal(t, 1, wa.count(), "el WhatsApp sí debía intentarse aunque el correo fallara")
+	assert.Equal(t, 1, sender.count(), "el correo debe usarse como respaldo si el WhatsApp falla")
 
 	var appt models.Appointment
 	require.NoError(t, db.First(&appt, apptID).Error)

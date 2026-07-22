@@ -1,12 +1,15 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"path/filepath"
+	"propatient-api/internal/auth"
 	"propatient-api/internal/models"
 	"propatient-api/internal/storage"
+	"propatient-api/internal/whatsapp"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -114,7 +117,7 @@ func GetPublicUploadInfo(db *gorm.DB) gin.HandlerFunc {
 // UploadDocuments (validación de tipo/tamaño, nombre de archivo propio
 // para evitar path traversal), pero resuelve la cita por el token de
 // subida en vez de doctorID+propiedad.
-func PublicUploadDocuments(db *gorm.DB, storageClient storage.Client) gin.HandlerFunc {
+func PublicUploadDocuments(db *gorm.DB, storageClient storage.Client, waClient whatsapp.Client, waTemplates whatsapp.Templates) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		appointment, err := findAppointmentByUploadToken(db, c.Param("token"))
 		if err != nil {
@@ -158,6 +161,70 @@ func PublicUploadDocuments(db *gorm.DB, storageClient storage.Client) gin.Handle
 			saved++
 		}
 
+		// Aviso al doctor (correo + WhatsApp, mejor esfuerzo) de que un
+		// paciente subió documentos antes de su cita — antes no se avisaba
+		// nada, el doctor solo lo notaba si entraba a revisar la cita. En
+		// segundo plano: ver el comentario largo en CreatePublicAppointment
+		// sobre por qué esto no debe bloquear la respuesta ni usar el
+		// contexto de la petición.
+		if saved > 0 {
+			var doctor models.Doctor
+			if db.First(&doctor, appointment.DoctorID).Error == nil {
+				patientName := "Un paciente"
+				if appointment.Patient != nil {
+					patientName = fmt.Sprintf("%s %s", appointment.Patient.FirstName, appointment.Patient.LastName)
+				}
+				go func(doctor models.Doctor, patientName string, appointment models.Appointment, saved int) {
+					defer func() {
+						if r := recover(); r != nil {
+							log.Printf("⚠️ Pánico recuperado al mandar el aviso de documentos subidos (cita %d): %v", appointment.ID, r)
+						}
+					}()
+					sendDocumentUploadedWhatsApp(context.Background(), waClient, waTemplates, doctor, patientName, appointment, saved)
+					sendDocumentUploadedEmail(doctor, patientName, appointment, saved)
+				}(doctor, patientName, appointment, saved)
+			}
+		}
+
 		c.JSON(http.StatusOK, gin.H{"saved": saved})
+	}
+}
+
+// sendDocumentUploadedWhatsApp avisa al doctor, por WhatsApp, que un
+// paciente subió documentos desde el link/QR antes de su cita. Mejor
+// esfuerzo, mismo criterio que el resto de los avisos de esta app —
+// siempre se manda por los dos canales (a diferencia de los avisos al
+// paciente, este no tiene lógica de "no duplicar").
+func sendDocumentUploadedWhatsApp(ctx context.Context, waClient whatsapp.Client, waTemplates whatsapp.Templates, doctor models.Doctor, patientName string, appointment models.Appointment, saved int) {
+	if waClient == nil || doctor.Phone == "" {
+		return
+	}
+	when := auth.FormatSpanishDateTime(appointment.AppointmentDateTime)
+	body := fmt.Sprintf(
+		"%s subió %d documento(s) para su cita del %s. Revísalos en tu panel de ProPatient.",
+		patientName, saved, when,
+	)
+	vars := map[string]string{"1": patientName, "2": fmt.Sprintf("%d", saved), "3": when}
+	if err := whatsapp.SendWithFallback(ctx, waClient, doctor.Phone, waTemplates.DocumentUploaded, vars, body); err != nil {
+		log.Printf("⚠️ No se pudo enviar el WhatsApp de documentos subidos al doctor %d: %v", doctor.ID, err)
+	}
+}
+
+// sendDocumentUploadedEmail es el equivalente por correo de
+// sendDocumentUploadedWhatsApp.
+func sendDocumentUploadedEmail(doctor models.Doctor, patientName string, appointment models.Appointment, saved int) {
+	if doctor.Email == "" {
+		return
+	}
+	when := auth.FormatSpanishDateTime(appointment.AppointmentDateTime)
+	subject := "Un paciente subió documentos para su cita"
+	body := fmt.Sprintf(
+		`<p><strong>%s</strong> subió <strong>%d</strong> documento(s) para su cita del <strong>%s</strong>.</p>
+		<p>Revísalos desde tu panel de ProPatient.</p>
+		<p>— ProPatient</p>`,
+		patientName, saved, when,
+	)
+	if err := auth.SendEmail(doctor.Email, subject, body); err != nil {
+		log.Printf("⚠️ No se pudo enviar el correo de documentos subidos al doctor %d: %v", doctor.ID, err)
 	}
 }

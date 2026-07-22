@@ -420,24 +420,37 @@ func CancelAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient wh
 
 		deleteAppointmentFromGoogleCalendar(c.Request.Context(), db, calClient, appointment)
 
-		// Solo avisamos (correo + WhatsApp) cuando se está rechazando una
-		// solicitud en línea todavía sin confirmar — una cancelación normal
-		// de una cita ya aceptada no dispara este aviso (fuera del alcance
-		// pedido). En segundo plano: ver el comentario largo en
+		// Dos avisos distintos según qué se está cancelando en realidad — en
+		// segundo plano en ambos casos: ver el comentario largo en
 		// CreatePublicAppointment sobre por qué esto no debe bloquear la
 		// respuesta ni usar el contexto de la petición.
-		if wasPendingConfirmation {
-			var doctor models.Doctor
-			var patient models.Patient
-			if db.First(&doctor, doctorID).Error == nil && db.First(&patient, appointment.PatientID).Error == nil {
+		var doctor models.Doctor
+		var patient models.Patient
+		if db.First(&doctor, doctorID).Error == nil && db.First(&patient, appointment.PatientID).Error == nil {
+			if wasPendingConfirmation {
+				// Se está rechazando una solicitud en línea todavía sin
+				// confirmar ("no pudimos aceptar tu solicitud").
 				go func(doctor models.Doctor, patient models.Patient, appointment models.Appointment) {
 					defer func() {
 						if r := recover(); r != nil {
 							log.Printf("⚠️ Pánico recuperado al mandar el aviso de rechazo de la cita %d: %v", appointment.ID, r)
 						}
 					}()
-					sendAppointmentDecisionEmail(doctor, patient, appointment, false)
-					sendAppointmentDecisionWhatsApp(context.Background(), waClient, waTemplates, doctor, patient, appointment, false)
+					patientNotified := sendAppointmentDecisionWhatsApp(context.Background(), waClient, waTemplates, doctor, patient, appointment, false)
+					sendAppointmentDecisionEmail(doctor, patient, appointment, false, patientNotified)
+				}(doctor, patient, appointment)
+			} else {
+				// Se está cancelando una cita que YA estaba confirmada —
+				// aviso distinto ("tu cita fue cancelada"), no el de
+				// "rechazamos tu solicitud" de arriba.
+				go func(doctor models.Doctor, patient models.Patient, appointment models.Appointment) {
+					defer func() {
+						if r := recover(); r != nil {
+							log.Printf("⚠️ Pánico recuperado al mandar el aviso de cancelación de la cita %d: %v", appointment.ID, r)
+						}
+					}()
+					patientNotified := sendAppointmentCancelledWhatsApp(context.Background(), waClient, waTemplates, doctor, patient, appointment)
+					sendAppointmentCancelledEmail(doctor, patient, appointment, patientNotified)
 				}(doctor, patient, appointment)
 			}
 		}
@@ -485,8 +498,8 @@ func ConfirmAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient w
 						log.Printf("⚠️ Pánico recuperado al mandar el aviso de confirmación de la cita %d: %v", appointment.ID, r)
 					}
 				}()
-				sendAppointmentDecisionEmail(doctor, patient, appointment, true)
-				sendAppointmentDecisionWhatsApp(context.Background(), waClient, waTemplates, doctor, patient, appointment, true)
+				patientNotified := sendAppointmentDecisionWhatsApp(context.Background(), waClient, waTemplates, doctor, patient, appointment, true)
+				sendAppointmentDecisionEmail(doctor, patient, appointment, true, patientNotified)
 			}(doctor, patient, appointment)
 		}
 
@@ -497,10 +510,12 @@ func ConfirmAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient w
 // sendAppointmentDecisionWhatsApp avisa al paciente, por WhatsApp, si su
 // solicitud de cita en línea fue aceptada o rechazada por el consultorio.
 // Mejor esfuerzo: nunca bloquea ni revierte la confirmación/cancelación en
-// sí si Twilio no está configurado o falla.
-func sendAppointmentDecisionWhatsApp(ctx context.Context, waClient whatsapp.Client, waTemplates whatsapp.Templates, doctor models.Doctor, patient models.Patient, appointment models.Appointment, confirmed bool) {
+// sí si Twilio no está configurado o falla. Devuelve true si el paciente
+// quedó notificado por este canal, para que el llamador decida si todavía
+// hace falta mandarle el correo equivalente (ver sendAppointmentDecisionEmail).
+func sendAppointmentDecisionWhatsApp(ctx context.Context, waClient whatsapp.Client, waTemplates whatsapp.Templates, doctor models.Doctor, patient models.Patient, appointment models.Appointment, confirmed bool) bool {
 	if waClient == nil || patient.Phone == "" {
-		return
+		return false
 	}
 
 	when := auth.FormatSpanishDateTime(appointment.AppointmentDateTime)
@@ -521,13 +536,16 @@ func sendAppointmentDecisionWhatsApp(ctx context.Context, waClient whatsapp.Clie
 	if err := whatsapp.SendWithFallback(ctx, waClient, patient.Phone, contentSID, vars, body); err != nil {
 		log.Printf("⚠️ No se pudo enviar el WhatsApp de %s al paciente (cita %d): %v",
 			map[bool]string{true: "confirmación", false: "rechazo"}[confirmed], appointment.ID, err)
+		return false
 	}
+	return true
 }
 
 // sendAppointmentDecisionEmail es el equivalente por correo de
-// sendAppointmentDecisionWhatsApp.
-func sendAppointmentDecisionEmail(doctor models.Doctor, patient models.Patient, appointment models.Appointment, confirmed bool) {
-	if patient.Email == "" {
+// sendAppointmentDecisionWhatsApp. skipPatientEmail es true cuando el mismo
+// aviso ya se le entregó por WhatsApp, para no duplicarlo.
+func sendAppointmentDecisionEmail(doctor models.Doctor, patient models.Patient, appointment models.Appointment, confirmed bool, skipPatientEmail bool) {
+	if patient.Email == "" || skipPatientEmail {
 		return
 	}
 
@@ -555,6 +573,90 @@ func sendAppointmentDecisionEmail(doctor models.Doctor, patient models.Patient, 
 	if err := auth.SendEmail(patient.Email, subject, body); err != nil {
 		log.Printf("⚠️ No se pudo enviar el correo de %s al paciente (cita %d): %v",
 			map[bool]string{true: "confirmación", false: "rechazo"}[confirmed], appointment.ID, err)
+	}
+}
+
+// sendAppointmentCancelledWhatsApp avisa al paciente, por WhatsApp, que una
+// cita YA CONFIRMADA fue cancelada por el consultorio — distinto del
+// "rechazo" de sendAppointmentDecisionWhatsApp, que es para una solicitud
+// que nunca llegó a confirmarse. Mismo criterio de mejor esfuerzo; devuelve
+// true si el paciente quedó notificado por este canal.
+func sendAppointmentCancelledWhatsApp(ctx context.Context, waClient whatsapp.Client, waTemplates whatsapp.Templates, doctor models.Doctor, patient models.Patient, appointment models.Appointment) bool {
+	if waClient == nil || patient.Phone == "" {
+		return false
+	}
+	when := auth.FormatSpanishDateTime(appointment.AppointmentDateTime)
+	body := fmt.Sprintf(
+		"Tu cita con Dr(a). %s del %s fue cancelada por el consultorio. Si necesitas agendar de nuevo, hazlo desde el directorio de ProPatient. — ProPatient",
+		doctor.FullName, when,
+	)
+	vars := map[string]string{"1": doctor.FullName, "2": when}
+	if err := whatsapp.SendWithFallback(ctx, waClient, patient.Phone, waTemplates.AppointmentCancelled, vars, body); err != nil {
+		log.Printf("⚠️ No se pudo enviar el WhatsApp de cancelación al paciente (cita %d): %v", appointment.ID, err)
+		return false
+	}
+	return true
+}
+
+// sendAppointmentCancelledEmail es el equivalente por correo de
+// sendAppointmentCancelledWhatsApp; se salta si el paciente ya quedó
+// notificado por WhatsApp.
+func sendAppointmentCancelledEmail(doctor models.Doctor, patient models.Patient, appointment models.Appointment, skipPatientEmail bool) {
+	if patient.Email == "" || skipPatientEmail {
+		return
+	}
+	when := auth.FormatSpanishDateTime(appointment.AppointmentDateTime)
+	subject := "Tu cita con Dr(a). " + doctor.FullName + " fue cancelada"
+	body := fmt.Sprintf(
+		`<p>Hola %s,</p>
+		<p>Tu cita con <strong>Dr(a). %s</strong> del <strong>%s</strong> fue <strong>cancelada</strong> por el consultorio.</p>
+		<p>Si necesitas agendar de nuevo, puedes hacerlo desde el directorio de ProPatient.</p>
+		<p>— ProPatient</p>`,
+		patient.FirstName, doctor.FullName, when,
+	)
+	if err := auth.SendEmail(patient.Email, subject, body); err != nil {
+		log.Printf("⚠️ No se pudo enviar el correo de cancelación al paciente (cita %d): %v", appointment.ID, err)
+	}
+}
+
+// sendAppointmentRescheduledWhatsApp avisa al paciente, por WhatsApp, que
+// el consultorio movió la fecha/hora de su cita (ver UpdateAppointment).
+// Mismo criterio de mejor esfuerzo que el resto; devuelve true si el
+// paciente quedó notificado por este canal.
+func sendAppointmentRescheduledWhatsApp(ctx context.Context, waClient whatsapp.Client, waTemplates whatsapp.Templates, doctor models.Doctor, patient models.Patient, appointment models.Appointment) bool {
+	if waClient == nil || patient.Phone == "" {
+		return false
+	}
+	when := auth.FormatSpanishDateTime(appointment.AppointmentDateTime)
+	body := fmt.Sprintf(
+		"Tu cita con Dr(a). %s fue reprogramada. Nueva fecha y hora: %s. — ProPatient",
+		doctor.FullName, when,
+	)
+	vars := map[string]string{"1": doctor.FullName, "2": when}
+	if err := whatsapp.SendWithFallback(ctx, waClient, patient.Phone, waTemplates.AppointmentRescheduled, vars, body); err != nil {
+		log.Printf("⚠️ No se pudo enviar el WhatsApp de reprogramación al paciente (cita %d): %v", appointment.ID, err)
+		return false
+	}
+	return true
+}
+
+// sendAppointmentRescheduledEmail es el equivalente por correo de
+// sendAppointmentRescheduledWhatsApp; se salta si el paciente ya quedó
+// notificado por WhatsApp.
+func sendAppointmentRescheduledEmail(doctor models.Doctor, patient models.Patient, appointment models.Appointment, skipPatientEmail bool) {
+	if patient.Email == "" || skipPatientEmail {
+		return
+	}
+	when := auth.FormatSpanishDateTime(appointment.AppointmentDateTime)
+	subject := "Tu cita con Dr(a). " + doctor.FullName + " cambió de horario"
+	body := fmt.Sprintf(
+		`<p>Hola %s,</p>
+		<p>Tu cita con <strong>Dr(a). %s</strong> fue <strong>reprogramada</strong>. Nueva fecha y hora: <strong>%s</strong>.</p>
+		<p>— ProPatient</p>`,
+		patient.FirstName, doctor.FullName, when,
+	)
+	if err := auth.SendEmail(patient.Email, subject, body); err != nil {
+		log.Printf("⚠️ No se pudo enviar el correo de reprogramación al paciente (cita %d): %v", appointment.ID, err)
 	}
 }
 
@@ -672,13 +774,31 @@ func UpdateAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient wh
 		}
 		audit.Log(db, c, doctorID, &appointment.PatientID, audit.ActionUpdated, audit.EntityAppointment, appointment.ID, auditDetails)
 
-		// Solo tocamos Google Calendar cuando de verdad se reprogramó la
-		// cita (cambió la fecha/hora) — no en cada PUT parcial (ej. marcar
-		// seguimiento, guardar notas de la consulta).
+		// Solo tocamos Google Calendar y avisamos al paciente cuando de
+		// verdad se reprogramó la cita (cambió la fecha/hora) — no en cada
+		// PUT parcial (ej. marcar seguimiento, guardar notas de la
+		// consulta). El aviso de reprogramación solo aplica a una cita
+		// normal (PENDING); no tendría sentido para una ya cancelada o
+		// completada.
 		if !appointment.AppointmentDateTime.Equal(previousDateTime) {
 			var patient models.Patient
 			if err := db.First(&patient, appointment.PatientID).Error; err == nil {
 				syncAppointmentToGoogleCalendar(c.Request.Context(), db, calClient, &appointment, patient)
+
+				if appointment.Status == "PENDING" {
+					var doctor models.Doctor
+					if db.First(&doctor, doctorID).Error == nil {
+						go func(doctor models.Doctor, patient models.Patient, appointment models.Appointment) {
+							defer func() {
+								if r := recover(); r != nil {
+									log.Printf("⚠️ Pánico recuperado al mandar el aviso de reprogramación de la cita %d: %v", appointment.ID, r)
+								}
+							}()
+							patientNotified := sendAppointmentRescheduledWhatsApp(context.Background(), waClient, waTemplates, doctor, patient, appointment)
+							sendAppointmentRescheduledEmail(doctor, patient, appointment, patientNotified)
+						}(doctor, patient, appointment)
+					}
+				}
 			}
 		}
 

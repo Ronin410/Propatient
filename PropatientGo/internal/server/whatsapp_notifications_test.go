@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -89,11 +90,12 @@ func TestConfirmAppointment_NotifiesPatientByWhatsApp(t *testing.T) {
 	wa.waitForCallsTo(t, "5559990000", 2)
 }
 
-// TestCancelAppointment_NotifiesPatientOnlyWhenRejectingOnlineRequest cubre
-// las dos ramas: rechazar una solicitud PENDING_CONFIRMATION sí manda
-// WhatsApp; cancelar una cita ya confirmada (PENDING normal) no lo manda —
-// fuera del alcance pedido.
-func TestCancelAppointment_NotifiesPatientOnlyWhenRejectingOnlineRequest(t *testing.T) {
+// TestCancelAppointment_NotifiesPatientWithDistinctWordingByCase cubre las
+// dos ramas: rechazar una solicitud PENDING_CONFIRMATION manda el aviso de
+// "no pudimos aceptar tu solicitud"; cancelar una cita ya confirmada
+// (PENDING normal) manda un aviso distinto de "tu cita fue cancelada" — en
+// ambos casos el paciente debe quedar notificado por WhatsApp.
+func TestCancelAppointment_NotifiesPatientWithDistinctWordingByCase(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
 	wa := newMockWhatsAppClient()
@@ -136,10 +138,7 @@ func TestCancelAppointment_NotifiesPatientOnlyWhenRejectingOnlineRequest(t *test
 
 	w = doRequest(t, router, http.MethodPut, "/api/appointments/"+strconv.Itoa(int(appt.ID))+"/cancel", docToken, nil)
 	require.Equal(t, http.StatusOK, w.Code)
-	// No hay nada que "esperar" para un caso negativo: le damos un margen
-	// corto a una eventual goroutine errónea y confirmamos que sigue en 0.
-	time.Sleep(200 * time.Millisecond)
-	assert.Equal(t, 0, wa.callsTo("5552220002"), "cancelar una cita ya confirmada no debe mandar este aviso")
+	wa.waitForCallsTo(t, "5552220002", 1)
 }
 
 // TestUpdateAppointment_NotifiesPatientWhenFollowUpDateSet cubre el aviso
@@ -174,4 +173,73 @@ func TestUpdateAppointment_NotifiesPatientWhenFollowUpDateSet(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	time.Sleep(200 * time.Millisecond)
 	assert.Equal(t, 1, wa.callsTo("5553330003"), "no debe repetirse si la fecha de seguimiento no cambió")
+}
+
+// TestUpdateAppointment_NotifiesPatientWhenRescheduled cubre el aviso nuevo
+// de reprogramación: cambiar appointmentDateTime en una cita PENDING debe
+// avisarle al paciente por WhatsApp; guardar sin tocar la fecha (ej. solo
+// notas) no debe disparar nada.
+func TestUpdateAppointment_NotifiesPatientWhenRescheduled(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
+	wa := newMockWhatsAppClient()
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), wa, nil)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_wa_reschedule", "password123")
+	docToken := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	patient := models.Patient{FirstName: "Reprogramado", LastName: "Prueba", Phone: "5554440004", Email: "reprogramado.wa@test.local"}
+	require.NoError(t, db.Create(&patient).Error)
+	require.NoError(t, db.Model(&doc).Association("Patients").Append(&patient))
+	appt := models.Appointment{PatientID: patient.ID, DoctorID: doc.ID, AppointmentDateTime: time.Now().UTC().Add(48 * time.Hour), Status: "PENDING"}
+	require.NoError(t, db.Create(&appt).Error)
+
+	// Guardar sin cambiar la fecha (solo notas) no debe avisar nada.
+	w := doRequest(t, router, http.MethodPut, "/api/appointments/"+strconv.Itoa(int(appt.ID)), docToken, map[string]any{
+		"notes": "Nota sin reprogramar",
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	time.Sleep(200 * time.Millisecond)
+	assert.Equal(t, 0, wa.callsTo("5554440004"), "no debe avisar si la fecha/hora no cambió")
+
+	newDateTime := time.Now().UTC().Add(72 * time.Hour).Format(time.RFC3339)
+	w = doRequest(t, router, http.MethodPut, "/api/appointments/"+strconv.Itoa(int(appt.ID)), docToken, map[string]any{
+		"appointmentDateTime": newDateTime,
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	wa.waitForCallsTo(t, "5554440004", 1)
+}
+
+// TestPublicUploadDocuments_NotifiesDoctorByWhatsApp cubre el aviso nuevo al
+// doctor cuando un paciente sube documentos desde el link/QR público —
+// antes de este cambio no se avisaba nada, el doctor solo lo notaba si
+// entraba a revisar la cita.
+func TestPublicUploadDocuments_NotifiesDoctorByWhatsApp(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
+	wa := newMockWhatsAppClient()
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), wa, nil)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_wa_upload", "password123")
+	require.NoError(t, db.Model(&doc).Updates(map[string]any{"phone": "5555550005"}).Error)
+	docToken := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	patient := models.Patient{FirstName: "SubeDoc", LastName: "Prueba", Phone: "5556660006", Email: "subedoc.wa@test.local"}
+	require.NoError(t, db.Create(&patient).Error)
+	require.NoError(t, db.Model(&doc).Association("Patients").Append(&patient))
+	appt := models.Appointment{PatientID: patient.ID, DoctorID: doc.ID, AppointmentDateTime: time.Now().UTC().Add(24 * time.Hour), Status: "PENDING"}
+	require.NoError(t, db.Create(&appt).Error)
+
+	w := doRequest(t, router, http.MethodGet, "/api/appointments/"+strconv.Itoa(int(appt.ID))+"/upload-link", docToken, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	linkResp := decodeJSON(t, w)
+	uploadURL, _ := linkResp["uploadUrl"].(string)
+	require.NotEmpty(t, uploadURL)
+	token := uploadURL[strings.LastIndex(uploadURL, "/")+1:]
+
+	w = doMultipartRequest(t, router, http.MethodPost, "/api/public/upload/"+token, "",
+		nil, "files", "estudio.pdf", minimalPDFBytes)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	wa.waitForCallsTo(t, "5555550005", 1)
 }
