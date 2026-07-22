@@ -3,6 +3,10 @@
   max-width: 900px;
   margin: 0 auto;
 
+  @media (max-width: 600px) {
+    padding: 1rem;
+  }
+
   .page-header {
     margin-bottom: 2rem;
 
@@ -62,6 +66,13 @@
     }
   }
 
+  // Respaldo por si algún contenido no cabe ni en el layout de tarjetas
+  // de abajo (ej. un correo muy largo) — nunca deja que la tabla empuje
+  // el ancho de toda la página, el scroll queda contenido aquí.
+  .staff-table-wrapper {
+    overflow-x: auto;
+  }
+
   .staff-table {
     width: 100%;
     border-collapse: collapse;
@@ -115,6 +126,56 @@
         color: var(--color-danger);
         border-color: var(--color-danger);
         &:hover { background-color: var(--color-danger); color: #ffffff; }
+      }
+    }
+  }
+
+  // En celular, una tabla de 4 columnas no cabe: en vez de dejarla
+  // desbordarse fuera de la pantalla (como se veía antes: la tabla se
+  // cortaba a la derecha y "Acciones" quedaba invisible), cada fila se
+  // vuelve una tarjeta con sus datos apilados verticalmente.
+  @media (max-width: 600px) {
+    .staff-table {
+      thead { display: none; }
+
+      tbody, tr, td { display: block; width: 100%; }
+
+      tr {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        margin-bottom: 12px;
+      }
+
+      // Etiqueta arriba, valor abajo (en vez de lado a lado): un correo o
+      // nombre largo necesita poder envolver en más de una línea sin que
+      // se corte — ver el bug real que esto reemplaza más abajo.
+      td {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--bg-subtle);
+        text-align: left;
+        word-break: break-word;
+
+        &::before {
+          content: attr(data-label);
+          font-size: 0.75rem;
+          font-weight: 600;
+          text-transform: uppercase;
+          color: var(--color-secondary);
+        }
+
+        &:last-child { border-bottom: none; }
+      }
+
+      .actions-cell {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 8px;
+
+        &::before { display: none; }
       }
     }
   }

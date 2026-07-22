@@ -137,36 +137,38 @@ export const StaffManagement: React.FC = () => {
         ) : staff.length === 0 ? (
           <p className="empty-msg">Aún no has invitado a nadie.</p>
         ) : (
-          <table className="staff-table">
-            <thead>
-              <tr>
-                <th>Nombre</th>
-                <th>Correo</th>
-                <th>Estado</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {staff.map((member) => {
-                const status = statusLabel(member);
-                return (
-                  <tr key={member.id}>
-                    <td>{member.fullName}</td>
-                    <td>{member.email}</td>
-                    <td><span className={`status-badge ${status.className}`}>{status.text}</span></td>
-                    <td className="actions-cell">
-                      <button className="btn-outline-sm" onClick={() => handleToggleActive(member)}>
-                        {member.active ? 'Desactivar' : 'Reactivar'}
-                      </button>
-                      <button className="btn-outline-sm danger" onClick={() => setStaffToDelete(member)}>
-                        Eliminar
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="staff-table-wrapper">
+            <table className="staff-table">
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Correo</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {staff.map((member) => {
+                  const status = statusLabel(member);
+                  return (
+                    <tr key={member.id}>
+                      <td data-label="Nombre">{member.fullName}</td>
+                      <td data-label="Correo">{member.email}</td>
+                      <td data-label="Estado"><span className={`status-badge ${status.className}`}>{status.text}</span></td>
+                      <td className="actions-cell" data-label="Acciones">
+                        <button className="btn-outline-sm" onClick={() => handleToggleActive(member)}>
+                          {member.active ? 'Desactivar' : 'Reactivar'}
+                        </button>
+                        <button className="btn-outline-sm danger" onClick={() => setStaffToDelete(member)}>
+                          Eliminar
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 
