@@ -2,7 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/favicon.png" />
+    <!-- favicon-simple.png (no favicon.png): a tamaño de pestaña/resultado
+         de búsqueda, el logo detallado con degradado se ve borroso — esta
+         versión es una silueta blanca de alto contraste sobre fondo sólido,
+         pensada para leerse bien incluso a 16-32px. favicon.png sigue
+         usándose donde sí hay espacio para el detalle (ícono de la PWA,
+         apple-touch-icon). -->
+    <link rel="icon" type="image/png" href="/favicon-simple.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -16,17 +22,20 @@
     <title>ProPatient — Agenda tu cita médica en línea</title>
     <meta name="description" content="Encuentra doctores por especialidad o ubicación y solicita tu cita en línea sin crear una cuenta. Para consultorios: gestiona tu agenda, pacientes y expediente clínico digital." />
 
-    <!-- Open Graph / redes sociales. og:image queda pendiente hasta tener
-         una imagen de portada diseñada; complétalo cuando la tengas. -->
+    <!-- Open Graph / redes sociales. og:image usa el logo simplificado
+         mientras no exista una imagen de portada 1200x630 diseñada a
+         propósito — mejor eso que ninguna imagen al compartir el link. -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="ProPatient" />
     <meta property="og:title" content="ProPatient — Agenda tu cita médica en línea" />
     <meta property="og:description" content="Encuentra doctores por especialidad o ubicación y solicita tu cita en línea sin crear una cuenta." />
+    <meta property="og:image" content="https://propatient.pro/favicon-simple.png" />
     <meta property="og:url" content="https://propatient.pro/" />
     <meta property="og:locale" content="es_MX" />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="ProPatient — Agenda tu cita médica en línea" />
     <meta name="twitter:description" content="Encuentra doctores por especialidad o ubicación y solicita tu cita en línea sin crear una cuenta." />
+    <meta name="twitter:image" content="https://propatient.pro/favicon-simple.png" />
 
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>

@@ -10,6 +10,7 @@ import api from '../api/axios';
 import { toAbsoluteFileUrl } from '../utils/fileUrl';
 import type { PublicDoctor } from '../types';
 import { Footer } from '../components/Footer';
+import { setPageMeta } from '../utils/pageMeta';
 import logo from '../assets/logo.png';
 import './DoctorDirectory.scss';
 
@@ -40,6 +41,11 @@ export const DoctorDirectory: React.FC = () => {
       .catch(() => setDoctors([]))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => setPageMeta({
+    title: 'Directorio de doctores | ProPatient',
+    description: 'Busca doctores por especialidad o ubicación y agenda tu cita en línea sin crear una cuenta.',
+  }), []);
 
   const filteredDoctors = useMemo(() => {
     const q = search.trim().toLowerCase();

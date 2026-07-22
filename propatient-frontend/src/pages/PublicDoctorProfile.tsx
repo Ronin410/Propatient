@@ -13,6 +13,7 @@ import { sanitizePhoneInput } from '../utils/phoneInput';
 import { preloadRecaptcha, getRecaptchaToken } from '../utils/recaptcha';
 import { zonedTimeToUtc, nowInAppTimezone } from '../utils/appointmentSlots';
 import { APP_TIMEZONE } from '../utils/dateFormatter';
+import { setPageMeta } from '../utils/pageMeta';
 import type { PublicDoctor, WeekSchedule } from '../types';
 import { Footer } from '../components/Footer';
 import { SlotPicker } from '../components/SlotPicker';
@@ -131,6 +132,20 @@ export const PublicDoctorProfile: React.FC = () => {
   useEffect(() => {
     preloadRecaptcha();
   }, []);
+
+  // Título/descripción únicos para este doctor — sin esto, cada perfil
+  // público comparte el mismo <title>/<meta description> genérico de
+  // index.html, y Google no puede distinguir el perfil de un doctor del de
+  // otro (ver la nota en utils/pageMeta.ts).
+  useEffect(() => {
+    if (!doctor) return;
+    const specialty = doctor.medicalSpecialty || 'Médico General';
+    const location = doctor.address ? ` en ${doctor.address}` : '';
+    return setPageMeta({
+      title: `Dr(a). ${doctor.fullName} — ${specialty} | ProPatient`,
+      description: `Agenda una cita con Dr(a). ${doctor.fullName}, ${specialty}${location}. Solicita tu cita en línea sin crear una cuenta.`,
+    });
+  }, [doctor]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;

@@ -138,7 +138,12 @@ services:
     # este deploy y que hacen fallar "tsc -b". Vite no requiere que el type-check
     # pase para generar el bundle. Vale la pena corregir esos errores más adelante
     # (correr "npx tsc -b" en propatient-frontend para verlos).
-    buildCommand: npm install && npx vite build
+    #
+    # generate-sitemap.mjs corre antes de vite build para que public/sitemap.xml
+    # (que vite copia tal cual a dist/) incluya el perfil público real de cada
+    # doctor listado, no solo las páginas estáticas — así Google los encuentra
+    # sin depender de que rastree /doctores por su cuenta.
+    buildCommand: npm install && node scripts/generate-sitemap.mjs && npx vite build
     staticPublishPath: ./dist
     envVars:
       - key: VITE_API_URL
