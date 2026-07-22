@@ -618,13 +618,20 @@
 
     .form-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      // min(300px, 100%) evita que la columna fuerce un ancho mínimo de
+      // 300px más ancho que el propio contenedor en pantallas angostas
+      // (el bug que hacía que Alergias/Antecedentes se vieran cortados a
+      // la derecha en celular) — se sigue viendo en 2 columnas de 300px
+      // en pantallas anchas, pero colapsa a 1 columna completa cuando no
+      // caben.
+      grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
       gap: 16px;
     }
 
     .form-group {
       margin-bottom: 0;
-      
+      min-width: 0;
+
       label {
         font-size: 12px;
         color: var(--color-secondary);

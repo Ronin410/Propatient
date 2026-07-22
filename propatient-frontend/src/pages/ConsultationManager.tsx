@@ -6,6 +6,10 @@ import { toAbsoluteFileUrl } from '../utils/fileUrl';
 import { sanitizePhoneInput } from '../utils/phoneInput';
 import api from '../api/axios';
 import { getErrorMessage } from '../utils/errorMessage';
+import {
+  ChecklistField, HabitsLifestyleField, GynecoObstetricField,
+  ALLERGY_OPTIONS, PATHOLOGICAL_OPTIONS, SURGICAL_OPTIONS, HEREDITARY_OPTIONS,
+} from '../components/MedicalHistoryFields';
 
 type FormSection = 'generalData' | 'medicalHistory';
 
@@ -359,7 +363,11 @@ export const ConsultationManager: React.FC = () => {
                   </div>
                 </fieldset>
               ) : (
-                /* PANEL DE ANTECEDENTES REESTRUCTURADO */
+                /* PANEL DE ANTECEDENTES REESTRUCTURADO — chips/booleanos +
+                   texto libre en vez de solo texto libre, ver
+                   MedicalHistoryFields.tsx. key=appointmentId fuerza que
+                   cada campo reinicie su selección al cambiar de cita, en
+                   vez de arrastrar la selección de la cita anterior. */
                 <fieldset disabled={isCompleted} className="medical-history-sections fieldset-plain">
                   {/* SUBSECCIÓN 1: ALERTAS Y ALERGIAS (CRÍTICO) */}
                   <div className="history-subsection critical-box">
@@ -367,25 +375,31 @@ export const ConsultationManager: React.FC = () => {
                     <div className="form-grid">
                       <div className="form-group full-width">
                         <label>Alergias Conocidas</label>
-                        <input
-                          type="text"
-                          placeholder="Ej: Penicilina, mariscos, ninguna..."
+                        <ChecklistField
+                          key={`allergies-${appointmentId}`}
                           value={patientForm.medicalHistory.allergies}
-                          onChange={e => setPatientFormData({
+                          options={ALLERGY_OPTIONS}
+                          noneLabel="Sin alergias conocidas"
+                          otherPlaceholder="Otra alergia u observación..."
+                          disabled={isCompleted}
+                          onChange={next => setPatientFormData({
                             ...patientForm,
-                            medicalHistory: { ...patientForm.medicalHistory, allergies: e.target.value }
+                            medicalHistory: { ...patientForm.medicalHistory, allergies: next }
                           })}
                         />
                       </div>
                       <div className="form-group full-width">
                         <label>Medicamentos Actuales / Tratamientos activos</label>
-                        <input
-                          type="text"
-                          placeholder="Ej: Metformina 850mg c/24h..."
+                        <ChecklistField
+                          key={`medication-${appointmentId}`}
                           value={patientForm.medicalHistory.current_medication}
-                          onChange={e => setPatientFormData({
+                          noneLabel="No toma medicamentos actualmente"
+                          otherLabel="Medicamento, dosis y frecuencia"
+                          otherPlaceholder="Ej: Metformina 850mg c/24h..."
+                          disabled={isCompleted}
+                          onChange={next => setPatientFormData({
                             ...patientForm,
-                            medicalHistory: { ...patientForm.medicalHistory, current_medication: e.target.value }
+                            medicalHistory: { ...patientForm.medicalHistory, current_medication: next }
                           })}
                         />
                       </div>
@@ -398,25 +412,31 @@ export const ConsultationManager: React.FC = () => {
                     <div className="form-grid">
                       <div className="form-group">
                         <label>Antecedentes Patológicos</label>
-                        <textarea
-                          rows={3}
-                          placeholder="Enfermedades crónicas, cardiovasculares, etc."
+                        <ChecklistField
+                          key={`pathological-${appointmentId}`}
                           value={patientForm.medicalHistory.pathological_history}
-                          onChange={e => setPatientFormData({
+                          options={PATHOLOGICAL_OPTIONS}
+                          noneLabel="Sin antecedentes patológicos"
+                          otherPlaceholder="Otra enfermedad crónica u observación..."
+                          disabled={isCompleted}
+                          onChange={next => setPatientFormData({
                             ...patientForm,
-                            medicalHistory: { ...patientForm.medicalHistory, pathological_history: e.target.value }
+                            medicalHistory: { ...patientForm.medicalHistory, pathological_history: next }
                           })}
                         />
                       </div>
                       <div className="form-group">
                         <label>Antecedentes Quirúrgicos y Traumas</label>
-                        <textarea
-                          rows={3}
-                          placeholder="Cirugías previas, hospitalizaciones, fracturas..."
+                        <ChecklistField
+                          key={`surgical-${appointmentId}`}
                           value={patientForm.medicalHistory.surgical_history}
-                          onChange={e => setPatientFormData({
+                          options={SURGICAL_OPTIONS}
+                          noneLabel="Sin cirugías ni traumatismos previos"
+                          otherPlaceholder="Otra cirugía, hospitalización o fractura..."
+                          disabled={isCompleted}
+                          onChange={next => setPatientFormData({
                             ...patientForm,
-                            medicalHistory: { ...patientForm.medicalHistory, surgical_history: e.target.value }
+                            medicalHistory: { ...patientForm.medicalHistory, surgical_history: next }
                           })}
                         />
                       </div>
@@ -429,25 +449,29 @@ export const ConsultationManager: React.FC = () => {
                     <div className="form-grid">
                       <div className="form-group">
                         <label>Heredofamiliares (Padres, Abuelos, Hermanos)</label>
-                        <textarea
-                          rows={3}
-                          placeholder="Diabetes, hipertensión, neoplasias en la familia..."
+                        <ChecklistField
+                          key={`hereditary-${appointmentId}`}
                           value={patientForm.medicalHistory.hereditaryHistory}
-                          onChange={e => setPatientFormData({
+                          options={HEREDITARY_OPTIONS}
+                          noneLabel="Sin antecedentes heredofamiliares relevantes"
+                          otherLabel="Quién / detalles"
+                          otherPlaceholder="Ej: Madre - diabetes, Abuelo paterno - cáncer..."
+                          disabled={isCompleted}
+                          onChange={next => setPatientFormData({
                             ...patientForm,
-                            medicalHistory: { ...patientForm.medicalHistory, hereditaryHistory: e.target.value }
+                            medicalHistory: { ...patientForm.medicalHistory, hereditaryHistory: next }
                           })}
                         />
                       </div>
                       <div className="form-group">
                         <label>Hábitos, Estilo de Vida y No Patológicos</label>
-                        <textarea
-                          rows={3}
-                          placeholder="Tabaquismo, alcohol, actividad física, alimentación..."
+                        <HabitsLifestyleField
+                          key={`habits-${appointmentId}`}
                           value={patientForm.medicalHistory.habitsLifestyle}
-                          onChange={e => setPatientFormData({
+                          disabled={isCompleted}
+                          onChange={next => setPatientFormData({
                             ...patientForm,
-                            medicalHistory: { ...patientForm.medicalHistory, habitsLifestyle: e.target.value }
+                            medicalHistory: { ...patientForm.medicalHistory, habitsLifestyle: next }
                           })}
                         />
                       </div>
@@ -460,13 +484,13 @@ export const ConsultationManager: React.FC = () => {
                     <div className="form-grid">
                       <div className="form-group full-width">
                         <label>Registro Ginecoobstétrico</label>
-                        <input
-                          type="text"
-                          placeholder="Ej: Menarca: 12, FUM: 15/05/26, Ciclos: 28/5, G:1 P:1 C:0 A:0"
+                        <GynecoObstetricField
+                          key={`gyneco-${appointmentId}`}
                           value={patientForm.medicalHistory.gynecoObstetric}
-                          onChange={e => setPatientFormData({
+                          disabled={isCompleted}
+                          onChange={next => setPatientFormData({
                             ...patientForm,
-                            medicalHistory: { ...patientForm.medicalHistory, gynecoObstetric: e.target.value }
+                            medicalHistory: { ...patientForm.medicalHistory, gynecoObstetric: next }
                           })}
                         />
                       </div>

@@ -1,0 +1,138 @@
+// Estilos compartidos por ChecklistField, HabitsLifestyleField y
+// GynecoObstetricField (ver MedicalHistoryFields.tsx) — usan las mismas
+// variables de color que el resto de la app para verse bien en modo claro
+// y oscuro sin reglas propias por tema.
+
+.checkbox-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-heading);
+  cursor: pointer;
+  margin-bottom: 10px;
+  user-select: none;
+
+  input[type='checkbox'] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--color-primary);
+    cursor: pointer;
+  }
+}
+
+.chip-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+
+  &[aria-disabled='true'] { opacity: 0.5; }
+}
+
+.chip-option {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-subtle);
+  color: var(--color-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  user-select: none;
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-primary);
+    color: var(--color-heading);
+  }
+
+  &.selected {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: #fff;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+  }
+}
+
+.checklist-other {
+  label {
+    display: block;
+    font-size: 12px;
+    color: var(--color-secondary);
+    margin-bottom: 4px;
+  }
+
+  textarea {
+    width: 100%;
+    resize: vertical;
+  }
+}
+
+.habits-lifestyle-field,
+.gyneco-obstetric-field {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+  }
+
+  .form-group {
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--color-secondary);
+      margin-bottom: 4px;
+    }
+
+    select,
+    input {
+      width: 100%;
+      padding: 8px 12px;
+      font-size: 13px;
+      border-radius: 5px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--color-heading);
+    }
+  }
+}
+
+.gyneco-obstetric-field {
+  .gyneco-grid {
+    border: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+
+    &:disabled {
+      opacity: 0.5;
+    }
+  }
+
+  .gpca-group {
+    grid-column: 1 / -1;
+
+    .gpca-inputs {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+
+      input {
+        text-align: center;
+      }
+    }
+  }
+}

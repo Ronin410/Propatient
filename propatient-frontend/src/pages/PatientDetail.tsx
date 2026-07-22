@@ -6,6 +6,10 @@ import type { Patient, MedicalHistory } from '../types';
 import { useFetchData } from '../hooks/useFetchData';
 import { downloadPatientHistoryPDF } from '../utils/patientHistoryPdf';
 import { toAbsoluteFileUrl } from '../utils/fileUrl';
+import {
+  ChecklistField, HabitsLifestyleField, GynecoObstetricField,
+  ALLERGY_OPTIONS, PATHOLOGICAL_OPTIONS, SURGICAL_OPTIONS, HEREDITARY_OPTIONS,
+} from '../components/MedicalHistoryFields';
 import './PatientDetail.scss';
 
 interface AuditLogEntry {
@@ -125,28 +129,72 @@ export const PatientDetail: React.FC = () => {
             {isEditingHistory ? (
               <div className="history-edit-form">
                 <label>Alergias</label>
-                <textarea value={editedHistory?.allergies} onChange={e => setEditedHistory({...editedHistory!, allergies: e.target.value})} />
+                <ChecklistField
+                  key={`allergies-${patient.id}`}
+                  value={editedHistory?.allergies || ''}
+                  options={ALLERGY_OPTIONS}
+                  noneLabel="Sin alergias conocidas"
+                  otherPlaceholder="Otra alergia u observación..."
+                  onChange={next => setEditedHistory({...editedHistory!, allergies: next})}
+                />
 
                 <label>Medicamentos Actuales</label>
-                <textarea value={editedHistory?.current_medication} onChange={e => setEditedHistory({...editedHistory!, current_medication: e.target.value})} />
+                <ChecklistField
+                  key={`medication-${patient.id}`}
+                  value={editedHistory?.current_medication || ''}
+                  noneLabel="No toma medicamentos actualmente"
+                  otherLabel="Medicamento, dosis y frecuencia"
+                  otherPlaceholder="Ej: Metformina 850mg c/24h..."
+                  onChange={next => setEditedHistory({...editedHistory!, current_medication: next})}
+                />
 
                 <label>Antecedentes Patológicos</label>
-                <textarea value={editedHistory?.pathological_history} onChange={e => setEditedHistory({...editedHistory!, pathological_history: e.target.value})} />
+                <ChecklistField
+                  key={`pathological-${patient.id}`}
+                  value={editedHistory?.pathological_history || ''}
+                  options={PATHOLOGICAL_OPTIONS}
+                  noneLabel="Sin antecedentes patológicos"
+                  otherPlaceholder="Otra enfermedad crónica u observación..."
+                  onChange={next => setEditedHistory({...editedHistory!, pathological_history: next})}
+                />
 
                 <label>Antecedentes Quirúrgicos y Traumas</label>
-                <textarea value={editedHistory?.surgical_history} onChange={e => setEditedHistory({...editedHistory!, surgical_history: e.target.value})} />
+                <ChecklistField
+                  key={`surgical-${patient.id}`}
+                  value={editedHistory?.surgical_history || ''}
+                  options={SURGICAL_OPTIONS}
+                  noneLabel="Sin cirugías ni traumatismos previos"
+                  otherPlaceholder="Otra cirugía, hospitalización o fractura..."
+                  onChange={next => setEditedHistory({...editedHistory!, surgical_history: next})}
+                />
 
                 <label>No Patológicos</label>
                 <textarea value={editedHistory?.non_pathological_history} onChange={e => setEditedHistory({...editedHistory!, non_pathological_history: e.target.value})} />
 
                 <label>Heredofamiliares</label>
-                <textarea value={editedHistory?.hereditaryHistory} onChange={e => setEditedHistory({...editedHistory!, hereditaryHistory: e.target.value})} />
+                <ChecklistField
+                  key={`hereditary-${patient.id}`}
+                  value={editedHistory?.hereditaryHistory || ''}
+                  options={HEREDITARY_OPTIONS}
+                  noneLabel="Sin antecedentes heredofamiliares relevantes"
+                  otherLabel="Quién / detalles"
+                  otherPlaceholder="Ej: Madre - diabetes, Abuelo paterno - cáncer..."
+                  onChange={next => setEditedHistory({...editedHistory!, hereditaryHistory: next})}
+                />
 
                 <label>Hábitos y Estilo de Vida</label>
-                <textarea value={editedHistory?.habitsLifestyle} onChange={e => setEditedHistory({...editedHistory!, habitsLifestyle: e.target.value})} />
+                <HabitsLifestyleField
+                  key={`habits-${patient.id}`}
+                  value={editedHistory?.habitsLifestyle || ''}
+                  onChange={next => setEditedHistory({...editedHistory!, habitsLifestyle: next})}
+                />
 
                 <label>Ginecoobstétricos</label>
-                <textarea value={editedHistory?.gynecoObstetric} onChange={e => setEditedHistory({...editedHistory!, gynecoObstetric: e.target.value})} />
+                <GynecoObstetricField
+                  key={`gyneco-${patient.id}`}
+                  value={editedHistory?.gynecoObstetric || ''}
+                  onChange={next => setEditedHistory({...editedHistory!, gynecoObstetric: next})}
+                />
               </div>
             ) : (
               <>
