@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -208,38 +207,4 @@ func TestUpdateAppointment_NotifiesPatientWhenRescheduled(t *testing.T) {
 	})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	wa.waitForCallsTo(t, "5554440004", 1)
-}
-
-// TestPublicUploadDocuments_NotifiesDoctorByWhatsApp cubre el aviso nuevo al
-// doctor cuando un paciente sube documentos desde el link/QR público —
-// antes de este cambio no se avisaba nada, el doctor solo lo notaba si
-// entraba a revisar la cita.
-func TestPublicUploadDocuments_NotifiesDoctorByWhatsApp(t *testing.T) {
-	db := testutil.SetupTestDB(t)
-	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
-	wa := newMockWhatsAppClient()
-	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), wa, nil)
-
-	doc := testutil.CreateTestDoctor(t, db, "doc_wa_upload", "password123")
-	require.NoError(t, db.Model(&doc).Updates(map[string]any{"phone": "5555550005"}).Error)
-	docToken := testutil.TokenFor(t, doc.ID, doc.Username)
-
-	patient := models.Patient{FirstName: "SubeDoc", LastName: "Prueba", Phone: "5556660006", Email: "subedoc.wa@test.local"}
-	require.NoError(t, db.Create(&patient).Error)
-	require.NoError(t, db.Model(&doc).Association("Patients").Append(&patient))
-	appt := models.Appointment{PatientID: patient.ID, DoctorID: doc.ID, AppointmentDateTime: time.Now().UTC().Add(24 * time.Hour), Status: "PENDING"}
-	require.NoError(t, db.Create(&appt).Error)
-
-	w := doRequest(t, router, http.MethodGet, "/api/appointments/"+strconv.Itoa(int(appt.ID))+"/upload-link", docToken, nil)
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	linkResp := decodeJSON(t, w)
-	uploadURL, _ := linkResp["uploadUrl"].(string)
-	require.NotEmpty(t, uploadURL)
-	token := uploadURL[strings.LastIndex(uploadURL, "/")+1:]
-
-	w = doMultipartRequest(t, router, http.MethodPost, "/api/public/upload/"+token, "",
-		nil, "files", "estudio.pdf", minimalPDFBytes)
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-
-	wa.waitForCallsTo(t, "5555550005", 1)
 }

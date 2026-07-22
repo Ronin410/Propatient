@@ -63,7 +63,6 @@ type Templates struct {
 	ReminderPatient        string // TWILIO_TEMPLATE_REMINDER_PATIENT
 	ReviewRequest          string // TWILIO_TEMPLATE_REVIEW_REQUEST
 	FollowUp               string // TWILIO_TEMPLATE_FOLLOWUP
-	DocumentUploaded       string // TWILIO_TEMPLATE_DOCUMENT_UPLOADED
 }
 
 func LoadTemplatesFromEnv() Templates {
@@ -77,7 +76,6 @@ func LoadTemplatesFromEnv() Templates {
 		ReminderPatient:        os.Getenv("TWILIO_TEMPLATE_REMINDER_PATIENT"),
 		ReviewRequest:          os.Getenv("TWILIO_TEMPLATE_REVIEW_REQUEST"),
 		FollowUp:               os.Getenv("TWILIO_TEMPLATE_FOLLOWUP"),
-		DocumentUploaded:       os.Getenv("TWILIO_TEMPLATE_DOCUMENT_UPLOADED"),
 	}
 }
 

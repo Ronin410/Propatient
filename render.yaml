@@ -116,8 +116,6 @@ services:
         sync: false
       - key: TWILIO_TEMPLATE_FOLLOWUP
         sync: false
-      - key: TWILIO_TEMPLATE_DOCUMENT_UPLOADED
-        sync: false
       # Notificaciones push / Web Push (PWA, ver .env.example para cómo
       # generarlas). Sin estas tres, la app funciona igual — el toggle de
       # activar notificaciones simplemente no aparece en el Perfil.
