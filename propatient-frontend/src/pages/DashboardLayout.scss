@@ -396,5 +396,10 @@
     .main-content {
         height: auto;
         min-height: calc(100vh - 56px);
+        // 2.5rem (40px) de cada lado no se reducía en celular, dejando el
+        // contenido mucho más angosto que la pantalla real — ver además
+        // los ajustes de padding en ConsultationManager.scss para el
+        // mismo problema dentro de esa pantalla en particular.
+        padding: 1rem;
     }
 }

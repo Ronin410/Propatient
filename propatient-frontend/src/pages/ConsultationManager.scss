@@ -932,3 +932,31 @@
     }
   }
 }
+
+/* En celular, el padding de cada capa anidada del formulario (contenedor
+   + tarjeta de sección + subsección de antecedentes) sumaba más de 100px
+   entre los dos lados, dejando el formulario mucho más angosto que la
+   pantalla real en vez de aprovechar todo el ancho disponible. Mismo
+   breakpoint que ya usa el resto de esta pantalla para pasar a una sola
+   columna (ver .consultation-workspace-layout arriba). */
+@media (max-width: 992px) {
+  .consultation-manager-container {
+    padding: 12px;
+  }
+
+  .consultation-manager-container .profile-card-section {
+    padding: 16px;
+  }
+
+  .consultation-manager-container .patient-sidebar .sidebar-card {
+    padding: 16px;
+  }
+
+  .form-card {
+    padding: 16px;
+  }
+
+  .medical-history-sections .history-subsection {
+    padding: 12px 14px;
+  }
+}
