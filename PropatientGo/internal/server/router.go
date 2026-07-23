@@ -265,7 +265,7 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 			billingRoutes := protected.Group("/billing")
 			billingRoutes.Use(auth.RequireDoctorRole())
 			{
-				billingRoutes.GET("/status", handlers.GetBillingStatus(db))
+				billingRoutes.GET("/status", handlers.GetBillingStatus(db, billingClient))
 				billingRoutes.POST("/checkout", handlers.CreateCheckoutSession(db, billingClient, billingConfig))
 				billingRoutes.POST("/portal", handlers.CreatePortalSession(db, billingClient))
 			}

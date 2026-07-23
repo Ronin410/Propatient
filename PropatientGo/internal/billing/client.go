@@ -114,6 +114,12 @@ type Client interface {
 	// suscripción individual de un doctor que se acaba de unir a una
 	// clínica — evita que le sigan cobrando dos veces.
 	CancelSubscription(ctx context.Context, subscriptionID string) error
+	// GetSubscriptionPeriodEnd consulta a Stripe cuándo se cobra la
+	// próxima renovación de una suscripción activa. A diferencia de
+	// TrialEndsAt (que sí se guarda en la base de datos porque es fijo
+	// desde el alta), esta fecha solo vive en Stripe y puede recorrerse
+	// con cada pago, así que se consulta en vivo en vez de guardarla.
+	GetSubscriptionPeriodEnd(ctx context.Context, subscriptionID string) (time.Time, error)
 }
 
 type realClient struct {
@@ -263,4 +269,14 @@ func (r *realClient) CancelSubscription(ctx context.Context, subscriptionID stri
 	cancelParams.Context = ctx
 	_, err := subscription.Cancel(subscriptionID, cancelParams)
 	return err
+}
+
+func (r *realClient) GetSubscriptionPeriodEnd(ctx context.Context, subscriptionID string) (time.Time, error) {
+	params := &stripe.SubscriptionParams{}
+	params.Context = ctx
+	sub, err := subscription.Get(subscriptionID, params)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return time.Unix(sub.CurrentPeriodEnd, 0).UTC(), nil
 }

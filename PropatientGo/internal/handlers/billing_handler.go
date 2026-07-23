@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"propatient-api/internal/billing"
 	"propatient-api/internal/models"
@@ -18,21 +19,34 @@ import (
 
 // GetBillingStatus expone el estado de suscripción del doctor para que el
 // frontend pueda mostrar el banner de prueba/pago sin depender de que
-// alguna otra ruta le devuelva un 402.
-func GetBillingStatus(db *gorm.DB) gin.HandlerFunc {
+// alguna otra ruta le devuelva un 402. Con una suscripción activa, además
+// consulta a Stripe en vivo la fecha de la próxima renovación (ver
+// billing.Client.GetSubscriptionPeriodEnd) — mejor esfuerzo, si Stripe no
+// responde el resto del estatus se manda igual, solo sin esa fecha.
+func GetBillingStatus(db *gorm.DB, client billing.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		doctorID := c.MustGet("doctorID").(uint)
 
 		var doctor models.Doctor
-		if err := db.Select("subscription_status, trial_ends_at, stripe_customer_id").First(&doctor, doctorID).Error; err != nil {
+		if err := db.Select("subscription_status, trial_ends_at, stripe_customer_id, stripe_subscription_id").First(&doctor, doctorID).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Doctor no encontrado"})
 			return
+		}
+
+		var currentPeriodEnd *time.Time
+		if doctor.SubscriptionStatus == "active" && doctor.StripeSubscriptionID != "" && client != nil {
+			if end, err := client.GetSubscriptionPeriodEnd(c.Request.Context(), doctor.StripeSubscriptionID); err == nil {
+				currentPeriodEnd = &end
+			} else {
+				log.Printf("⚠️ No se pudo consultar la fecha de renovación de Stripe (doctor %d): %v", doctorID, err)
+			}
 		}
 
 		c.JSON(http.StatusOK, gin.H{
 			"subscriptionStatus": doctor.SubscriptionStatus,
 			"trialEndsAt":        doctor.TrialEndsAt,
 			"hasPaymentMethod":   doctor.StripeCustomerID != "",
+			"currentPeriodEnd":   currentPeriodEnd,
 		})
 	}
 }

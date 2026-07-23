@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"propatient-api/internal/billing"
 )
@@ -19,6 +20,10 @@ type mockBillingClient struct {
 	canceledSubscriptions []string
 	extraQtyCalls         []mockExtraQtyCall
 	nextExtraItemSeq      int
+	// periodEnd es lo que devuelve GetSubscriptionPeriodEnd; por defecto
+	// (zero value) simula 30 días a partir de ahora, como cualquier
+	// suscripción real recién pagada.
+	periodEnd time.Time
 }
 
 type mockExtraQtyCall struct {
@@ -65,6 +70,15 @@ func (m *mockBillingClient) CancelSubscription(ctx context.Context, subscription
 	defer m.mu.Unlock()
 	m.canceledSubscriptions = append(m.canceledSubscriptions, subscriptionID)
 	return nil
+}
+
+func (m *mockBillingClient) GetSubscriptionPeriodEnd(ctx context.Context, subscriptionID string) (time.Time, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.periodEnd.IsZero() {
+		return time.Now().UTC().Add(30 * 24 * time.Hour), nil
+	}
+	return m.periodEnd, nil
 }
 
 func (m *mockBillingClient) wasCanceled(subscriptionID string) bool {

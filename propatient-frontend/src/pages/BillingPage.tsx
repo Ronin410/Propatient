@@ -2,17 +2,23 @@ import React, { useEffect, useState } from 'react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { getErrorMessage } from '../utils/errorMessage';
+import { formatToLocalDate } from '../utils/dateFormatter';
 import './BillingPage.scss';
 
 interface BillingStatus {
   subscriptionStatus: 'trialing' | 'active' | 'past_due' | 'canceled';
   trialEndsAt: string | null;
   hasPaymentMethod: boolean;
+  // Fecha real de la próxima renovación, consultada a Stripe en vivo (ver
+  // GetBillingStatus en el backend) — null si no hay suscripción activa,
+  // o si Stripe no respondió a tiempo (mejor esfuerzo, el resto del
+  // estatus se sigue mostrando igual).
+  currentPeriodEnd: string | null;
 }
 
-function daysLeft(trialEndsAt: string | null): number {
-  if (!trialEndsAt) return 0;
-  const ms = new Date(trialEndsAt).getTime() - Date.now();
+function daysLeft(dateStr: string | null): number {
+  if (!dateStr) return 0;
+  const ms = new Date(dateStr).getTime() - Date.now();
   return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
 }
 
@@ -110,7 +116,14 @@ export const BillingPage: React.FC = () => {
                 <span className="material-icons-outlined">check_circle</span>
                 <div>
                   <strong>Suscripción activa</strong>
-                  <p>Tu consultorio tiene acceso completo a ProPatient.</p>
+                  {status.currentPeriodEnd ? (
+                    <p>
+                      Se renueva automáticamente en {daysLeft(status.currentPeriodEnd)} días
+                      ({formatToLocalDate(status.currentPeriodEnd)}).
+                    </p>
+                  ) : (
+                    <p>Tu consultorio tiene acceso completo a ProPatient.</p>
+                  )}
                 </div>
               </div>
             )}

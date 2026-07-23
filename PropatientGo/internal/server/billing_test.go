@@ -133,6 +133,53 @@ func TestBilling_WebhookRejectsBadSignature(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
+// TestBilling_ActiveSubscription_IncludesCurrentPeriodEnd confirma que,
+// con una suscripción activa, /billing/status trae la fecha real de la
+// próxima renovación consultada a Stripe (ver
+// billing.Client.GetSubscriptionPeriodEnd) — no solo el status "active" a
+// secas, que no le dice al doctor cuándo es su próximo cobro.
+func TestBilling_ActiveSubscription_IncludesCurrentPeriodEnd(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	mockBilling := newMockBillingClient()
+	expectedEnd := time.Now().UTC().Add(21 * 24 * time.Hour).Truncate(time.Second)
+	mockBilling.periodEnd = expectedEnd
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mustLocalStorage(t), billing.Config{}, mockBilling, geocoding.NewClient(), nil, nil)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_billing_period_end", "password123")
+	require.NoError(t, db.Model(&doc).Updates(map[string]any{
+		"subscription_status":    "active",
+		"stripe_subscription_id": "sub_test_123",
+	}).Error)
+	token := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doRequest(t, router, http.MethodGet, "/api/billing/status", token, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	body := decodeJSON(t, w)
+	assert.Equal(t, "active", body["subscriptionStatus"])
+	require.NotNil(t, body["currentPeriodEnd"])
+	got, err := time.Parse(time.RFC3339, body["currentPeriodEnd"].(string))
+	require.NoError(t, err)
+	assert.WithinDuration(t, expectedEnd, got, time.Second)
+}
+
+// TestBilling_TrialingSubscription_OmitsCurrentPeriodEnd confirma que un
+// doctor en prueba (sin suscripción activa todavía) no trae
+// currentPeriodEnd — esa fecha solo existe una vez que Stripe está
+// cobrando de verdad.
+func TestBilling_TrialingSubscription_OmitsCurrentPeriodEnd(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_billing_still_trial", "password123")
+	token := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doRequest(t, router, http.MethodGet, "/api/billing/status", token, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	body := decodeJSON(t, w)
+	assert.Equal(t, "trialing", body["subscriptionStatus"])
+	assert.Nil(t, body["currentPeriodEnd"])
+}
+
 func mustLocalStorage(t *testing.T) storage.Client {
 	t.Helper()
 	client, err := storage.NewClient(t.Context(), storage.Config{})
