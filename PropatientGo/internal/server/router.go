@@ -270,6 +270,17 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 				billingRoutes.POST("/portal", handlers.CreatePortalSession(db, billingClient))
 			}
 
+			// Código de invitación entre doctores: fuera de
+			// RequireActiveSubscription a propósito (mismo motivo que
+			// /billing) — el propio handler exige suscripción individual
+			// activa antes de devolver el código, así que no hace falta
+			// duplicar esa condición en el middleware.
+			doctorRoutes := protected.Group("/doctor")
+			doctorRoutes.Use(auth.RequireDoctorRole())
+			{
+				doctorRoutes.GET("/referral-code", handlers.GetReferralCode(db))
+			}
+
 			// Clínica: también fuera de RequireActiveSubscription a propósito,
 			// mismo motivo que /billing — un doctor invitado a una clínica
 			// puede tener su propia prueba/suscripción vencida y aun así debe

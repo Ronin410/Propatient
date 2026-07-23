@@ -3,6 +3,7 @@ import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { getErrorMessage } from '../utils/errorMessage';
 import { formatToLocalDate } from '../utils/dateFormatter';
+import { Popup } from '../components/Popup';
 import './BillingPage.scss';
 
 interface BillingStatus {
@@ -14,6 +15,14 @@ interface BillingStatus {
   // o si Stripe no respondió a tiempo (mejor esfuerzo, el resto del
   // estatus se sigue mostrando igual).
   currentPeriodEnd: string | null;
+}
+
+interface ReferralInfo {
+  code: string;
+  totalReferrals: number;
+  rewardedReferrals: number;
+  remainingSlots: number;
+  maxReferrals: number;
 }
 
 function daysLeft(dateStr: string | null): number {
@@ -37,6 +46,9 @@ export const BillingPage: React.FC = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [referral, setReferral] = useState<ReferralInfo | null>(null);
+  const [copyPopupOpen, setCopyPopupOpen] = useState(false);
+
   useEffect(() => {
     if (isStaff) return;
     api.get('/billing/status')
@@ -46,6 +58,27 @@ export const BillingPage: React.FC = () => {
     // Limpia los parámetros de la URL para que no se repita el aviso al recargar.
     window.history.replaceState({}, '', window.location.pathname);
   }, [isStaff]);
+
+  // El código de invitación solo existe una vez que la suscripción está
+  // activa (ver handlers.GetReferralCode en el backend) — se consulta
+  // aparte, después de que /billing/status confirme ese estado.
+  useEffect(() => {
+    if (status?.subscriptionStatus !== 'active') return;
+    api.get('/doctor/referral-code')
+      .then((res) => setReferral(res.data))
+      .catch(() => setReferral(null));
+  }, [status?.subscriptionStatus]);
+
+  const handleCopyReferralCode = async () => {
+    if (!referral) return;
+    try {
+      await navigator.clipboard.writeText(referral.code);
+      setCopyPopupOpen(true);
+    } catch {
+      // Sin permiso de portapapeles: el input de solo lectura de abajo
+      // ya deja al doctor seleccionar y copiar el código a mano.
+    }
+  };
 
   const handleSubscribe = async () => {
     setActionLoading(true);
@@ -159,9 +192,44 @@ export const BillingPage: React.FC = () => {
                 </button>
               )}
             </div>
+
+            {status.subscriptionStatus === 'active' && referral && (
+              <div className="billing-referral">
+                <h2>Invita a un colega, gana una semana gratis</h2>
+                <p>
+                  Comparte tu código. Cuando un colega se registre con él y pague su suscripción,
+                  ambos ganan 1 semana extra gratis.
+                </p>
+                <div className="billing-referral-code-row">
+                  <input
+                    type="text"
+                    readOnly
+                    value={referral.code}
+                    onClick={(e) => (e.target as HTMLInputElement).select()}
+                  />
+                  <button className="btn-secondary" onClick={handleCopyReferralCode}>
+                    Copiar
+                  </button>
+                </div>
+                <p className="billing-referral-progress">
+                  Has invitado a {referral.totalReferrals} colega{referral.totalReferrals === 1 ? '' : 's'} ·{' '}
+                  {referral.rewardedReferrals} semana{referral.rewardedReferrals === 1 ? '' : 's'} ganada
+                  {referral.rewardedReferrals === 1 ? '' : 's'} · quedan {referral.remainingSlots} de{' '}
+                  {referral.maxReferrals}
+                </p>
+              </div>
+            )}
           </>
         ) : null}
       </div>
+
+      <Popup
+        isOpen={copyPopupOpen}
+        type="success"
+        title="¡Código copiado!"
+        message="Ya puedes compartirlo con tu colega."
+        onClose={() => setCopyPopupOpen(false)}
+      />
     </div>
   );
 };

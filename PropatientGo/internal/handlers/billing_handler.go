@@ -10,6 +10,7 @@ import (
 
 	"propatient-api/internal/billing"
 	"propatient-api/internal/models"
+	"propatient-api/internal/referral"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stripe/stripe-go/v81"
@@ -236,6 +237,16 @@ func StripeWebhook(db *gorm.DB, client billing.Client, cfg billing.Config) gin.H
 				log.Printf("⚠️ Webhook checkout.session.completed: client_reference_id inválido (%q): %v", sess.ClientReferenceID, err)
 				break
 			}
+			// StripeSubscriptionID ANTES de actualizar: así se sabe si este
+			// es de verdad el primer pago del doctor (para la recompensa
+			// de referidos, ver abajo) — después del Updates ya no se
+			// podría distinguir un pago nuevo de una renovación.
+			var doctorBefore models.Doctor
+			wasFirstPayment := false
+			if err := db.Select("stripe_subscription_id").First(&doctorBefore, doctorID).Error; err == nil {
+				wasFirstPayment = doctorBefore.StripeSubscriptionID == ""
+			}
+
 			updates := map[string]interface{}{"subscription_status": "active"}
 			if sess.Customer != nil {
 				updates["stripe_customer_id"] = sess.Customer.ID
@@ -250,6 +261,9 @@ func StripeWebhook(db *gorm.DB, client billing.Client, cfg billing.Config) gin.H
 				log.Printf("⚠️ Webhook checkout.session.completed: no existe ningún doctor con id %d", doctorID)
 			} else {
 				log.Printf("✅ Suscripción activada para el doctor %d", doctorID)
+				if wasFirstPayment {
+					referral.GrantRewardIfPending(c.Request.Context(), db, client, uint(doctorID))
+				}
 			}
 
 		case "customer.subscription.updated":
@@ -299,5 +313,46 @@ func StripeWebhook(db *gorm.DB, client billing.Client, cfg billing.Config) gin.H
 		}
 
 		c.JSON(http.StatusOK, gin.H{"received": true})
+	}
+}
+
+// GetReferralCode expone el código de invitación del doctor autenticado
+// más cuántos colegas ha invitado — solo disponible con suscripción
+// individual activa (ver referral.ApplyCodeIfValid/GrantRewardIfPending
+// para el resto del mecanismo). Un doctor de clínica no tiene código
+// propio en esta primera versión: su facturación no funciona como una
+// suscripción individual de Stripe, así que empujar trial_end no aplica
+// igual ahí.
+func GetReferralCode(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		doctorID := c.MustGet("doctorID").(uint)
+
+		var doctor models.Doctor
+		if err := db.Select("subscription_status, clinic_id, referral_code").First(&doctor, doctorID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Doctor no encontrado"})
+			return
+		}
+		if doctor.ClinicID != nil || doctor.SubscriptionStatus != "active" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Tu código de invitación estará disponible en cuanto tu suscripción esté activa."})
+			return
+		}
+
+		var totalReferrals int64
+		db.Model(&models.Referral{}).Where("referrer_doctor_id = ?", doctorID).Count(&totalReferrals)
+		var rewardedReferrals int64
+		db.Model(&models.Referral{}).Where("referrer_doctor_id = ? AND status = ?", doctorID, "rewarded").Count(&rewardedReferrals)
+
+		remaining := int64(models.MaxReferralsPerDoctor) - totalReferrals
+		if remaining < 0 {
+			remaining = 0
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"code":              doctor.ReferralCode,
+			"totalReferrals":    totalReferrals,
+			"rewardedReferrals": rewardedReferrals,
+			"remainingSlots":    remaining,
+			"maxReferrals":      models.MaxReferralsPerDoctor,
+		})
 	}
 }

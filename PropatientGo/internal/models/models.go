@@ -117,6 +117,21 @@ type Doctor struct {
 	TermsAcceptedVersion string     `json:"termsAcceptedVersion"`
 	TermsAcceptedIP      string     `json:"-"`
 
+	// Código propio, permanente, para invitar a otros doctores — solo se
+	// muestra una vez que la suscripción está activa (ver
+	// handlers.GetReferralCode). Se genera al crear la cuenta; las
+	// cuentas creadas antes de este campo se rellenan en un paso de
+	// compatibilidad en main.go, mismo patrón que la limpieza de
+	// TrialEndsAt de ahí mismo. json:"-" porque se expone solo a través
+	// de GetReferralCode, no en este payload ya grande.
+	//
+	// Índice normal, NO "uniqueIndex": mismo motivo que PublicSlug arriba
+	// — todas las filas existentes arrancan en "" y un índice único
+	// chocaría en cuanto haya dos. generateReferralCode ya garantiza
+	// unicidad a nivel de aplicación (reintenta contra la tabla antes de
+	// asignar), igual que generateDoctorSlug hace con PublicSlug.
+	ReferralCode string `gorm:"index" json:"-"`
+
 	Patients []Patient `gorm:"many2many:doctor_patients;" json:"-"`
 }
 
@@ -210,6 +225,35 @@ type Review struct {
 	TokenExpiresAt *time.Time `json:"-"`
 	SubmittedAt    *time.Time `json:"submittedAt"`
 }
+
+// Referral registra que un doctor se registró usando el código de
+// invitación de otro (ver Doctor.ReferralCode). Nace en "pending" en
+// cuanto el nuevo doctor captura un código válido al completar su
+// perfil; pasa a "rewarded" solo cuando el PAGO del referido se
+// completa de verdad (ver handlers.grantReferralRewardIfPending desde
+// StripeWebhook) — nunca por el solo hecho de registrarse, para que no
+// se puedan farmear semanas gratis con cuentas que jamás pagan.
+//
+// ReferredDoctorID con uniqueIndex (tabla nueva, sin filas viejas que
+// choquen — a diferencia de Doctor.ReferralCode arriba): un doctor solo
+// puede haber sido referido una vez, sin importar cuántas veces se
+// intente aplicar un código distinto después.
+type Referral struct {
+	ID               uint       `gorm:"primaryKey" json:"id"`
+	CreatedAt        time.Time  `json:"createdAt"`
+	ReferrerDoctorID uint       `gorm:"not null;index" json:"referrerDoctorId"`
+	ReferredDoctorID uint       `gorm:"not null;uniqueIndex" json:"referredDoctorId"`
+	Status           string     `gorm:"default:'pending'" json:"status"` // "pending" | "rewarded"
+	RewardedAt       *time.Time `json:"rewardedAt"`
+}
+
+// MaxReferralsPerDoctor es el tope de invitaciones que un mismo doctor
+// puede tener en vuelo (pendientes + ya premiadas) — pasado este número,
+// cualquier código nuevo que alguien intente usar contra él se rechaza
+// en silencio, indistinguible de un código inválido (decisión explícita
+// del producto: quien lo intenta no debe poder inferir si el código
+// nunca existió o si ya se agotó).
+const MaxReferralsPerDoctor = 10
 
 // Staff representa a un miembro del personal (secretaria/asistente) — una
 // sola identidad (correo/contraseña) que puede estar vinculada a VARIOS

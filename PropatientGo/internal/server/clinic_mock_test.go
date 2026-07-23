@@ -23,7 +23,13 @@ type mockBillingClient struct {
 	// periodEnd es lo que devuelve GetSubscriptionPeriodEnd; por defecto
 	// (zero value) simula 30 días a partir de ahora, como cualquier
 	// suscripción real recién pagada.
-	periodEnd time.Time
+	periodEnd   time.Time
+	extendCalls []mockExtendCall
+}
+
+type mockExtendCall struct {
+	SubscriptionID string
+	Days           int
 }
 
 type mockExtraQtyCall struct {
@@ -79,6 +85,24 @@ func (m *mockBillingClient) GetSubscriptionPeriodEnd(ctx context.Context, subscr
 		return time.Now().UTC().Add(30 * 24 * time.Hour), nil
 	}
 	return m.periodEnd, nil
+}
+
+func (m *mockBillingClient) ExtendSubscriptionByDays(ctx context.Context, subscriptionID string, days int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.extendCalls = append(m.extendCalls, mockExtendCall{SubscriptionID: subscriptionID, Days: days})
+	return nil
+}
+
+func (m *mockBillingClient) wasExtended(subscriptionID string, days int) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, c := range m.extendCalls {
+		if c.SubscriptionID == subscriptionID && c.Days == days {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *mockBillingClient) wasCanceled(subscriptionID string) bool {

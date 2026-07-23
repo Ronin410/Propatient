@@ -120,6 +120,15 @@ type Client interface {
 	// desde el alta), esta fecha solo vive en Stripe y puede recorrerse
 	// con cada pago, así que se consulta en vivo en vez de guardarla.
 	GetSubscriptionPeriodEnd(ctx context.Context, subscriptionID string) (time.Time, error)
+	// ExtendSubscriptionByDays empuja "days" días hacia adelante la
+	// próxima fecha de cobro de una suscripción YA ACTIVA, sin
+	// interrumpir el acceso — usado para dar semanas de regalo (ver
+	// internal/referral). Técnicamente mueve la suscripción a estado
+	// "trialing" en Stripe hasta esa fecha (Stripe no cobra durante un
+	// trial), pero mapStripeSubscriptionStatus ya traduce tanto Active
+	// como Trialing a "active" en nuestra base, así que el doctor nunca
+	// nota el cambio de estado — solo que no le cobran hasta más tarde.
+	ExtendSubscriptionByDays(ctx context.Context, subscriptionID string, days int) error
 }
 
 type realClient struct {
@@ -279,4 +288,19 @@ func (r *realClient) GetSubscriptionPeriodEnd(ctx context.Context, subscriptionI
 		return time.Time{}, err
 	}
 	return time.Unix(sub.CurrentPeriodEnd, 0).UTC(), nil
+}
+
+func (r *realClient) ExtendSubscriptionByDays(ctx context.Context, subscriptionID string, days int) error {
+	currentEnd, err := r.GetSubscriptionPeriodEnd(ctx, subscriptionID)
+	if err != nil {
+		return err
+	}
+	newEnd := currentEnd.Add(time.Duration(days) * 24 * time.Hour)
+	params := &stripe.SubscriptionParams{
+		TrialEnd:          stripe.Int64(newEnd.Unix()),
+		ProrationBehavior: stripe.String("none"),
+	}
+	params.Context = ctx
+	_, err = subscription.Update(subscriptionID, params)
+	return err
 }

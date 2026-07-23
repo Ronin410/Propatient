@@ -10,6 +10,7 @@ import (
 	"propatient-api/internal/billing"
 	"propatient-api/internal/geocoding"
 	"propatient-api/internal/models"
+	"propatient-api/internal/referral"
 	"propatient-api/internal/storage"
 	"strings"
 	"time"
@@ -77,6 +78,13 @@ func GoogleLoginHandler(db *gorm.DB) gin.HandlerFunc {
 				generatedUsername := strings.Split(claims.Email, "@")[0]
 
 				trialEndsAt := time.Now().UTC().Add(billing.TrialDuration)
+				// Mejor esfuerzo: sin código no se bloquea el registro — si
+				// falla, main.go lo rellena en el siguiente arranque (ver
+				// la migración de compatibilidad ahí).
+				referralCode, codeErr := referral.GenerateCode(db)
+				if codeErr != nil {
+					log.Printf("⚠️ No se pudo generar el código de invitación para %s: %v", claims.Email, codeErr)
+				}
 				doctor = models.Doctor{
 					Username:           generatedUsername,
 					Email:              claims.Email,
@@ -85,6 +93,7 @@ func GoogleLoginHandler(db *gorm.DB) gin.HandlerFunc {
 					CedulaValidated:    "VACIO",
 					SubscriptionStatus: "trialing",
 					TrialEndsAt:        &trialEndsAt,
+					ReferralCode:       referralCode,
 				}
 
 				if err := db.Create(&doctor).Error; err != nil {
@@ -172,6 +181,10 @@ func UpdateProfileHandler(db *gorm.DB, geoClient geocoding.Client) gin.HandlerFu
 			// del registro; ver geocoding.ResolveCoordinates.
 			Latitude  string `json:"latitude"`
 			Longitude string `json:"longitude"`
+			// Código de invitación de otro doctor (opcional) — ver
+			// referral.ApplyCodeIfValid. Nunca bloquea el guardado del
+			// resto del perfil, sea válido o no.
+			ReferralCode string `json:"referralCode"`
 		}
 
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -220,7 +233,9 @@ func UpdateProfileHandler(db *gorm.DB, geoClient geocoding.Client) gin.HandlerFu
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"message": "Perfil actualizado exitosamente"})
+		referralCodeApplied := referral.ApplyCodeIfValid(db, doctorID.(uint), req.ReferralCode)
+
+		c.JSON(http.StatusOK, gin.H{"message": "Perfil actualizado exitosamente", "referralCodeApplied": referralCodeApplied})
 	}
 }
 
@@ -422,6 +437,10 @@ func RegisterDoctor(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		trialEndsAt := time.Now().UTC().Add(billing.TrialDuration)
+		referralCode, codeErr := referral.GenerateCode(db)
+		if codeErr != nil {
+			log.Printf("⚠️ No se pudo generar el código de invitación para %s: %v", req.Email, codeErr)
+		}
 		doctor := models.Doctor{
 			Username:           req.Username,
 			PasswordHash:       string(hashedPassword),
@@ -430,6 +449,7 @@ func RegisterDoctor(db *gorm.DB) gin.HandlerFunc {
 			MedicalSpecialty:   req.Specialty,
 			SubscriptionStatus: "trialing",
 			TrialEndsAt:        &trialEndsAt,
+			ReferralCode:       referralCode,
 		}
 
 		if err := db.Create(&doctor).Error; err != nil {

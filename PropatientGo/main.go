@@ -9,6 +9,7 @@ import (
 	"propatient-api/internal/database"
 	"propatient-api/internal/models"
 	"propatient-api/internal/observability"
+	"propatient-api/internal/referral"
 	"propatient-api/internal/server"
 	"propatient-api/internal/whatsapp"
 	"propatient-api/internal/workers"
@@ -53,7 +54,7 @@ func main() {
 	}
 
 	// 3. Automigración y Seed
-	db.AutoMigrate(&models.Doctor{}, &models.Patient{}, &models.MedicalHistory{}, &models.Appointment{}, &models.MedicalDocument{}, &models.DoctorTemplate{}, &models.Staff{}, &models.DoctorStaff{}, &models.SuperAdmin{}, &models.DoctorSchedule{}, &models.DoctorGalleryImage{}, &models.Review{}, &models.PushSubscription{}, &models.Clinic{}, &models.AuditLog{}, &models.AppointmentNoteHistory{}, &models.Cie10Code{}, &models.ConsentRecord{})
+	db.AutoMigrate(&models.Doctor{}, &models.Patient{}, &models.MedicalHistory{}, &models.Appointment{}, &models.MedicalDocument{}, &models.DoctorTemplate{}, &models.Staff{}, &models.DoctorStaff{}, &models.SuperAdmin{}, &models.DoctorSchedule{}, &models.DoctorGalleryImage{}, &models.Review{}, &models.PushSubscription{}, &models.Clinic{}, &models.AuditLog{}, &models.AppointmentNoteHistory{}, &models.Cie10Code{}, &models.ConsentRecord{}, &models.Referral{})
 
 	// Migración de compatibilidad: Staff dejó de pertenecer a un solo
 	// doctor (columnas doctor_id/active) y ahora se vincula a uno o más
@@ -104,6 +105,25 @@ func main() {
 		"UPDATE doctors SET subscription_status = 'trialing', trial_ends_at = NOW() + INTERVAL '30 days' WHERE trial_ends_at IS NULL",
 	).Error; err != nil {
 		log.Println("Aviso: no se pudo aplicar el periodo de gracia de suscripción a doctores existentes:", err)
+	}
+
+	// Migración de compatibilidad para el sistema de código de invitación:
+	// los doctores que ya existían antes de este campo tienen ReferralCode
+	// vacío. Se rellena en Go (no en SQL crudo) porque cada fila necesita un
+	// valor aleatorio propio y único.
+	var doctorsWithoutCode []models.Doctor
+	if err := db.Select("id").Where("referral_code = ''").Find(&doctorsWithoutCode).Error; err != nil {
+		log.Println("Aviso: no se pudo leer la lista de doctores sin código de invitación:", err)
+	}
+	for _, d := range doctorsWithoutCode {
+		code, err := referral.GenerateCode(db)
+		if err != nil {
+			log.Printf("Aviso: no se pudo generar código de invitación para el doctor %d: %v", d.ID, err)
+			continue
+		}
+		if err := db.Model(&models.Doctor{}).Where("id = ?", d.ID).Update("referral_code", code).Error; err != nil {
+			log.Printf("Aviso: no se pudo asignar código de invitación al doctor %d: %v", d.ID, err)
+		}
 	}
 
 	database.SeedDatabase(db)
