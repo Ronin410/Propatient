@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -95,14 +96,33 @@ type Client interface {
 // de que existieran las plantillas. client puede ser nil (Twilio no
 // configurado), en cuyo caso no hace nada, igual que los call sites hacían
 // antes de este cambio.
+//
+// Loguea el intento ANTES de llamar a Twilio (para poder confirmar en los
+// logs de Render que sí se está intentando, no solo cuando falla — cada
+// call site ya loguea su propio error con más contexto, así que aquí solo
+// se agrega la confirmación de intento/éxito) y, si Twilio acepta el
+// mensaje, un "entregado a Twilio" — que confirma que la API lo aceptó,
+// no que ya llegó al teléfono (eso Twilio lo procesa de forma asíncrona).
 func SendWithFallback(ctx context.Context, client Client, toPhone, contentSID string, variables map[string]string, fallbackBody string) error {
 	if client == nil {
+		log.Printf("ℹ️ WhatsApp no configurado (sin credenciales de Twilio) — se omite el envío a %s", toPhone)
 		return nil
 	}
+	to := NormalizeE164(toPhone)
 	if contentSID != "" {
-		return client.SendTemplate(ctx, toPhone, contentSID, variables)
+		log.Printf("📲 Enviando WhatsApp con plantilla %s a %s...", contentSID, to)
+		if err := client.SendTemplate(ctx, toPhone, contentSID, variables); err != nil {
+			return err
+		}
+		log.Printf("✅ WhatsApp con plantilla %s entregado a Twilio para %s", contentSID, to)
+		return nil
 	}
-	return client.SendMessage(ctx, toPhone, fallbackBody)
+	log.Printf("📲 Enviando WhatsApp en texto libre a %s...", to)
+	if err := client.SendMessage(ctx, toPhone, fallbackBody); err != nil {
+		return err
+	}
+	log.Printf("✅ WhatsApp en texto libre entregado a Twilio para %s", to)
+	return nil
 }
 
 type twilioClient struct {
