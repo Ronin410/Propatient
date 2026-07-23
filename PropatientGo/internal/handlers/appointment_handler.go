@@ -181,6 +181,7 @@ func CreateAppointment(db *gorm.DB, calClient googlecalendar.Client) gin.Handler
 			Notes:               req.Notes,              // Asegúrate de agregar Notes al struct Appointment
 			Status:              "PENDING",              // Estado inicial por defecto
 			RegistrationStatus:  req.RegistrationStatus, // Asegúrate de agregar este campo al struct Appointment
+			Source:              "DOCTOR",
 		}
 
 		if err := db.Create(&appointment).Error; err != nil {

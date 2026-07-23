@@ -286,6 +286,7 @@ func CreatePublicAppointment(db *gorm.DB, waClient whatsapp.Client, waTemplates 
 			Reason:              req.Reason,
 			Status:              "PENDING_CONFIRMATION",
 			RegistrationStatus:  "PENDING_RECORD",
+			Source:              "PUBLIC",
 		}
 		if err := db.Create(&appointment).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo registrar tu solicitud de cita"})

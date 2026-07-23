@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import adminApi from '../api/adminAxios';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Popup } from '../components/Popup';
@@ -77,6 +77,10 @@ export const AdminPendingDoctors: React.FC = () => {
           <span className="material-icons-outlined">fact_check</span>
           Cédulas pendientes de revisión
         </h1>
+        <nav className="admin-nav">
+          <Link to="/admin/doctores">Doctores</Link>
+          <Link to="/admin/pendientes" className="active">Cédulas pendientes</Link>
+        </nav>
         <button className="admin-logout-btn" onClick={handleLogout}>
           <span className="material-icons-outlined">logout</span>
           Cerrar sesión

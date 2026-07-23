@@ -36,6 +36,7 @@ const TermsOfServiceContent = lazy(() => import('./pages/TermsOfServiceContent')
 // totalmente separada de la del doctor (ver AdminProtectedRoute).
 const AdminLogin = lazy(() => import('./pages/AdminLogin').then((m) => ({ default: m.AdminLogin })));
 const AdminPendingDoctors = lazy(() => import('./pages/AdminPendingDoctors').then((m) => ({ default: m.AdminPendingDoctors })));
+const AdminDoctors = lazy(() => import('./pages/AdminDoctors').then((m) => ({ default: m.AdminDoctors })));
 import { AdminProtectedRoute } from './components/AdminProtectedRoute';
 
 // Nuevas Pantallas que estamos migrando
@@ -142,6 +143,14 @@ function App() {
               element={
                 <AdminProtectedRoute>
                   <AdminPendingDoctors />
+                </AdminProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/doctores"
+              element={
+                <AdminProtectedRoute>
+                  <AdminDoctors />
                 </AdminProtectedRoute>
               }
             />

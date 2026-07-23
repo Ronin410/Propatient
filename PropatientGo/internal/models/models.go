@@ -334,7 +334,16 @@ type Appointment struct {
 	AppointmentDateTime time.Time      `json:"appointmentDateTime"` // Asegurar que coincida con el .ts de Angular
 	Reason              string         `json:"reason"`
 	Status              string         `gorm:"default:'PENDING'" json:"status"`
-	Diagnosis           string         `gorm:"type:text" json:"diagnosis"`
+	// Quién originó la cita: "DOCTOR" (el doctor/personal la agendó
+	// directo) o "PUBLIC" (el paciente la solicitó desde el directorio
+	// público, ver CreatePublicAppointment). Se fija una sola vez al
+	// crearla y nunca cambia — a diferencia de Status, sigue siendo
+	// consultable después de que una solicitud pública se confirma (ahí
+	// Status pasa a "PENDING" igual que una cita creada por el doctor, y
+	// se perdería la distinción sin este campo). "" en citas creadas
+	// antes de este campo (dato desconocido, no se adivina).
+	Source    string `json:"source"`
+	Diagnosis string `gorm:"type:text" json:"diagnosis"`
 	// Código CIE-10 elegido en el buscador (ver Cie10Code), opcional —
 	// Diagnosis sigue siendo el texto libre que se ve/imprime; este campo
 	// es la versión estructurada para catálogo/interoperabilidad futura
