@@ -212,7 +212,7 @@ func GetClinic(db *gorm.DB) gin.HandlerFunc {
 			// Montos informativos (MXN/mes) — el cobro real vive en Stripe,
 			// esto es solo para que el dueño vea el desglose sin tener que
 			// entrar al portal de facturación.
-			"basePriceDisplay":  5000,
+			"basePriceDisplay":  3200,
 			"extraPriceDisplay": 1000,
 			// Ubicación única de la clínica (ver UpdateClinicLocation) — el
 			// directorio público la usa para TODOS los doctores de esta

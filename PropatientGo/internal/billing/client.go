@@ -31,7 +31,7 @@ const TrialDuration = 14 * 24 * time.Hour
 // ClinicBaseIncludedDoctors: cuántos doctores cubre el precio base de la
 // clínica (STRIPE_CLINIC_BASE_PRICE_ID) antes de empezar a cobrar el
 // extra por cabeza (STRIPE_CLINIC_EXTRA_DOCTOR_PRICE_ID). Decisión de
-// producto: $5,000 MXN/mes cubre hasta 5 doctores, $1,000 MXN/mes por
+// producto: $3,200 MXN/mes cubre hasta 5 doctores, $1,000 MXN/mes por
 // cada uno adicional.
 const ClinicBaseIncludedDoctors = 5
 

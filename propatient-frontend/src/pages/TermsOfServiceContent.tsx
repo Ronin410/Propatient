@@ -102,7 +102,7 @@ export const TermsOfServiceContent: React.FC = () => {
             de periodos ya cobrados.
           </li>
           <li>
-            <strong>Plan de clínica:</strong> tarifa base de $5,000.00 MXN mensuales (incluye hasta 5
+            <strong>Plan de clínica:</strong> tarifa base de $3,200.00 MXN mensuales (incluye hasta 5
             doctores vinculados), más $1,000.00 MXN mensuales por cada doctor adicional. Este plan no
             tiene periodo de prueba.
           </li>
