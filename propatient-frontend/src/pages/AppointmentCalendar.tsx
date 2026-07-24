@@ -5,6 +5,7 @@ import { formatToLocalTime, formatToLocalDate, toLocalDateKey } from '../utils/d
 import type { Appointment } from '../types';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
+import { getErrorMessage } from '../utils/errorMessage';
 import './AppointmentCalendar.scss';
 
 export const AppointmentCalendar: React.FC = () => {
@@ -24,17 +25,92 @@ export const AppointmentCalendar: React.FC = () => {
 
   const MAX_VISIBLE_EVENTS = 3;
 
+  // Cita pendiente para un día POSTERIOR a hoy: gestionar (cancelar/
+  // reprogramar) en vez de dejarla abrirse para consulta — ver manageApp
+  // más abajo. Comparación de strings "YYYY-MM-DD" en vez de timestamps
+  // para no tener que lidiar con horas/zonas horarias, igual que
+  // toLocalDateKey ya usa en el resto de este archivo.
+  const [manageApp, setManageApp] = useState<Appointment | null>(null);
+  const [rescheduleMode, setRescheduleMode] = useState(false);
+  const [newDateTime, setNewDateTime] = useState('');
+  const [rescheduling, setRescheduling] = useState(false);
+  const [rescheduleError, setRescheduleError] = useState<string | null>(null);
+  const [appToCancel, setAppToCancel] = useState<Appointment | null>(null);
+
   // El personal nunca puede iniciar consultas (/consulta/:id ya está
   // protegida por DoctorOnlyRoute); para citas PENDING del doctor, en vez
   // de ir directo al expediente se pide confirmar antes de iniciar —
   // mismo criterio que el botón "Iniciar Atención" de AppointmentTracking.
+  // Pero si la cita es de un día futuro, ni el doctor ni el personal deben
+  // poder "iniciarla" todavía (ver manageApp arriba): solo cancelarla o
+  // reprogramarla desde aquí.
   const handleEventClick = (ev: Appointment) => {
     setDayViewDate(null);
     const statusStr = (ev.status || '').toLowerCase();
+    const isFutureDay = ev.appointmentDateTime
+      ? toLocalDateKey(ev.appointmentDateTime) > toISODate(new Date())
+      : false;
+
+    if (statusStr === 'pending' && isFutureDay) {
+      setManageApp(ev);
+      return;
+    }
     if (!isStaff && statusStr === 'pending') {
       setSelectedApp(ev);
     } else {
       navigate(`/pacientes/${ev.patientId}`);
+    }
+  };
+
+  // Convierte un ISO string a formato "YYYY-MM-DDTHH:mm" en hora local,
+  // como lo espera un <input type="datetime-local"> — mismo helper que
+  // usa AppointmentTracking.tsx para su propio modal de reprogramar.
+  const toDatetimeLocalValue = (iso: string) => {
+    const d = new Date(iso);
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const closeManageModal = () => {
+    setManageApp(null);
+    setRescheduleMode(false);
+    setRescheduleError(null);
+  };
+
+  const handleStartReschedule = () => {
+    if (!manageApp) return;
+    setNewDateTime(toDatetimeLocalValue(manageApp.appointmentDateTime));
+    setRescheduleError(null);
+    setRescheduleMode(true);
+  };
+
+  const handleConfirmReschedule = async () => {
+    if (!manageApp || !newDateTime) return;
+    setRescheduling(true);
+    setRescheduleError(null);
+    try {
+      await api.put(`/appointments/${manageApp.id}`, {
+        appointmentDateTime: new Date(newDateTime).toISOString(),
+      });
+      closeManageModal();
+      fetchAppointments();
+    } catch (err) {
+      setRescheduleError(getErrorMessage(err, 'No se pudo reprogramar la cita. Intenta de nuevo.'));
+    } finally {
+      setRescheduling(false);
+    }
+  };
+
+  const handleCancelConfirmed = async () => {
+    if (!appToCancel) return;
+    const id = appToCancel.id;
+    try {
+      await api.put(`/appointments/${id}/cancel`);
+      setAppToCancel(null);
+      fetchAppointments();
+    } catch (err) {
+      console.error('Error al cancelar la cita:', err);
+      setAppToCancel(null);
     }
   };
 
@@ -331,6 +407,75 @@ export const AppointmentCalendar: React.FC = () => {
           setSelectedApp(null);
         }}
         onCancel={() => setSelectedApp(null)}
+      />
+
+      {manageApp && (
+        <div className="manage-appt-overlay" onClick={closeManageModal}>
+          <div className="manage-appt-content" onClick={(e) => e.stopPropagation()}>
+            {!rescheduleMode ? (
+              <>
+                <div className="manage-appt-header">
+                  <span className="material-icons-outlined alert-icon">event_upcoming</span>
+                  <h3>Cita próxima</h3>
+                </div>
+                <p>
+                  La cita de{' '}
+                  <strong>{manageApp.patient?.firstName || ''} {manageApp.patient?.lastName || ''}</strong>
+                  {' '}es el {formatToLocalDate(manageApp.appointmentDateTime)} a las{' '}
+                  {formatToLocalTime(manageApp.appointmentDateTime)}. Todavía no se puede iniciar la consulta —
+                  eso se habilita hasta el día de la cita. Mientras tanto puedes cancelarla o reprogramarla.
+                </p>
+                <div className="manage-appt-actions">
+                  <button className="btn-text" onClick={closeManageModal}>Cerrar</button>
+                  <button className="btn-text" onClick={handleStartReschedule}>Reprogramar</button>
+                  <button
+                    className="btn-text danger"
+                    onClick={() => { setAppToCancel(manageApp); setManageApp(null); }}
+                  >
+                    Cancelar cita
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="manage-appt-header">
+                  <span className="material-icons-outlined alert-icon">event_repeat</span>
+                  <h3>Reprogramar cita</h3>
+                </div>
+                <p>
+                  Nueva fecha y hora para la cita de: <br />
+                  <strong>{manageApp.patient?.firstName || ''} {manageApp.patient?.lastName || ''}</strong>
+                </p>
+                <input
+                  type="datetime-local"
+                  value={newDateTime}
+                  onChange={(e) => setNewDateTime(e.target.value)}
+                  className="manage-appt-datetime-input"
+                />
+                {rescheduleError && <p className="manage-appt-error">{rescheduleError}</p>}
+                <div className="manage-appt-actions">
+                  <button className="btn-text" onClick={() => setRescheduleMode(false)} disabled={rescheduling}>
+                    Regresar
+                  </button>
+                  <button className="btn-primary" onClick={handleConfirmReschedule} disabled={rescheduling || !newDateTime}>
+                    {rescheduling ? 'Guardando...' : 'Confirmar Nueva Fecha'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      <ConfirmDialog
+        isOpen={!!appToCancel}
+        variant="danger"
+        title="Cancelar cita"
+        message={`¿Seguro que quieres cancelar la cita de ${appToCancel?.patient?.firstName || 'este paciente'}? Esta acción no se puede deshacer.`}
+        confirmText="Sí, cancelar"
+        cancelText="Regresar"
+        onConfirm={handleCancelConfirmed}
+        onCancel={() => setAppToCancel(null)}
       />
 
       {dayViewDate && (

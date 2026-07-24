@@ -445,3 +445,111 @@
     }
   }
 }
+
+/* Modal de "cita próxima" (cancelar/reprogramar) — se abre al elegir una
+   cita PENDING de un día futuro (ver manageApp en AppointmentCalendar.tsx),
+   ya que ese día no se puede "iniciar consulta" todavía. Mismo lenguaje
+   visual que .day-view-overlay de arriba y que el modal de reprogramar de
+   AppointmentTracking.scss (pero con sus propias clases, ese archivo las
+   deja scoped a .tracking-page). */
+.manage-appt-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+  padding: 1rem;
+
+  .manage-appt-content {
+    background-color: var(--bg);
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    max-width: 420px;
+    width: 100%;
+    padding: 1.6rem;
+    text-align: center;
+  }
+
+  .manage-appt-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 1rem;
+
+    .alert-icon {
+      font-size: 40px;
+      color: var(--color-primary);
+      margin-bottom: 0.6rem;
+    }
+
+    h3 {
+      margin: 0;
+      color: var(--color-heading);
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+  }
+
+  p {
+    font-size: 0.9rem;
+    color: var(--color-secondary);
+    line-height: 1.6;
+    margin: 0 0 1.4rem 0;
+
+    strong { color: var(--color-heading); }
+  }
+
+  .manage-appt-datetime-input {
+    width: 100%;
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--color-heading);
+    margin-bottom: 1rem;
+    box-sizing: border-box;
+  }
+
+  .manage-appt-error {
+    color: var(--color-danger);
+    font-size: 0.85rem;
+    margin: -0.6rem 0 1rem 0 !important;
+  }
+
+  .manage-appt-actions {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+
+    .btn-text {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--color-secondary);
+      padding: 0.6rem 1rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+
+      &:hover { background-color: var(--bg-subtle); }
+
+      &.danger {
+        color: var(--color-danger);
+        border-color: var(--color-danger);
+
+        &:hover { background-color: var(--color-danger-bg); }
+      }
+    }
+
+    .btn-primary {
+      padding: 0.6rem 1.2rem;
+    }
+  }
+}
