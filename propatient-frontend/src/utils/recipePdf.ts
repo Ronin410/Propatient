@@ -23,15 +23,22 @@ export function getBase64FromUrl(url: string): Promise<string> {
     img.src = url;
 
     img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('No se pudo procesar el canvas');
         ctx.drawImage(img, 0, 0);
+        // toDataURL truena con SecurityError si el servidor de la imagen no
+        // manda Access-Control-Allow-Origin (canvas "manchado"/tainted) —
+        // sin este try/catch esa excepción quedaba sin capturar dentro del
+        // callback y la promesa nunca se resolvía NI se rechazaba, dejando
+        // que el único respaldo fuera esperar el timeout completo de
+        // getBase64FromUrlWithTimeout en vez de fallar de inmediato.
         resolve(canvas.toDataURL('image/png'));
-      } else {
-        reject(new Error('No se pudo procesar el canvas'));
+      } catch (err) {
+        reject(err);
       }
     };
     img.onerror = (error) => reject(error);
@@ -105,11 +112,16 @@ export async function buildRecipeDocDefinition({
   // una marca real en vez de un placeholder de texto.
   let logoBase64 = '';
   if (doctorInfo?.logoUrl) {
+    const cleanFullUrl = toAbsoluteFileUrl(doctorInfo.logoUrl);
     try {
-      const cleanFullUrl = toAbsoluteFileUrl(doctorInfo.logoUrl);
       logoBase64 = await getBase64FromUrlWithTimeout(cleanFullUrl);
     } catch (err) {
-      console.error('No se pudo cargar el logo del doctor, se usará el de ProPatient:', err);
+      // Se deja el detalle completo (URL + error real) en consola: la
+      // causa típica de esto es que el servidor donde vive la imagen
+      // (S3, u otro origen) no manda Access-Control-Allow-Origin para el
+      // origen del frontend, lo cual solo se puede diagnosticar viendo
+      // el error real, no solo "falló".
+      console.error(`No se pudo cargar el logo del doctor desde ${cleanFullUrl}, se usará el de ProPatient:`, err);
       logoBase64 = '';
     }
   }
@@ -180,7 +192,7 @@ export async function buildRecipeDocDefinition({
       },
       {
         canvas: [{ type: 'line', x1: 0, y1: 0, x2: 532, y2: 0, lineWidth: 1.5, lineColor: '#1a365d' }],
-        margin: [0, 6, 0, 4],
+        margin: [0, 2, 0, 10],
       },
       {
         style: 'patientTable',
@@ -204,8 +216,8 @@ export async function buildRecipeDocDefinition({
           vLineWidth: () => 0.5,
           hLineColor: () => '#cbd5e0',
           vLineColor: () => '#cbd5e0',
-          paddingTop: () => 5,
-          paddingBottom: () => 5,
+          paddingTop: () => 7,
+          paddingBottom: () => 7,
           paddingLeft: () => 10,
           paddingRight: () => 10,
           fillColor: (rowIndex: number) => (rowIndex === 0 ? '#f0f5fa' : null),
@@ -218,9 +230,9 @@ export async function buildRecipeDocDefinition({
       signatureBlock,
     ],
     styles: {
-      doctorName: { fontSize: 15, bold: true, color: '#1a365d', alignment: 'right', margin: [0, 0, 0, 3] },
-      doctorSpecialty: { fontSize: 10, bold: true, color: '#4a5568', alignment: 'right' },
-      doctorSub: { fontSize: 9, color: '#718096', alignment: 'right' },
+      doctorName: { fontSize: 17, bold: true, color: '#1a365d', alignment: 'right', margin: [0, 0, 0, 3] },
+      doctorSpecialty: { fontSize: 12, bold: true, color: '#4a5568', alignment: 'right' },
+      doctorSub: { fontSize: 11, color: '#718096', alignment: 'right' },
       patientTable: { margin: [0, 0, 0, 10] },
       tableCell: { fontSize: 10, color: '#2d3748' },
       tableCellBold: { fontSize: 10, bold: true, color: '#1a365d' },
