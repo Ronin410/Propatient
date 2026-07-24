@@ -95,6 +95,69 @@ func TestPublicDoctors_OnlyShowsOptedInAndActive(t *testing.T) {
 	assert.Equal(t, "Dr. Activo", doctors[0]["fullName"])
 }
 
+// TestPublicDoctors_ClinicMember_ShowsClinicAddressNotOwn confirma que un
+// doctor de clínica aparece en el directorio con la dirección DE LA
+// CLÍNICA, no la propia que tenía guardada de antes — un consultorio de
+// clínica no es "movible" por cada doctor por separado (ver
+// handlers.UpdateClinicLocation).
+func TestPublicDoctors_ClinicMember_ShowsClinicAddressNotOwn(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), nil, nil)
+
+	owner := testutil.CreateTestDoctor(t, db, "doc_clinic_pub_owner", "password123")
+	clinicLat, clinicLng := 20.1, -103.1
+	clinic := models.Clinic{
+		Name: "Clínica Pública", OwnerDoctorID: owner.ID, SubscriptionStatus: "active",
+		Address: "Dirección de la Clínica 100", Latitude: &clinicLat, Longitude: &clinicLng,
+	}
+	require.NoError(t, db.Create(&clinic).Error)
+
+	member := testutil.CreateTestDoctor(t, db, "doc_clinic_pub_member", "password123")
+	ownLat, ownLng := 19.0, -99.0
+	require.NoError(t, db.Model(&member).Updates(map[string]any{
+		"clinic_id": clinic.ID, "public_listed": true, "public_slug": "dr-clinica-miembro",
+		"full_name": "Dr. Miembro", "address": "Mi Dirección Propia 200", "latitude": &ownLat, "longitude": &ownLng,
+	}).Error)
+
+	w := doRequest(t, router, http.MethodGet, "/api/public/doctors", "", nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	var doctors []map[string]any
+	decodeJSONList(t, w, &doctors)
+
+	require.Len(t, doctors, 1)
+	assert.Equal(t, "Dirección de la Clínica 100", doctors[0]["address"])
+	assert.InDelta(t, clinicLat, doctors[0]["latitude"], 0.0001)
+	assert.InDelta(t, clinicLng, doctors[0]["longitude"], 0.0001)
+}
+
+// TestPublicDoctorBySlug_ClinicMember_ShowsClinicAddress confirma lo mismo
+// que el test anterior pero en el perfil público individual (/dr/:slug).
+func TestPublicDoctorBySlug_ClinicMember_ShowsClinicAddress(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), nil, nil)
+
+	owner := testutil.CreateTestDoctor(t, db, "doc_clinic_pub_owner2", "password123")
+	clinicLat, clinicLng := 21.5, -104.5
+	clinic := models.Clinic{
+		Name: "Clínica Pública 2", OwnerDoctorID: owner.ID, SubscriptionStatus: "active",
+		Address: "Otra Dirección de Clínica 300", Latitude: &clinicLat, Longitude: &clinicLng,
+	}
+	require.NoError(t, db.Create(&clinic).Error)
+
+	member := testutil.CreateTestDoctor(t, db, "doc_clinic_pub_member2", "password123")
+	require.NoError(t, db.Model(&member).Updates(map[string]any{
+		"clinic_id": clinic.ID, "public_listed": true, "public_slug": "dr-clinica-miembro2",
+		"full_name": "Dr. Miembro Dos", "address": "Dirección propia que no debe verse",
+	}).Error)
+
+	w := doRequest(t, router, http.MethodGet, "/api/public/doctors/dr-clinica-miembro2", "", nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	body := decodeJSON(t, w)
+	assert.Equal(t, "Otra Dirección de Clínica 300", body["address"])
+}
+
 // TestPublicAppointment_FullLifecycle cubre el flujo completo: alguien sin
 // cuenta agenda con un doctor público, la cita nace pendiente de
 // confirmación (no ocupa el horario todavía), y el doctor la confirma.

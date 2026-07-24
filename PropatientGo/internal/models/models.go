@@ -190,6 +190,16 @@ type Clinic struct {
 	// Doctor.SubscriptionStatus, sin "trialing" porque no aplica aquí.
 	SubscriptionStatus string `gorm:"default:'incomplete'" json:"subscriptionStatus"`
 
+	// Ubicación única de la clínica — a diferencia de un doctor
+	// independiente (que tiene su propia dirección editable), un
+	// consultorio de clínica no es "movible" por cada doctor por separado:
+	// solo el dueño la edita aquí (ver handlers.UpdateClinicLocation), y el
+	// directorio público muestra ESTA dirección para todos sus doctores en
+	// vez de la individual de cada quien (ver toPublicDoctorSummary).
+	Address   string   `json:"address"`
+	Latitude  *float64 `json:"latitude"`
+	Longitude *float64 `json:"longitude"`
+
 	StripeCustomerID     string `json:"-"`
 	StripeSubscriptionID string `json:"-"`
 	StripeBaseItemID     string `json:"-"`

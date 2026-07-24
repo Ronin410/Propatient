@@ -38,6 +38,7 @@ interface ProfileData {
   tiktokUrl?: string;
   youtubeUrl?: string;
   websiteUrl?: string;
+  clinicId?: number | null;
 }
 
 export const DoctorProfile = () => {
@@ -63,7 +64,8 @@ export const DoctorProfile = () => {
     twitterUrl: '',
     tiktokUrl: '',
     youtubeUrl: '',
-    websiteUrl: ''
+    websiteUrl: '',
+    clinicId: null
   });
   // Estado único para controlar la configuración del popup genérico
   const [popupConfig, setPopupConfig] = useState({
@@ -76,6 +78,12 @@ export const DoctorProfile = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+  // Dirección de la clínica (si el doctor pertenece a una) — la
+  // administra únicamente quien la creó, desde "Mi Clínica". Se muestra
+  // aquí solo de lectura, en vez de la dirección propia del doctor, ver
+  // GetClinic en el backend.
+  const [clinicAddress, setClinicAddress] = useState<string | null>(null);
 
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -148,6 +156,19 @@ export const DoctorProfile = () => {
 
     fetchProfileData();
   }, []);
+
+  // Si el doctor pertenece a una clínica, la dirección pública la fija
+  // quien la administra (ver "Mi Clínica") — se consulta aparte para
+  // mostrarla de solo lectura en vez de la dirección propia del doctor.
+  useEffect(() => {
+    if (!profile.clinicId) {
+      setClinicAddress(null);
+      return;
+    }
+    api.get('/clinic')
+      .then((res) => setClinicAddress(res.data.address || ''))
+      .catch(() => setClinicAddress(''));
+  }, [profile.clinicId]);
 
   // El callback de Google Calendar (backend) redirige aquí con
   // ?calendar=connected o ?calendar=error tras el consentimiento.
@@ -555,20 +576,32 @@ export const DoctorProfile = () => {
               <input type="text" name="university" value={profile.university} onChange={handleInputChange} />
             </div>
 
-            <div className="form-group full-width">
-              <label>Dirección Física del Consultorio</label>
-              <input type="text" name="address" value={profile.address} onChange={handleInputChange} />
-            </div>
+            {profile.clinicId ? (
+              <div className="form-group full-width">
+                <label>Dirección Física del Consultorio</label>
+                <input type="text" value={clinicAddress ?? 'Cargando...'} disabled readOnly />
+                <p className="field-hint">
+                  Perteneces a una clínica — la ubicación la administra quien la creó, desde "Mi Clínica".
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="form-group full-width">
+                  <label>Dirección Física del Consultorio</label>
+                  <input type="text" name="address" value={profile.address} onChange={handleInputChange} />
+                </div>
 
-            <div className="form-group full-width">
-              <label>Ubicación en el Mapa</label>
-              <LocationPicker
-                address={profile.address}
-                latitude={profile.latitude ?? null}
-                longitude={profile.longitude ?? null}
-                onChange={handleLocationChange}
-              />
-            </div>
+                <div className="form-group full-width">
+                  <label>Ubicación en el Mapa</label>
+                  <LocationPicker
+                    address={profile.address}
+                    latitude={profile.latitude ?? null}
+                    longitude={profile.longitude ?? null}
+                    onChange={handleLocationChange}
+                  />
+                </div>
+              </>
+            )}
 
             <div className="form-group full-width">
               <label>Leyenda Personalizada para Recetas (COFEPRIS)</label>

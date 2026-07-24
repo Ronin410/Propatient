@@ -440,3 +440,67 @@ func TestClinic_Middleware_AllowsMember_WhenClinicActive_EvenIfOwnTrialExpired(t
 	w := doRequest(t, router, http.MethodGet, "/api/patients", token, nil)
 	assert.Equal(t, http.StatusOK, w.Code)
 }
+
+// TestClinic_UpdateClinicLocation_OnlyOwnerCanUpdate confirma que un
+// doctor miembro (no dueño) no puede cambiar la ubicación única de la
+// clínica — el consultorio de clínica no es "movible" por cada doctor.
+func TestClinic_UpdateClinicLocation_OnlyOwnerCanUpdate(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	owner := testutil.CreateTestDoctor(t, db, "doc_clinic_loc_owner1", "password123")
+	clinic := models.Clinic{Name: "Clínica Ubicación", OwnerDoctorID: owner.ID, SubscriptionStatus: "active"}
+	require.NoError(t, db.Create(&clinic).Error)
+	require.NoError(t, db.Model(&owner).Updates(map[string]any{"clinic_id": clinic.ID, "is_clinic_owner": true}).Error)
+
+	member := testutil.CreateTestDoctor(t, db, "doc_clinic_loc_member1", "password123")
+	require.NoError(t, db.Model(&member).Update("clinic_id", clinic.ID).Error)
+
+	token := testutil.TokenFor(t, member.ID, member.Username)
+	w := doRequest(t, router, http.MethodPut, "/api/clinic/location", token, map[string]any{
+		"address": "Calle Falsa 123", "latitude": "20.0", "longitude": "-103.0",
+	})
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+// TestClinic_UpdateClinicLocation_NonClinicDoctor_Returns403 confirma que
+// un doctor independiente (sin clínica) tampoco puede llamar este endpoint.
+func TestClinic_UpdateClinicLocation_NonClinicDoctor_Returns403(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_clinic_loc_indep1", "password123")
+	token := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doRequest(t, router, http.MethodPut, "/api/clinic/location", token, map[string]any{
+		"address": "Calle Falsa 123", "latitude": "20.0", "longitude": "-103.0",
+	})
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+// TestClinic_UpdateClinicLocation_Success_PersistsAddressAndCoordinates
+// confirma el camino feliz: el dueño guarda la dirección/coordenadas, y
+// quedan persistidas en la fila de la clínica.
+func TestClinic_UpdateClinicLocation_Success_PersistsAddressAndCoordinates(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	owner := testutil.CreateTestDoctor(t, db, "doc_clinic_loc_owner2", "password123")
+	clinic := models.Clinic{Name: "Clínica Ubicación 2", OwnerDoctorID: owner.ID, SubscriptionStatus: "active"}
+	require.NoError(t, db.Create(&clinic).Error)
+	require.NoError(t, db.Model(&owner).Updates(map[string]any{"clinic_id": clinic.ID, "is_clinic_owner": true}).Error)
+
+	token := testutil.TokenFor(t, owner.ID, owner.Username)
+	w := doRequest(t, router, http.MethodPut, "/api/clinic/location", token, map[string]any{
+		"address": "Av. Siempre Viva 742", "latitude": "20.6597", "longitude": "-103.3496",
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var updated models.Clinic
+	require.NoError(t, db.First(&updated, clinic.ID).Error)
+	assert.Equal(t, "Av. Siempre Viva 742", updated.Address)
+	require.NotNil(t, updated.Latitude)
+	require.NotNil(t, updated.Longitude)
+	assert.InDelta(t, 20.6597, *updated.Latitude, 0.0001)
+	assert.InDelta(t, -103.3496, *updated.Longitude, 0.0001)
+}

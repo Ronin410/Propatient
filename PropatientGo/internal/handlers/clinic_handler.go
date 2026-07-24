@@ -3,12 +3,14 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"propatient-api/internal/auth"
 	"propatient-api/internal/billing"
+	"propatient-api/internal/geocoding"
 	"propatient-api/internal/models"
 
 	"github.com/gin-gonic/gin"
@@ -206,6 +208,75 @@ func GetClinic(db *gorm.DB) gin.HandlerFunc {
 			// entrar al portal de facturación.
 			"basePriceDisplay":  5000,
 			"extraPriceDisplay": 1000,
+			// Ubicación única de la clínica (ver UpdateClinicLocation) — el
+			// directorio público la usa para TODOS los doctores de esta
+			// clínica en vez de la dirección individual de cada quien.
+			"address":   clinic.Address,
+			"latitude":  clinic.Latitude,
+			"longitude": clinic.Longitude,
+		})
+	}
+}
+
+type updateClinicLocationRequest struct {
+	Address   string `json:"address"`
+	Latitude  string `json:"latitude"`
+	Longitude string `json:"longitude"`
+}
+
+// UpdateClinicLocation deja que SOLO el dueño de la clínica fije la
+// dirección única que el directorio público va a mostrar para todos sus
+// doctores (ver toPublicDoctorSummary en public_handler.go) — un
+// consultorio de clínica no es "movible" por cada doctor por separado, a
+// diferencia de uno independiente.
+func UpdateClinicLocation(db *gorm.DB, geoClient geocoding.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		doctorID := c.MustGet("doctorID").(uint)
+
+		var self models.Doctor
+		if err := db.First(&self, doctorID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Doctor no encontrado"})
+			return
+		}
+		if self.ClinicID == nil || !self.IsClinicOwner {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Solo el dueño de la clínica puede editar su ubicación"})
+			return
+		}
+
+		var clinic models.Clinic
+		if err := db.First(&clinic, *self.ClinicID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Clínica no encontrada"})
+			return
+		}
+
+		var req updateClinicLocationRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Datos inválidos"})
+			return
+		}
+
+		previousAddress := clinic.Address
+		lat, lng, geoErr := geocoding.ResolveCoordinates(
+			c.Request.Context(), geoClient, req.Address, previousAddress, clinic.Latitude, clinic.Longitude,
+			req.Latitude, req.Longitude,
+		)
+		if geoErr != nil {
+			log.Printf("⚠️ No se pudo geocodificar la dirección de la clínica %d: %v", clinic.ID, geoErr)
+		}
+
+		clinic.Address = req.Address
+		clinic.Latitude = lat
+		clinic.Longitude = lng
+		if err := db.Save(&clinic).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo actualizar la ubicación de la clínica"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message":   "Ubicación de la clínica actualizada",
+			"address":   clinic.Address,
+			"latitude":  clinic.Latitude,
+			"longitude": clinic.Longitude,
 		})
 	}
 }

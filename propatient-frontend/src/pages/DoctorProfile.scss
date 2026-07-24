@@ -223,6 +223,13 @@
       border-color: var(--border);
       cursor: not-allowed;
     }
+
+    .field-hint {
+      font-size: 12px;
+      color: var(--color-secondary);
+      margin: 2px 0 0 0;
+      font-weight: 400;
+    }
   }
 
   /* Directorio público */

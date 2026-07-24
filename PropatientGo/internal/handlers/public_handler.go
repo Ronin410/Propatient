@@ -73,17 +73,32 @@ type publicReviewSummary struct {
 	SubmittedAt      time.Time `json:"submittedAt"`
 }
 
-func toPublicDoctorSummary(d models.Doctor) PublicDoctorSummary {
+// toPublicDoctorSummary arma el resumen público de un doctor. clinic es
+// nil para un doctor independiente; si el doctor pertenece a una clínica
+// (d.ClinicID != nil), clinic debe traer esa fila — la dirección/
+// coordenadas que se exponen son las de LA CLÍNICA, no las propias del
+// doctor: un consultorio de clínica no es "movible" por cada doctor por
+// separado, solo el dueño de la clínica la administra (ver
+// handlers.UpdateClinicLocation).
+func toPublicDoctorSummary(d models.Doctor, clinic *models.Clinic) PublicDoctorSummary {
+	address := d.Address
+	lat := d.Latitude
+	lng := d.Longitude
+	if clinic != nil {
+		address = clinic.Address
+		lat = clinic.Latitude
+		lng = clinic.Longitude
+	}
 	return PublicDoctorSummary{
 		ID:               d.ID,
 		FullName:         d.FullName,
 		MedicalSpecialty: d.MedicalSpecialty,
 		PublicBio:        d.PublicBio,
 		AvatarUrl:        d.AvatarUrl,
-		Address:          d.Address,
+		Address:          address,
 		Phone:            d.Phone,
-		Latitude:         d.Latitude,
-		Longitude:        d.Longitude,
+		Latitude:         lat,
+		Longitude:        lng,
 		PublicSlug:       d.PublicSlug,
 		FacebookUrl:      d.FacebookUrl,
 		InstagramUrl:     d.InstagramUrl,
@@ -116,13 +131,40 @@ func GetPublicDoctors(db *gorm.DB, storageClient storage.Client) gin.HandlerFunc
 			return
 		}
 
+		// Una sola consulta para todas las clínicas referenciadas por este
+		// listado (en vez de una consulta por doctor) — el directorio puede
+		// tener muchos doctores de pocas clínicas distintas.
+		clinicIDs := make([]uint, 0)
+		seenClinic := make(map[uint]bool)
+		for _, d := range doctors {
+			if d.ClinicID != nil && !seenClinic[*d.ClinicID] {
+				seenClinic[*d.ClinicID] = true
+				clinicIDs = append(clinicIDs, *d.ClinicID)
+			}
+		}
+		clinicsByID := make(map[uint]models.Clinic, len(clinicIDs))
+		if len(clinicIDs) > 0 {
+			var clinics []models.Clinic
+			if err := db.Where("id IN ?", clinicIDs).Find(&clinics).Error; err == nil {
+				for _, cl := range clinics {
+					clinicsByID[cl.ID] = cl
+				}
+			}
+		}
+
 		summaries := make([]PublicDoctorSummary, 0, len(doctors))
 		for i := range doctors {
 			if !isDoctorAcceptingPublicBookings(doctors[i]) {
 				continue
 			}
 			presignDoctorFiles(c.Request.Context(), storageClient, &doctors[i])
-			summaries = append(summaries, toPublicDoctorSummary(doctors[i]))
+			var clinicPtr *models.Clinic
+			if doctors[i].ClinicID != nil {
+				if cl, ok := clinicsByID[*doctors[i].ClinicID]; ok {
+					clinicPtr = &cl
+				}
+			}
+			summaries = append(summaries, toPublicDoctorSummary(doctors[i], clinicPtr))
 		}
 
 		c.JSON(http.StatusOK, summaries)
@@ -146,7 +188,14 @@ func GetPublicDoctorBySlug(db *gorm.DB, storageClient storage.Client) gin.Handle
 		}
 
 		presignDoctorFiles(c.Request.Context(), storageClient, &doctor)
-		summary := toPublicDoctorSummary(doctor)
+		var clinicPtr *models.Clinic
+		if doctor.ClinicID != nil {
+			var clinic models.Clinic
+			if err := db.First(&clinic, *doctor.ClinicID).Error; err == nil {
+				clinicPtr = &clinic
+			}
+		}
+		summary := toPublicDoctorSummary(doctor, clinicPtr)
 
 		// El horario solo se manda en el perfil individual (donde vive el
 		// formulario de agendar), no en el directorio — evita una consulta

@@ -3,6 +3,7 @@ import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { Popup } from '../components/Popup';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { LocationPicker } from '../components/LocationPicker';
 import { getErrorMessage } from '../utils/errorMessage';
 import './ClinicManagement.scss';
 
@@ -23,6 +24,9 @@ interface ClinicInfo {
   extraDoctors: number;
   basePriceDisplay: number;
   extraPriceDisplay: number;
+  address: string;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 // "No configurado" (503) es distinto de "no perteneces a ninguna" (404):
@@ -48,6 +52,14 @@ export const ClinicManagement: React.FC = () => {
 
   const [doctorToRemove, setDoctorToRemove] = useState<ClinicDoctor | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
+
+  // Ubicación única de la clínica — solo el dueño la edita; el directorio
+  // público la muestra para TODOS los doctores de la clínica en vez de la
+  // dirección individual de cada quien (ver public_handler.go).
+  const [locationAddress, setLocationAddress] = useState('');
+  const [locationLat, setLocationLat] = useState<number | null>(null);
+  const [locationLng, setLocationLng] = useState<number | null>(null);
+  const [savingLocation, setSavingLocation] = useState(false);
 
   const [popupConfig, setPopupConfig] = useState({
     isOpen: false,
@@ -82,6 +94,41 @@ export const ClinicManagement: React.FC = () => {
     fetchClinic();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isStaff]);
+
+  useEffect(() => {
+    if (!clinic) return;
+    setLocationAddress(clinic.address || '');
+    setLocationLat(clinic.latitude ?? null);
+    setLocationLng(clinic.longitude ?? null);
+  }, [clinic]);
+
+  const handleSaveLocation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingLocation(true);
+    try {
+      await api.put('/clinic/location', {
+        address: locationAddress,
+        latitude: locationLat != null ? String(locationLat) : '',
+        longitude: locationLng != null ? String(locationLng) : '',
+      });
+      setPopupConfig({
+        isOpen: true,
+        type: 'success',
+        title: 'Ubicación guardada',
+        message: 'Todos los doctores de la clínica mostrarán esta dirección en el directorio público.',
+      });
+      fetchClinic();
+    } catch (err: unknown) {
+      setPopupConfig({
+        isOpen: true,
+        type: 'error',
+        title: 'No se pudo guardar',
+        message: getErrorMessage(err, 'Ocurrió un error al guardar la ubicación.'),
+      });
+    } finally {
+      setSavingLocation(false);
+    }
+  };
 
   const handleCreateClinic = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -285,6 +332,41 @@ export const ClinicManagement: React.FC = () => {
           <button className="btn-outline-sm" onClick={handleManagePayments} disabled={portalLoading}>
             {portalLoading ? 'Abriendo...' : 'Gestionar pagos'}
           </button>
+        )}
+      </section>
+
+      <section className="card">
+        <h3>Ubicación de la clínica</h3>
+        <p className="clinic-muted">
+          Un consultorio de clínica tiene una sola dirección: todos sus doctores la muestran en el
+          directorio público en vez de su dirección propia.
+        </p>
+        {clinic.isOwner ? (
+          <form className="clinic-create-form" onSubmit={handleSaveLocation}>
+            <div className="form-group">
+              <label>Dirección física</label>
+              <input
+                type="text"
+                value={locationAddress}
+                onChange={(e) => setLocationAddress(e.target.value)}
+                placeholder="Calle, número, colonia, ciudad"
+              />
+            </div>
+            <LocationPicker
+              address={locationAddress}
+              latitude={locationLat}
+              longitude={locationLng}
+              onChange={(lat, lng) => {
+                setLocationLat(lat);
+                setLocationLng(lng);
+              }}
+            />
+            <button type="submit" className="btn-primary" disabled={savingLocation}>
+              {savingLocation ? 'Guardando...' : 'Guardar ubicación'}
+            </button>
+          </form>
+        ) : (
+          <p>{clinic.address || 'Aún no se ha configurado la dirección de la clínica.'}</p>
         )}
       </section>
 
