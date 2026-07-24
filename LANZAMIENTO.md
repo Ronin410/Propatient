@@ -410,11 +410,8 @@ pacientes, doctores y personal.
     cada uno con su finalidad específica.
   - **Google Calendar** — sección 9, con detalle del scope exacto y cómo
     revocarlo.
-  - **Único hueco real que queda**: Google para **login** (OAuth) no
-    tiene su propia declaración de transferencia — solo se le menciona de
-    paso en la sección de cookies (7). Falta una línea explícita
-    declarando qué datos ve Google al iniciar sesión (correo, nombre) —
-    es un ajuste de texto chico, no una sección nueva.
+  - **✅ resuelto** — se agregó Google (login) a la sección 8, con el
+    detalle de qué datos comparte (correo, nombre).
 
 - **Consentimiento para reCAPTCHA/Sentry.** Como se agregaron esta sesión,
   técnicamente califican como "transferencia a terceros" (Google, Sentry)
@@ -481,10 +478,12 @@ Verificado releyendo `TermsOfServiceContent.tsx` completo esta sesión:
   montos exactos de cada plan.
 - Derecho de cancelación — descrito (cancelación vía Stripe, sin
   reembolso de periodos ya cobrados).
-- **Hueco real que queda**: no hay mención explícita del procedimiento
-  para presentar una queja ante PROFECO (canal/domicilio de PROFECO) ni
-  del derecho de retracto — si tu abogado confirma que aplica a un
-  servicio digital recurrente como este, es una sección corta de agregar.
+- **✅ resuelto** — se agregó el canal de queja (profeco.gob.mx) a la
+  sección 7 de Términos. No se incluyó un teléfono porque no pude
+  verificarlo en vivo desde este entorno (mismo bloqueo de proxy de
+  siempre); confírmalo tú o déjaselo al abogado si quieres agregarlo.
+  Derecho de retracto: sigue pendiente de que el abogado confirme si
+  aplica a este tipo de servicio.
 
 ### 6.5 Menores de edad — ✅ resuelto en texto y en código
 
@@ -547,14 +546,14 @@ Privacidad mencionándolo, aunque sea breve.
       plan free, sin resolver.
 - [x] Aviso de Privacidad completo en texto (LFPDPPP, sección 6.1) ✅ —
       falta solo revisión formal de abogado, no redacción
-- [~] Transferencias internacionales de datos declaradas (sección 6.1) —
-      falta solo declarar Google Login (Twilio/Resend/Stripe/S3/Sentry/
-      Calendar ya están)
+- [x] Transferencias internacionales de datos declaradas (sección 6.1) ✅ —
+      Google Login agregado; el resto ya estaba
 - [x] Retención de expediente clínico conforme a NOM-004-SSA3-2012 (sección 6.2) ✅
 - [x] Términos y Condiciones con deslinde de responsabilidad médica (sección 6.3) ✅ —
       falta solo revisión formal de abogado, no redacción
-- [~] Política de cancelación conforme a PROFECO (sección 6.4) — falta
-      solo el canal/procedimiento de queja ante PROFECO
+- [x] Política de cancelación conforme a PROFECO (sección 6.4) ✅ — canal
+      de queja agregado; derecho de retracto sigue pendiente de confirmar
+      con abogado
 - [x] Consentimiento para menores de edad, si aplica (sección 6.5) ✅
 - [ ] CFDI/facturación fiscal (sección 6.6) — sin avance, requiere PAC externo
 - [x] Consentimiento explícito de datos de salud en el booking público ✅

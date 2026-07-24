@@ -169,6 +169,13 @@ export const PrivacyPolicyContent: React.FC = () => {
             <strong>Sentry:</strong> recibe únicamente información técnica de errores del sistema
             (nunca el contenido de un expediente clínico) para poder corregir fallas.
           </li>
+          <li>
+            <strong>Google:</strong> el doctor inicia sesión con su cuenta de Google (Google Identity
+            Services) en vez de crear una contraseña propia — Google confirma a ProPatient su correo,
+            nombre y que la cuenta es real, sin compartir más datos que esos. Si además el doctor
+            conecta su Google Calendar (función opcional), aplica el detalle específico de la
+            sección 9.
+          </li>
         </ul>
       </section>
 

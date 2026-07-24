@@ -111,6 +111,14 @@ export const TermsOfServiceContent: React.FC = () => {
             pero el expediente clínico de tus pacientes se conserva conforme a la sección 13 — no se
             pierde ni se borra de forma automática.
           </li>
+          <li>
+            Si consideras que se vulneró alguno de tus derechos como consumidor en el cobro de tu
+            suscripción, puedes presentar tu queja ante la Procuraduría Federal del Consumidor
+            (PROFECO) a través de{' '}
+            <a href="https://www.profeco.gob.mx" target="_blank" rel="noopener noreferrer">
+              www.profeco.gob.mx
+            </a>, independientemente de cualquier otro medio de contacto directo con ProPatient.
+          </li>
         </ul>
       </section>
 
