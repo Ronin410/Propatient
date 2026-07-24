@@ -192,7 +192,7 @@ export async function buildRecipeDocDefinition({
       },
       {
         canvas: [{ type: 'line', x1: 0, y1: 0, x2: 532, y2: 0, lineWidth: 1.5, lineColor: '#1a365d' }],
-        margin: [0, 2, 0, 10],
+        margin: [0, 2, 0, 6],
       },
       {
         style: 'patientTable',
