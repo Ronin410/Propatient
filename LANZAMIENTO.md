@@ -245,7 +245,8 @@ frontend reales, con tests automatizados):
 
 - Rate limiting por IP en login/registro y en agendar cita pública.
 - Términos y Condiciones (`/terminos`) y Aviso de Privacidad (`/privacidad`)
-  — **siguen siendo placeholders**, ver sección de recomendaciones.
+  — texto completo, específico a como funciona la app (ya no son
+  placeholders); **falta la revisión formal de un abogado**, ver sección 6.
 - Panel interno de administración para aprobar/rechazar cédula profesional
   (`/admin/login`), reemplazando la edición manual por SQL.
 - El doctor de prueba `medico`/`12345` ya NO se crea en producción por
@@ -298,9 +299,10 @@ frontend reales, con tests automatizados):
 ## 🟡 4. Recomendado antes de escalar (no bloquea un lanzamiento piloto)
 
 - **Revisión legal real** del Aviso de Privacidad y los Términos y
-  Condiciones — hoy son placeholders estructurados con un banner de
-  "borrador" bien visible, pensados para que un abogado los complete, no
-  para publicarse tal cual. Ver el desglose completo en la sección 6.
+  Condiciones — el texto ya está completo y específico a como funciona la
+  app (sin placeholders ni banner de "borrador", ver sección 3), pero
+  sigue sin haber sido revisado ni firmado por un abogado. Ver el
+  desglose completo en la sección 6.
 - **Facturación fiscal (CFDI)** si vas a cobrarle formalmente a
   consultorios en México — Stripe no la genera, necesitarías un PAC
   (proveedor autorizado de certificación) aparte. Ver sección 6.6.
@@ -368,21 +370,24 @@ Ley Federal de Protección de Datos Personales en Posesión de los
 Particulares — la ley mexicana que rige todo el manejo de datos de
 pacientes, doctores y personal.
 
-- **Aviso de Privacidad completo.** El Artículo 16 de la LFPDPPP exige que
-  incluya, como mínimo:
-  - Identidad y domicilio del responsable (quién eres tú/tu empresa
-    legalmente, no solo "ProPatient").
-  - Las finalidades del tratamiento de datos (agendar citas, expediente
-    clínico, recetas, facturación, recordatorios, etc. — ya listadas en el
-    borrador, falta completarlas formalmente).
-  - Opciones para limitar el uso o divulgación de los datos.
-  - Los medios para ejercer los derechos ARCO.
-  - Las transferencias de datos que se realicen (ver 6.1.2 abajo).
-  - El procedimiento para comunicar cambios al aviso.
-  - Estado actual: `PrivacyPolicyContent.tsx` tiene la estructura completa
-    con las 9 secciones, pero varias siguen con `[Completar: ...]` —
-    específicamente el responsable legal, el mecanismo de consentimiento,
-    y el procedimiento ARCO necesitan texto real, no placeholder.
+- **Aviso de Privacidad completo — ✅ resuelto en texto** (verificado
+  releyendo el archivo completo esta sesión, ya no hay ningún
+  `[Completar...]`). El Artículo 16 de la LFPDPPP exige, como mínimo, y
+  así está cubierto en `PrivacyPolicyContent.tsx` (12 secciones):
+  - Identidad y domicilio del responsable — sección 1 (responsable con
+    nombre real y correo de contacto).
+  - Las finalidades del tratamiento de datos — sección 2.
+  - Opciones para limitar el uso o divulgación de los datos — sección 3
+    (consentimiento expreso) y 11 (ARCO).
+  - Los medios para ejercer los derechos ARCO — sección 11, con correo de
+    contacto real.
+  - Las transferencias de datos que se realicen — sección 8 (Render, S3,
+    Stripe, Twilio, Resend, Sentry) y 9 (Google Calendar) — ver la nota
+    de abajo sobre Google Login.
+  - El procedimiento para comunicar cambios al aviso — sección 12.
+  - **Lo que sigue pendiente es la revisión formal de un abogado**, no
+    redacción — el texto ya existe y es específico a como funciona la
+    app de verdad.
 
 - **Datos de salud = "datos personales sensibles" (Art. 3, fracción VI).**
   Esto es más estricto que datos personales normales:
@@ -397,20 +402,19 @@ pacientes, doctores y personal.
     tratamientos) cae aquí — es el dato más sensible que maneja el
     sistema.
 
-- **Transferencias internacionales de datos (Art. 36-37).** Usas varios
-  proveedores con sede fuera de México que procesan datos de tus usuarios:
-  - **Google** (login, Calendar, reCAPTCHA) — procesa correo, nombre, y
-    (si se conecta Calendar) datos de citas.
-  - **Twilio** (WhatsApp) — procesa teléfonos y el contenido de los
-    mensajes.
-  - **Resend** (correo) — procesa correos y contenido de los emails.
-  - **Stripe** (pagos) — procesa datos de facturación del doctor.
-  - **AWS S3** (si está configurado) — almacena documentos clínicos,
-    recetas, INE.
-  - La LFPDPPP exige que estas transferencias se declaren explícitamente
-    en el Aviso de Privacidad (ya hay una sección para Google Calendar
-    específicamente, agregada esta sesión — falta extenderla a los demás
-    proveedores).
+- **Transferencias internacionales de datos (Art. 36-37) — ✅ resuelto casi
+  del todo.** Usas varios proveedores con sede fuera de México que
+  procesan datos de tus usuarios, y ya están declarados en
+  `PrivacyPolicyContent.tsx`:
+  - **Twilio, Resend, Stripe, AWS S3, Sentry, Render** — sección 8,
+    cada uno con su finalidad específica.
+  - **Google Calendar** — sección 9, con detalle del scope exacto y cómo
+    revocarlo.
+  - **Único hueco real que queda**: Google para **login** (OAuth) no
+    tiene su propia declaración de transferencia — solo se le menciona de
+    paso en la sección de cookies (7). Falta una línea explícita
+    declarando qué datos ve Google al iniciar sesión (correo, nombre) —
+    es un ajuste de texto chico, no una sección nueva.
 
 - **Consentimiento para reCAPTCHA/Sentry.** Como se agregaron esta sesión,
   técnicamente califican como "transferencia a terceros" (Google, Sentry)
@@ -454,42 +458,44 @@ por alto porque no es "legal" en el sentido usual, es normativa de salud.
   esto es suficiente o si se requiere algo más explícito (ej. un log de
   quién accedió a qué expediente y cuándo).
 
-### 6.3 Términos y Condiciones — responsabilidad médica y de plataforma
+### 6.3 Términos y Condiciones — responsabilidad médica y de plataforma — ✅ resuelto en texto
 
-- **El punto más importante**: dejar clarísimo que ProPatient es una
-  **herramienta de gestión de consultorio**, no presta servicios médicos
-  ni sustituye el criterio clínico del doctor — la responsabilidad de la
-  atención médica es exclusivamente del doctor que la brinda, no de la
-  plataforma. Sin esta cláusula bien redactada, ProPatient queda expuesto
-  legalmente a reclamos que le corresponden al doctor (mala praxis,
-  errores de diagnóstico, etc.).
-- **Límites de responsabilidad técnica**: qué pasa si el sistema tiene una
-  caída y un doctor pierde acceso a una cita programada, o si un
-  recordatorio de WhatsApp no llega — cláusulas estándar de SaaS
-  (disponibilidad "best effort", no garantía de 100% uptime salvo que se
-  ofrezca un SLA formal).
-- **Política de cancelación de la cuenta/suscripción** y qué pasa con los
-  datos del doctor si cancela (ver también 6.1: el expediente clínico se
-  conserva por NOM-004 aunque la cuenta se cancele).
+Verificado releyendo `TermsOfServiceContent.tsx` completo esta sesión:
 
-### 6.4 PROFECO (protección al consumidor)
+- **El punto más importante** — sección 4 ("ProPatient no presta
+  servicios médicos"): deja clarísimo que la responsabilidad de la
+  atención médica es exclusivamente del doctor, con referencia explícita
+  a la NOM-004-SSA3-2012.
+- **Límites de responsabilidad técnica** — sección 9 ("Disponibilidad del
+  servicio") cubre caídas del sistema y fallas de Twilio/Resend/Google
+  Calendar; sección 10 ("Limitación de responsabilidad") tiene un límite
+  económico concreto (el importe pagado en los tres meses previos al
+  reclamo), no un placeholder.
+- **Política de cancelación** — sección 7 (precios exactos + cancelación
+  vía Stripe) y sección 13 (retención de datos tras cancelar, coincide
+  con NOM-004). Pendiente: revisión formal de abogado, no redacción.
 
-Aplica porque cobras una **suscripción recurrente** a los doctores:
+### 6.4 PROFECO (protección al consumidor) — ✅ resuelto en lo esencial
 
-- Precios claros y sin cargos sorpresa — el flujo de Stripe (checkout +
-  portal de cliente) ya muestra el precio antes de cobrar.
-- Derecho de cancelación — el portal de cliente de Stripe ya permite
-  cancelar, confirma que el texto de tus Términos lo describa
-  correctamente (cuándo deja de tener acceso, si hay reembolso parcial).
-- Si publicitas precios ("Mejoras... Publicidad" del checklist de
-  marketing), deben coincidir exactamente con lo que Stripe cobra.
+- Precios claros y sin cargos sorpresa — sección 7 de Términos, con los
+  montos exactos de cada plan.
+- Derecho de cancelación — descrito (cancelación vía Stripe, sin
+  reembolso de periodos ya cobrados).
+- **Hueco real que queda**: no hay mención explícita del procedimiento
+  para presentar una queja ante PROFECO (canal/domicilio de PROFECO) ni
+  del derecho de retracto — si tu abogado confirma que aplica a un
+  servicio digital recurrente como este, es una sección corta de agregar.
 
-### 6.5 Menores de edad
+### 6.5 Menores de edad — ✅ resuelto en texto y en código
 
-Ya implementado: el formulario público de agendar cita
+Verificado en ambos documentos legales, no solo en el código: el Aviso
+de Privacidad (secciones 2 y 3) y los Términos (sección 8) ya mencionan
+explícitamente el caso de un paciente menor de edad y el consentimiento
+de quien ejerce la patria potestad o tutela — coincide con lo ya
+implementado en el formulario público de agendar cita
 (`PublicDoctorProfile.tsx`) y el alta manual de pacientes
-(`PatientForm.tsx`) tienen un checkbox "El paciente es menor de edad".
-Al marcarlo:
+(`PatientForm.tsx`), que tienen el checkbox "El paciente es menor de
+edad". Al marcarlo:
 - Las etiquetas de teléfono/correo cambian para dejar claro que son los
   datos de quien agenda (padre, madre o tutor), no los del menor.
 - El texto del checkbox de consentimiento cambia a una declaración
@@ -539,13 +545,18 @@ Privacidad mencionándolo, aunque sea breve.
       que el usuario confirme el plan elegido para actualizar
       `render.yaml` (ver sección 2). Backend (servicio web) todavía en
       plan free, sin resolver.
-- [ ] Aviso de Privacidad completo y revisado por abogado (LFPDPPP, sección 6.1)
-- [ ] Transferencias internacionales de datos declaradas (Google, Twilio, Resend, Stripe, S3 — sección 6.1)
-- [ ] Retención de expediente clínico conforme a NOM-004-SSA3-2012 (sección 6.2)
-- [ ] Términos y Condiciones con deslinde de responsabilidad médica (sección 6.3)
-- [ ] Política de cancelación conforme a PROFECO (sección 6.4)
-- [ ] Consentimiento para menores de edad, si aplica (sección 6.5)
-- [ ] CFDI/facturación fiscal (sección 6.6)
+- [x] Aviso de Privacidad completo en texto (LFPDPPP, sección 6.1) ✅ —
+      falta solo revisión formal de abogado, no redacción
+- [~] Transferencias internacionales de datos declaradas (sección 6.1) —
+      falta solo declarar Google Login (Twilio/Resend/Stripe/S3/Sentry/
+      Calendar ya están)
+- [x] Retención de expediente clínico conforme a NOM-004-SSA3-2012 (sección 6.2) ✅
+- [x] Términos y Condiciones con deslinde de responsabilidad médica (sección 6.3) ✅ —
+      falta solo revisión formal de abogado, no redacción
+- [~] Política de cancelación conforme a PROFECO (sección 6.4) — falta
+      solo el canal/procedimiento de queja ante PROFECO
+- [x] Consentimiento para menores de edad, si aplica (sección 6.5) ✅
+- [ ] CFDI/facturación fiscal (sección 6.6) — sin avance, requiere PAC externo
 - [x] Consentimiento explícito de datos de salud en el booking público ✅
 - [x] CI automatizado ✅
 - [x] `RECAPTCHA_SECRET_KEY` / `VITE_RECAPTCHA_SITE_KEY` ✅
