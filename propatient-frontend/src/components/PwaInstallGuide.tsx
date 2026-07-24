@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useInstallPrompt } from '../hooks/useInstallPrompt';
-import { isAndroid, isIOSSafari, isStandalonePwa } from '../utils/platformDetection';
+import { isAndroid, isIOSNonSafari, isIOSSafari, isStandalonePwa } from '../utils/platformDetection';
 import './PwaInstallGuide.scss';
 
 const DISMISSED_KEY = 'pwa_install_guide_dismissed';
@@ -22,11 +22,12 @@ export const PwaInstallGuide: React.FC = () => {
   const [dismissed, setDismissed] = useState(() => localStorage.getItem(DISMISSED_KEY) === 'true');
 
   const ios = isIOSSafari();
+  const iosOtherBrowser = isIOSNonSafari();
   const android = isAndroid();
 
   // Ya instalada, ya la cerró antes, o no es un dispositivo móvil (en
   // computadora no tiene sentido pedirle que la instale) — no mostrar nada.
-  if (dismissed || isStandalonePwa() || (!ios && !android)) return null;
+  if (dismissed || isStandalonePwa() || (!ios && !iosOtherBrowser && !android)) return null;
 
   const handleDismiss = () => {
     localStorage.setItem(DISMISSED_KEY, 'true');
@@ -46,8 +47,13 @@ export const PwaInstallGuide: React.FC = () => {
       <span className="material-icons-outlined pwa-install-guide-icon">install_mobile</span>
 
       <div className="pwa-install-guide-text">
-        <strong>Instala ProPatient en tu {ios ? 'iPhone/iPad' : 'celular o tablet'}</strong>
-        {ios ? (
+        <strong>Instala ProPatient en tu {ios || iosOtherBrowser ? 'iPhone/iPad' : 'celular o tablet'}</strong>
+        {iosOtherBrowser ? (
+          <p>
+            Ábrela desde <strong>Safari</strong> para poder instalarla — en iPhone/iPad, otros navegadores (Chrome,
+            Firefox, Edge) no lo permiten.
+          </p>
+        ) : ios ? (
           <p>
             Toca <strong>Compartir</strong>{' '}
             <span className="material-icons-outlined pwa-install-guide-inline-icon">ios_share</span> abajo en Safari y

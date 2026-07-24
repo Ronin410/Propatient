@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useInstallPrompt } from '../hooks/useInstallPrompt';
-import { isIOSSafari } from '../utils/platformDetection';
+import { isIOSNonSafari, isIOSSafari } from '../utils/platformDetection';
 import './InstallPwaButton.scss';
 
 interface InstallPwaButtonProps {
@@ -13,6 +13,10 @@ interface InstallPwaButtonProps {
 // - Chrome/Edge/Samsung Internet cuando ya decidieron que es instalable:
 //   botón real que dispara el prompt nativo.
 // - iOS Safari: un textito con las instrucciones manuales (no hay API).
+// - iOS con otro navegador (Chrome/Firefox/Edge para iOS): esos usan el
+//   motor de Safari por dentro pero Apple no les da soporte completo de
+//   PWA (notificaciones push, modo standalone) — hay que decirle al
+//   usuario que lo abra en Safari, si no, se queda sin ninguna opción.
 // - Cualquier otro caso (ya instalada, o el navegador no lo decidió
 //   todavía): no renderiza nada, para no ensuciar la UI con un botón que
 //   no haría nada.
@@ -40,6 +44,23 @@ export const InstallPwaButton: React.FC<InstallPwaButtonProps> = ({ className = 
           <p className="install-pwa-ios-hint">
             Toca <strong>Compartir</strong> (el ícono con la flecha hacia arriba) y luego{' '}
             <strong>"Agregar a inicio"</strong>.
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  if (isIOSNonSafari()) {
+    return (
+      <div className="install-pwa-ios">
+        <button type="button" className={`install-pwa-button ${className}`} onClick={() => setShowIOSHint((v) => !v)}>
+          <span className="material-icons-outlined">{icon}</span>
+          Instalar app
+        </button>
+        {showIOSHint && (
+          <p className="install-pwa-ios-hint">
+            En iPhone/iPad, ábrela desde <strong>Safari</strong> para poder instalarla — otros navegadores no lo
+            permiten aquí.
           </p>
         )}
       </div>
