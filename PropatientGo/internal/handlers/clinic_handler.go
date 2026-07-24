@@ -98,6 +98,12 @@ func CreateClinic(db *gorm.DB, client billing.Client, cfg billing.Config) gin.Ha
 			CancelURL:     base + "/clinica?checkout=cancelled",
 		})
 		if err != nil {
+			// El error real de Stripe (ej. "No such price": la llave de
+			// precio configurada en STRIPE_CLINIC_BASE_PRICE_ID no existe en
+			// el modo — prueba/producción — de la cuenta de Stripe que
+			// corresponde a STRIPE_SECRET_KEY) solo se ve en este log; el
+			// frontend siempre recibe el mensaje genérico de abajo.
+			log.Printf("⚠️ No se pudo crear la sesión de Checkout de la clínica %d (doctor %d): %v", clinic.ID, doctorID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo iniciar el proceso de pago"})
 			return
 		}
