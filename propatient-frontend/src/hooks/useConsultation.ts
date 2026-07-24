@@ -541,7 +541,7 @@ export function useConsultation(appointmentId: string | undefined) {
       navigate('/inicio');
     } catch (err) {
       console.error('Error al cerrar consulta:', err);
-      alert('Ocurrió un error al intentar finalizar la consulta. Los cambios no se guardaron por completo.');
+      alert(getErrorMessage(err, 'Ocurrió un error al intentar finalizar la consulta. Los cambios no se guardaron por completo.'));
     } finally {
       setLoading(false);
     }

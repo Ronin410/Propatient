@@ -178,6 +178,55 @@ func TestNoteHistory_NonClinicalUpdate_DoesNotCreateHistoryEntry(t *testing.T) {
 	assert.Empty(t, history, "un cambio que no toca contenido clínico no debe generar una versión")
 }
 
+// TestUpdateAppointment_RequiresClinicalContentToComplete confirma la regla
+// NOM-004 a nivel backend: una cita no puede quedar "COMPLETED" sin
+// diagnóstico ni notas de consulta con contenido, sin importar lo que haga
+// (o deje de hacer) el frontend.
+func TestUpdateAppointment_RequiresClinicalContentToComplete(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_min_content", "password123")
+	token := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doRequest(t, router, http.MethodPost, "/api/patients", token, map[string]any{
+		"firstName": "Paciente", "lastName": "Contenido", "email": "min_content_patient@test.local",
+	})
+	require.Equal(t, http.StatusCreated, w.Code)
+	patientID := int(decodeJSON(t, w)["id"].(float64))
+
+	apptID := createTestAppointment(t, router, token, patientID)
+
+	// Sin diagnóstico ni notas dinámicas: rechazado.
+	w = doRequest(t, router, http.MethodPut, fmt.Sprintf("/api/appointments/%d", apptID), token, map[string]any{
+		"status": "COMPLETED",
+	})
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+
+	// Notas dinámicas presentes pero en blanco: sigue rechazado.
+	w = doRequest(t, router, http.MethodPut, fmt.Sprintf("/api/appointments/%d", apptID), token, map[string]any{
+		"status":        "COMPLETED",
+		"dynamic_notes": map[string]string{"Padecimiento actual": "   "},
+	})
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+
+	// Con diagnóstico: se acepta.
+	w = doRequest(t, router, http.MethodPut, fmt.Sprintf("/api/appointments/%d", apptID), token, map[string]any{
+		"status":    "COMPLETED",
+		"diagnosis": "Gripe común",
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	apptID2 := createTestAppointment(t, router, token, patientID)
+
+	// Sin diagnóstico pero con una nota de consulta con contenido: también se acepta.
+	w = doRequest(t, router, http.MethodPut, fmt.Sprintf("/api/appointments/%d", apptID2), token, map[string]any{
+		"status":        "COMPLETED",
+		"dynamic_notes": map[string]string{"Padecimiento actual": "Paciente refiere tos y fiebre."},
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+}
+
 // TestNoteHistory_ScopedToDoctor confirma que un doctor no puede ver el
 // historial de notas de una cita ajena (IDOR).
 func TestNoteHistory_ScopedToDoctor(t *testing.T) {

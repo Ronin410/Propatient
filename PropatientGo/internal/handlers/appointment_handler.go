@@ -1,10 +1,9 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"path/filepath"
@@ -15,9 +14,11 @@ import (
 	"propatient-api/internal/storage"
 	"propatient-api/internal/whatsapp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -662,20 +663,32 @@ func sendAppointmentRescheduledEmail(doctor models.Doctor, patient models.Patien
 	}
 }
 
+// dynamicNotesHaveContent revisa si al menos una de las secciones de
+// Notas de Consulta (configurables por el doctor, ver sectionsConfig en
+// el frontend) tiene texto real — DynamicNotes es un mapa label->texto
+// serializado como JSON. Un JSON inválido o vacío se trata como "sin
+// contenido", nunca como error (la validación de arriba ya decide si
+// eso basta o hace falta el diagnóstico).
+func dynamicNotesHaveContent(raw datatypes.JSON) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	var notes map[string]string
+	if err := json.Unmarshal(raw, &notes); err != nil {
+		return false
+	}
+	for _, v := range notes {
+		if strings.TrimSpace(v) != "" {
+			return true
+		}
+	}
+	return false
+}
+
 func UpdateAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient whatsapp.Client, waTemplates whatsapp.Templates) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		doctorID := c.MustGet("doctorID").(uint)
-
-		// --- BLOQUE DE DEBBUGGING: LEER JSON CRUDO ---
-		// Leemos los bytes directos que vienen de la petición HTTP
-		bodyBytes, _ := io.ReadAll(c.Request.Body)
-		// Volvemos a restaurar el Body para que ShouldBindJSON pueda leerlo después
-		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-
-		// Imprimimos en la consola de la terminal lo que el frontend mandó
-		log.Printf("📥 JSON recibido desde el Frontend: %s", string(bodyBytes))
-		// ----------------------------------------------
 
 		var appointment models.Appointment
 		if err := db.Where("id = ? AND doctor_id = ?", id, doctorID).First(&appointment).Error; err != nil {
@@ -727,6 +740,17 @@ func UpdateAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient wh
 			appointment.TreatmentPlan != previousTreatmentPlan ||
 			appointment.Notes != previousNotes ||
 			string(appointment.DynamicNotes) != previousDynamicNotes
+
+		// NOM-004: un expediente no puede quedar en blanco. La UI ya deja
+		// que el doctor marque secciones de sus Notas de Consulta como
+		// obligatorias (ver sectionsConfig en el frontend), pero eso es
+		// fácil de saltarse llamando a esta ruta directo — este es el
+		// candado real: al finalizar (status pasa a COMPLETED) tiene que
+		// haber diagnóstico o al menos una nota clínica con contenido.
+		if appointment.Status == "COMPLETED" && strings.TrimSpace(appointment.Diagnosis) == "" && !dynamicNotesHaveContent(appointment.DynamicNotes) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "No se puede finalizar la consulta sin diagnóstico ni notas clínicas."})
+			return
+		}
 
 		// Solo se valida contra el horario laboral si de verdad se está
 		// moviendo la fecha/hora (reprogramar) — un PUT que solo guarda
