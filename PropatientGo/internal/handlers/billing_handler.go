@@ -337,6 +337,21 @@ func GetReferralCode(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Mejor esfuerzo: cuentas creadas antes de este campo, o donde la
+		// generación al registrarse falló por algún motivo, se rellenan
+		// aquí mismo en vez de mostrar un código vacío — ver
+		// referral.GenerateCode.
+		if doctor.ReferralCode == "" {
+			code, err := referral.GenerateCode(db)
+			if err != nil {
+				log.Printf("⚠️ No se pudo generar código de invitación para el doctor %d al consultarlo: %v", doctorID, err)
+			} else if err := db.Model(&models.Doctor{}).Where("id = ?", doctorID).Update("referral_code", code).Error; err != nil {
+				log.Printf("⚠️ No se pudo guardar el código de invitación generado para el doctor %d: %v", doctorID, err)
+			} else {
+				doctor.ReferralCode = code
+			}
+		}
+
 		var totalReferrals int64
 		db.Model(&models.Referral{}).Where("referrer_doctor_id = ?", doctorID).Count(&totalReferrals)
 		var rewardedReferrals int64
@@ -354,5 +369,32 @@ func GetReferralCode(db *gorm.DB) gin.HandlerFunc {
 			"remainingSlots":    remaining,
 			"maxReferrals":      models.MaxReferralsPerDoctor,
 		})
+	}
+}
+
+type applyReferralCodeRequest struct {
+	Code string `json:"code"`
+}
+
+// ApplyReferralCode deja que un doctor capture el código de invitación de
+// otro colega ANTES de pagar su suscripción — desde la pantalla de
+// Suscripción, justo antes de darle a "Suscribirse" (a propósito fuera del
+// grupo con RequireActiveSubscription: el doctor todavía no paga en este
+// punto). Solo queda como referencia "pending" (ver
+// referral.ApplyCodeIfValid); la recompensa real de ambos lados se otorga
+// hasta que el PRIMER pago se complete de verdad (ver StripeWebhook), así
+// que capturar un código aquí nunca por sí solo da nada gratis.
+func ApplyReferralCode(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		doctorID := c.MustGet("doctorID").(uint)
+
+		var req applyReferralCodeRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Datos inválidos"})
+			return
+		}
+
+		applied := referral.ApplyCodeIfValid(db, doctorID, req.Code)
+		c.JSON(http.StatusOK, gin.H{"applied": applied})
 	}
 }

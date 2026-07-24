@@ -268,6 +268,12 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 				billingRoutes.GET("/status", handlers.GetBillingStatus(db, billingClient))
 				billingRoutes.POST("/checkout", handlers.CreateCheckoutSession(db, billingClient, billingConfig))
 				billingRoutes.POST("/portal", handlers.CreatePortalSession(db, billingClient))
+				// Capturar el código de invitación de otro doctor ANTES de
+				// pagar — a propósito en /billing (no en /doctor) y fuera
+				// de RequireActiveSubscription, mismo motivo que el resto
+				// de esta sección: el doctor todavía no tiene suscripción
+				// activa en este punto.
+				billingRoutes.POST("/apply-referral-code", handlers.ApplyReferralCode(db))
 			}
 
 			// Código de invitación entre doctores: fuera de

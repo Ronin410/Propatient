@@ -12,30 +12,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestReferral_UpdateProfile_AppliesValidCode confirma que capturar un
-// código de invitación válido al completar el perfil crea la fila
-// Referral "pending" y lo refleja en la respuesta (referralCodeApplied).
-func TestReferral_UpdateProfile_AppliesValidCode(t *testing.T) {
+// TestReferral_ApplyReferralCode_ValidCode_CreatesPendingReferral confirma
+// el nuevo punto donde se captura el código: la pantalla de Suscripción,
+// antes de pagar (no ya en el registro de la cuenta) — ver
+// handlers.ApplyReferralCode. Crea la fila Referral "pending" y lo refleja
+// en la respuesta.
+func TestReferral_ApplyReferralCode_ValidCode_CreatesPendingReferral(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	router := server.NewRouter(db)
 
-	referrer := testutil.CreateTestDoctor(t, db, "doc_ref_int_referrer", "password123")
+	referrer := testutil.CreateTestDoctor(t, db, "doc_ref_apply_referrer", "password123")
 	require.NoError(t, db.Model(&referrer).Update("referral_code", "INTCODE1").Error)
 
-	referred := testutil.CreateTestDoctor(t, db, "doc_ref_int_referred", "password123")
+	referred := testutil.CreateTestDoctor(t, db, "doc_ref_apply_referred", "password123")
 	token := testutil.TokenFor(t, referred.ID, referred.Username)
 
-	payload := map[string]any{
-		"fullName":         "Dr. Referido de Prueba",
-		"medicalSpecialty": "Medicina General",
-		"phone":            "5555555555",
-		"birthDate":        "1990-01-01",
-		"referralCode":     "intcode1",
-	}
-	w := doRequest(t, router, http.MethodPost, "/api/user/update-profile", token, payload)
+	w := doRequest(t, router, http.MethodPost, "/api/billing/apply-referral-code", token, map[string]any{"code": "intcode1"})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	body := decodeJSON(t, w)
-	assert.Equal(t, true, body["referralCodeApplied"])
+	assert.Equal(t, true, body["applied"])
 
 	var ref models.Referral
 	require.NoError(t, db.Where("referred_doctor_id = ?", referred.ID).First(&ref).Error)
@@ -43,31 +38,46 @@ func TestReferral_UpdateProfile_AppliesValidCode(t *testing.T) {
 	assert.Equal(t, "pending", ref.Status)
 }
 
-// TestReferral_UpdateProfile_InvalidCodeNeverBlocksSave confirma que un
-// código inválido no impide guardar el resto del perfil — solo se
-// refleja como no aplicado.
-func TestReferral_UpdateProfile_InvalidCodeNeverBlocksSave(t *testing.T) {
+// TestReferral_ApplyReferralCode_InvalidCode_ReturnsAppliedFalse confirma
+// que un código inválido no truena — solo se refleja como no aplicado,
+// indistinguible de un código agotado (ver internal/referral).
+func TestReferral_ApplyReferralCode_InvalidCode_ReturnsAppliedFalse(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	router := server.NewRouter(db)
 
-	doc := testutil.CreateTestDoctor(t, db, "doc_ref_int_invalid", "password123")
+	doc := testutil.CreateTestDoctor(t, db, "doc_ref_apply_invalid", "password123")
 	token := testutil.TokenFor(t, doc.ID, doc.Username)
 
-	payload := map[string]any{
-		"fullName":         "Dr. Sin Código Válido",
-		"medicalSpecialty": "Pediatría",
-		"phone":            "5555555556",
-		"birthDate":        "1990-01-01",
-		"referralCode":     "NOEXISTE",
-	}
-	w := doRequest(t, router, http.MethodPost, "/api/user/update-profile", token, payload)
+	w := doRequest(t, router, http.MethodPost, "/api/billing/apply-referral-code", token, map[string]any{"code": "NOEXISTE"})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	body := decodeJSON(t, w)
-	assert.Equal(t, false, body["referralCodeApplied"])
+	assert.Equal(t, false, body["applied"])
 
-	var updated models.Doctor
-	require.NoError(t, db.First(&updated, doc.ID).Error)
-	assert.Equal(t, "Dr. Sin Código Válido", updated.FullName, "el resto del perfil debe guardarse aunque el código no sea válido")
+	var count int64
+	db.Model(&models.Referral{}).Count(&count)
+	assert.Zero(t, count)
+}
+
+// TestReferral_ApplyReferralCode_AvailableBeforeSubscriptionActive
+// confirma el punto central del cambio: el doctor puede capturar el
+// código ANTES de pagar (suscripción todavía en "trialing"), ya que la
+// ruta vive fuera de RequireActiveSubscription — si no, nunca podría
+// aplicarlo justo antes del checkout como pide el flujo real.
+func TestReferral_ApplyReferralCode_AvailableBeforeSubscriptionActive(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	referrer := testutil.CreateTestDoctor(t, db, "doc_ref_apply_referrer2", "password123")
+	require.NoError(t, db.Model(&referrer).Update("referral_code", "PRETRIAL1").Error)
+
+	// El doctor referido sigue en "trialing" (nunca pagó) — justo el
+	// estado en el que debe poder capturar el código antes de suscribirse.
+	referred := testutil.CreateTestDoctor(t, db, "doc_ref_apply_referred2", "password123")
+	token := testutil.TokenFor(t, referred.ID, referred.Username)
+
+	w := doRequest(t, router, http.MethodPost, "/api/billing/apply-referral-code", token, map[string]any{"code": "PRETRIAL1"})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, true, decodeJSON(t, w)["applied"])
 }
 
 // TestReferral_GetReferralCode_ForbiddenWithoutActiveSubscription
@@ -113,6 +123,32 @@ func TestReferral_GetReferralCode_ActiveSubscription_ReturnsCodeAndCounts(t *tes
 	assert.EqualValues(t, 1, body["rewardedReferrals"])
 	assert.EqualValues(t, 8, body["remainingSlots"])
 	assert.EqualValues(t, models.MaxReferralsPerDoctor, body["maxReferrals"])
+}
+
+// TestReferral_GetReferralCode_SelfHealsEmptyCode confirma que, si por
+// cualquier motivo la cuenta se quedó sin ReferralCode (cuentas de antes
+// de este campo, o una generación fallida al registrarse), el endpoint
+// genera y guarda uno en vez de devolver el campo vacío.
+func TestReferral_GetReferralCode_SelfHealsEmptyCode(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_ref_int_empty_code", "password123")
+	require.NoError(t, db.Model(&doc).Updates(map[string]any{
+		"subscription_status": "active",
+		"referral_code":       "",
+	}).Error)
+	token := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doRequest(t, router, http.MethodGet, "/api/doctor/referral-code", token, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	body := decodeJSON(t, w)
+	code, _ := body["code"].(string)
+	assert.NotEmpty(t, code, "debe generar un código en vez de devolver uno vacío")
+
+	var updated models.Doctor
+	require.NoError(t, db.First(&updated, doc.ID).Error)
+	assert.Equal(t, code, updated.ReferralCode, "el código generado debe quedar guardado, no solo en la respuesta")
 }
 
 // TestReferral_GetReferralCode_ClinicDoctorForbidden confirma que el

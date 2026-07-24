@@ -181,10 +181,6 @@ func UpdateProfileHandler(db *gorm.DB, geoClient geocoding.Client) gin.HandlerFu
 			// del registro; ver geocoding.ResolveCoordinates.
 			Latitude  string `json:"latitude"`
 			Longitude string `json:"longitude"`
-			// Código de invitación de otro doctor (opcional) — ver
-			// referral.ApplyCodeIfValid. Nunca bloquea el guardado del
-			// resto del perfil, sea válido o no.
-			ReferralCode string `json:"referralCode"`
 		}
 
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -233,9 +229,7 @@ func UpdateProfileHandler(db *gorm.DB, geoClient geocoding.Client) gin.HandlerFu
 			return
 		}
 
-		referralCodeApplied := referral.ApplyCodeIfValid(db, doctorID.(uint), req.ReferralCode)
-
-		c.JSON(http.StatusOK, gin.H{"message": "Perfil actualizado exitosamente", "referralCodeApplied": referralCodeApplied})
+		c.JSON(http.StatusOK, gin.H{"message": "Perfil actualizado exitosamente"})
 	}
 }
 

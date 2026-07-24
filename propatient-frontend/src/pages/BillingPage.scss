@@ -142,5 +142,44 @@
       font-size: 0.85rem;
       color: var(--color-secondary);
     }
+
+    .billing-referral-apply-form {
+      display: flex;
+      gap: 0.6rem;
+
+      input {
+        flex: 1;
+        min-width: 0;
+        font-family: monospace;
+        font-size: 1rem;
+        letter-spacing: 0.05em;
+        padding: 0.6rem;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--bg);
+        color: var(--color-heading);
+      }
+
+      .btn-secondary {
+        background: var(--bg);
+        color: var(--color-primary);
+        border: 1px solid var(--color-primary);
+        padding: 0.6rem 1.2rem;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+
+        &:disabled { opacity: 0.6; cursor: not-allowed; }
+      }
+    }
+
+    .billing-referral-apply-message {
+      margin: 0.6rem 0 0 0;
+      font-size: 0.85rem;
+
+      &.success { color: var(--color-success); }
+      &.info { color: var(--color-warning); }
+    }
   }
 }

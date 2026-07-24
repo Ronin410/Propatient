@@ -49,6 +49,15 @@ export const BillingPage: React.FC = () => {
   const [referral, setReferral] = useState<ReferralInfo | null>(null);
   const [copyPopupOpen, setCopyPopupOpen] = useState(false);
 
+  // Código de invitación de OTRO doctor, capturado aquí — justo antes de
+  // pagar, ya con la cuenta y cédula validadas (esta pantalla solo es
+  // alcanzable después de eso, ver OnboardingGuard) — en vez de en el
+  // registro inicial. Solo queda "pending"; la recompensa real se otorga
+  // hasta que el pago se complete de verdad (ver StripeWebhook).
+  const [applyCodeInput, setApplyCodeInput] = useState('');
+  const [applyingCode, setApplyingCode] = useState(false);
+  const [applyCodeMessage, setApplyCodeMessage] = useState<{ type: 'success' | 'info'; text: string } | null>(null);
+
   useEffect(() => {
     if (isStaff) return;
     api.get('/billing/status')
@@ -77,6 +86,25 @@ export const BillingPage: React.FC = () => {
     } catch {
       // Sin permiso de portapapeles: el input de solo lectura de abajo
       // ya deja al doctor seleccionar y copiar el código a mano.
+    }
+  };
+
+  const handleApplyReferralCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!applyCodeInput.trim()) return;
+    setApplyingCode(true);
+    setApplyCodeMessage(null);
+    try {
+      const res = await api.post('/billing/apply-referral-code', { code: applyCodeInput });
+      if (res.data.applied) {
+        setApplyCodeMessage({ type: 'success', text: '¡Código aplicado! Ganarás una semana gratis en cuanto se confirme tu pago.' });
+      } else {
+        setApplyCodeMessage({ type: 'info', text: 'Ese código no es válido o ya no está disponible.' });
+      }
+    } catch (err: unknown) {
+      setApplyCodeMessage({ type: 'info', text: getErrorMessage(err, 'No se pudo aplicar el código, intenta de nuevo.') });
+    } finally {
+      setApplyingCode(false);
     }
   };
 
@@ -192,6 +220,30 @@ export const BillingPage: React.FC = () => {
                 </button>
               )}
             </div>
+
+            {status.subscriptionStatus !== 'active' && (
+              <div className="billing-referral">
+                <h2>¿Tienes un código de invitación?</h2>
+                <p>
+                  Captúralo antes de pagar — cuando tu suscripción se active, tú y quien te invitó ganan
+                  1 semana extra gratis cada uno.
+                </p>
+                <form className="billing-referral-apply-form" onSubmit={handleApplyReferralCode}>
+                  <input
+                    type="text"
+                    value={applyCodeInput}
+                    onChange={(e) => setApplyCodeInput(e.target.value)}
+                    placeholder="Código de un colega"
+                  />
+                  <button type="submit" className="btn-secondary" disabled={applyingCode || !applyCodeInput.trim()}>
+                    {applyingCode ? 'Aplicando...' : 'Aplicar código'}
+                  </button>
+                </form>
+                {applyCodeMessage && (
+                  <p className={`billing-referral-apply-message ${applyCodeMessage.type}`}>{applyCodeMessage.text}</p>
+                )}
+              </div>
+            )}
 
             {status.subscriptionStatus === 'active' && referral && (
               <div className="billing-referral">

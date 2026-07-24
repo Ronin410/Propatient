@@ -95,6 +95,33 @@
   overflow-y: auto;
   box-sizing: border-box;
 
+  // Formularios largos (registro con mapa, campos opcionales) no caben
+  // completos en pantallas bajas — antes solo se veían enteros bajando el
+  // zoom del navegador porque la barra de scroll nativa (gris, gruesa, o
+  // "overlay" que se oculta sola en Windows) no se notaba como algo con lo
+  // que se pudiera interactuar. Barra delgada y a tono en vez de eso, para
+  // que sea evidente que se puede bajar — mismo patrón que el sidebar del
+  // dashboard (ver DashboardLayout.scss).
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 80, 115, 0.3) transparent;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 80, 115, 0.3);
+    border-radius: 10px;
+
+    &:hover {
+      background-color: rgba(0, 80, 115, 0.5);
+    }
+  }
+
   @media (max-width: 768px) {
     flex: none;
     max-height: none;

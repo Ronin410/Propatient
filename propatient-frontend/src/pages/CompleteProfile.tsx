@@ -15,8 +15,7 @@ export const CompleteProfile = () => {
     address: '',
     postalCode: '',
     medicalSpecialty: '',
-    university: '',
-    referralCode: ''
+    university: ''
   });
   const [location, setLocation] = useState<{ latitude: number | null; longitude: number | null }>({
     latitude: null,
@@ -24,7 +23,6 @@ export const CompleteProfile = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [referralNotice, setReferralNotice] = useState<{ type: 'success' | 'info'; text: string } | null>(null);
   const navigate = useNavigate();
   const { setDoctorName } = useAuth();
 
@@ -70,27 +68,13 @@ export const CompleteProfile = () => {
     }
 
     try {
-      const res = await api.post('/user/update-profile', {
+      await api.post('/user/update-profile', {
         ...formData,
         latitude: location.latitude != null ? String(location.latitude) : '',
         longitude: location.longitude != null ? String(location.longitude) : ''
       });
       setDoctorName(formData.fullName);
-
-      // Confirmación (o aviso neutro) del código de invitación, sin
-      // bloquear nunca el avance al siguiente paso — ver
-      // referral.ApplyCodeIfValid en el backend.
-      if (formData.referralCode.trim()) {
-        if (res.data.referralCodeApplied) {
-          setReferralNotice({ type: 'success', text: '¡Código de invitación aplicado! Ganarás una semana gratis cuando actives tu suscripción.' });
-        } else {
-          setReferralNotice({ type: 'info', text: 'Ese código de invitación no es válido o ya no está disponible.' });
-        }
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        setTimeout(() => navigate('/registro/validar-cedula'), 1800);
-      } else {
-        navigate('/registro/validar-cedula');
-      }
+      navigate('/registro/validar-cedula');
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Ocurrió un error al guardar tu perfil.'));
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -152,22 +136,6 @@ export const CompleteProfile = () => {
               fontSize: '14px'
             }}>
               {error}
-            </div>
-          )}
-
-          {referralNotice && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              lineHeight: '1.4',
-              padding: '12px',
-              borderRadius: '6px',
-              backgroundColor: referralNotice.type === 'success' ? 'var(--color-success-bg)' : 'var(--color-warning-bg)',
-              color: referralNotice.type === 'success' ? 'var(--color-success)' : 'var(--color-warning)',
-              fontSize: '14px'
-            }}>
-              {referralNotice.text}
             </div>
           )}
 
@@ -324,28 +292,6 @@ export const CompleteProfile = () => {
               style={inputStyle} 
               value={formData.postalCode} 
               onChange={handleChange} 
-              onFocus={(e) => {
-                e.target.style.borderColor = 'var(--accent)';
-                e.target.style.boxShadow = '0 0 0 3px var(--accent-bg)';
-              }}
-              onBlur={(e) => {
-                e.target.style.borderColor = 'var(--border)';
-                e.target.style.boxShadow = 'none';
-              }}
-            />
-          </div>
-
-          <div>
-            <label style={{ ...labelStyle, color: 'var(--text)' }}>
-              Código de Invitación <span style={{ fontWeight: 'normal', fontSize: '12px' }}>(Opcional)</span>
-            </label>
-            <input
-              type="text"
-              name="referralCode"
-              placeholder="Código de un colega que te invitó"
-              style={{ ...inputStyle, textTransform: 'uppercase' }}
-              value={formData.referralCode}
-              onChange={handleChange}
               onFocus={(e) => {
                 e.target.style.borderColor = 'var(--accent)';
                 e.target.style.boxShadow = '0 0 0 3px var(--accent-bg)';
