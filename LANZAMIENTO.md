@@ -508,14 +508,32 @@ Sigue valiendo la pena confirmar con tu abogado si este nivel de
 consentimiento explícito es suficiente para tu caso de uso, o si además
 se requiere algo como una copia de identificación del tutor.
 
-### 6.6 Fiscal — CFDI y régimen (ver también la conversación sobre RESICO)
+### 6.6 Fiscal — CFDI y régimen — ⏳ decidido, falta configurar
 
-- Emitir CFDI 4.0 por cada cobro de suscripción — Stripe no lo genera
-  automáticamente, se necesita un PAC (proveedor autorizado de
-  certificación) o la herramienta gratuita del SAT.
-- Confirmar el régimen fiscal correcto (RESICO código 626, o Actividad
-  Empresarial y Profesional código 612) antes de facturar el primer cobro
-  real — pendiente de tu firma electrónica.
+**Decisión tomada**: usar la **app de Facturapi para el Marketplace de
+Stripe** (https://marketplace.stripe.com/apps/facturapi) en vez de
+construir una integración a la medida dentro de ProPatient — se instala
+directo en la cuenta de Stripe que ya se usa para cobrar las
+suscripciones, sin tocar el backend/frontend de ProPatient. También se
+evaluó Facturama y una integración custom contra la API REST de
+Facturapi; se descartaron por ahora a favor de la app lista, que da
+cumplimiento sin código nuevo que mantener.
+
+**Pasos pendientes (100% fuera del repo, en Stripe/Facturapi):**
+1. Tener el **CSD** (Certificado de Sello Digital) del SAT — dos archivos
+   (`.cer`/`.key`) + contraseña, distinto de la e.firma (la e.firma se
+   usa para tramitarlo, no es el CSD en sí). Sin esto no se puede timbrar
+   nada por ningún camino.
+2. Confirmar con un contador el régimen fiscal correcto (RESICO código
+   626, o Actividad Empresarial y Profesional código 612).
+3. Instalar la app desde el Marketplace de Stripe → crear/usar una
+   organización en Facturapi → capturar datos fiscales (deben coincidir
+   exacto con el SAT) → subir el CSD → contratar la suscripción de la
+   Stripe App (pago aparte de la API general, verificar precio en el
+   dashboard) → configurar preferencias de facturación automática.
+4. Probar primero en Stripe modo **Test** antes de instalar también en
+   modo **Live** (las apps de Stripe se instalan por separado en cada
+   modo).
 
 ### 6.7 Cookies / almacenamiento local
 
@@ -555,7 +573,9 @@ Privacidad mencionándolo, aunque sea breve.
       de queja agregado; derecho de retracto sigue pendiente de confirmar
       con abogado
 - [x] Consentimiento para menores de edad, si aplica (sección 6.5) ✅
-- [ ] CFDI/facturación fiscal (sección 6.6) — sin avance, requiere PAC externo
+- [ ] CFDI/facturación fiscal (sección 6.6) — ⏳ decidido usar la app de
+      Facturapi para Stripe (sin código nuevo); falta CSD del SAT +
+      instalarla y configurarla
 - [x] Consentimiento explícito de datos de salud en el booking público ✅
 - [x] CI automatizado ✅
 - [x] `RECAPTCHA_SECRET_KEY` / `VITE_RECAPTCHA_SITE_KEY` ✅
