@@ -534,3 +534,48 @@ func RemoveDoctorFromClinic(db *gorm.DB, client billing.Client) gin.HandlerFunc 
 		c.JSON(http.StatusOK, gin.H{"message": "Doctor removido de la clínica"})
 	}
 }
+
+// LeaveClinic deja que un doctor (no dueño) se salga de su clínica por su
+// propia cuenta, sin depender de que el dueño lo quite desde
+// RemoveDoctorFromClinic — mismo efecto (clinic_id se limpia, la
+// suscripción queda "canceled" hasta que se suscriba por su cuenta o lo
+// vuelvan a invitar). El dueño no puede salirse por aquí, mismo criterio
+// que RemoveDoctorFromClinic: tiene que cancelar la clínica completa desde
+// el portal de Stripe, porque sin dueño la clínica se queda huérfana.
+func LeaveClinic(db *gorm.DB, client billing.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		doctorID := c.MustGet("doctorID").(uint)
+
+		var doctor models.Doctor
+		if err := db.First(&doctor, doctorID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Doctor no encontrado"})
+			return
+		}
+		if doctor.ClinicID == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "No perteneces a ninguna clínica"})
+			return
+		}
+		if doctor.IsClinicOwner {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "El dueño no puede salirse de su propia clínica — cancélala desde el portal de facturación en Mi Clínica"})
+			return
+		}
+
+		clinicID := *doctor.ClinicID
+		if err := db.Model(&doctor).Updates(map[string]interface{}{
+			"clinic_id":           nil,
+			"subscription_status": "canceled",
+		}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo salir de la clínica"})
+			return
+		}
+
+		var clinic models.Clinic
+		if err := db.First(&clinic, clinicID).Error; err == nil {
+			if err := syncClinicDoctorCount(c.Request.Context(), db, client, &clinic); err != nil {
+				fmt.Printf("⚠️ No se pudo sincronizar el conteo de doctores de la clínica %d con Stripe tras que el doctor %d saliera: %v\n", clinic.ID, doctorID, err)
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Saliste de la clínica"})
+	}
+}

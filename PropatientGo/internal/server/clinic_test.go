@@ -404,6 +404,67 @@ func TestClinic_RemoveDoctorFromClinic_Success(t *testing.T) {
 	assert.Equal(t, int64(0), call.Quantity)
 }
 
+// TestClinic_LeaveClinic_Member_Success confirma el punto central de este
+// cambio: un doctor de clínica (no dueño) puede salirse por su cuenta, sin
+// depender de que el dueño lo quite — mismo efecto que
+// RemoveDoctorFromClinic (ClinicID se libera, queda "canceled").
+func TestClinic_LeaveClinic_Member_Success(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	mock := newMockBillingClient()
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mustLocalStorage(t), clinicBillingConfig(), mock, geocoding.NewClient(), nil, nil)
+
+	owner := testutil.CreateTestDoctor(t, db, "doc_clinic_owner_leave1", "password123")
+	clinic := models.Clinic{Name: "Clínica L", OwnerDoctorID: owner.ID, SubscriptionStatus: "active"}
+	require.NoError(t, db.Create(&clinic).Error)
+	require.NoError(t, db.Model(&owner).Updates(map[string]any{"clinic_id": clinic.ID, "is_clinic_owner": true}).Error)
+
+	member := testutil.CreateTestDoctor(t, db, "doc_clinic_member_leave1", "password123")
+	require.NoError(t, db.Model(&member).Update("clinic_id", clinic.ID).Error)
+
+	token := testutil.TokenFor(t, member.ID, member.Username)
+	w := doRequest(t, router, http.MethodPost, "/api/clinic/leave", token, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var reloaded models.Doctor
+	require.NoError(t, db.First(&reloaded, member.ID).Error)
+	assert.Nil(t, reloaded.ClinicID)
+	assert.Equal(t, "canceled", reloaded.SubscriptionStatus)
+}
+
+// TestClinic_LeaveClinic_Owner_Returns400 confirma que el dueño no puede
+// salirse por esta ruta — tiene que cancelar la clínica completa desde el
+// portal de Stripe (ver LeaveClinic), igual que en RemoveDoctorFromClinic.
+func TestClinic_LeaveClinic_Owner_Returns400(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	owner := testutil.CreateTestDoctor(t, db, "doc_clinic_owner_leave2", "password123")
+	clinic := models.Clinic{Name: "Clínica L2", OwnerDoctorID: owner.ID, SubscriptionStatus: "active"}
+	require.NoError(t, db.Create(&clinic).Error)
+	require.NoError(t, db.Model(&owner).Updates(map[string]any{"clinic_id": clinic.ID, "is_clinic_owner": true}).Error)
+
+	token := testutil.TokenFor(t, owner.ID, owner.Username)
+	w := doRequest(t, router, http.MethodPost, "/api/clinic/leave", token, nil)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var reloaded models.Doctor
+	require.NoError(t, db.First(&reloaded, owner.ID).Error)
+	require.NotNil(t, reloaded.ClinicID, "el dueño no debe haber sido desvinculado")
+}
+
+// TestClinic_LeaveClinic_NoClinic_Returns400 confirma que un doctor sin
+// clínica no puede llamar a esta ruta sin más.
+func TestClinic_LeaveClinic_NoClinic_Returns400(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_clinic_noclinic_leave", "password123")
+	token := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doRequest(t, router, http.MethodPost, "/api/clinic/leave", token, nil)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
 // TestClinic_Middleware_BlocksMember_WhenClinicSubscriptionNotActive
 // confirma que el acceso de un doctor de clínica depende de la
 // suscripción de la clínica, no de la suya propia.

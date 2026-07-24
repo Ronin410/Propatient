@@ -53,6 +53,13 @@ export const ClinicManagement: React.FC = () => {
   const [doctorToRemove, setDoctorToRemove] = useState<ClinicDoctor | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
 
+  // Salir de la clínica por cuenta propia (solo para un doctor que NO es
+  // dueño — el dueño cancela la clínica completa desde "Gestionar pagos",
+  // ver handleManagePayments) — mismo efecto que doctorToRemove pero
+  // iniciado por el propio doctor, sin depender de que el dueño lo quite.
+  const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+
   // Ubicación única de la clínica — solo el dueño la edita; el directorio
   // público la muestra para TODOS los doctores de la clínica en vez de la
   // dirección individual de cada quien (ver public_handler.go).
@@ -185,6 +192,29 @@ export const ClinicManagement: React.FC = () => {
         title: 'Error',
         message: getErrorMessage(err, 'No se pudo quitar al doctor de la clínica.'),
       });
+    }
+  };
+
+  const handleLeaveClinic = async () => {
+    setLeaving(true);
+    try {
+      await api.post('/clinic/leave');
+      setConfirmLeaveOpen(false);
+      // fetchClinic() volvería a traer 404 (ya no pertenece a ninguna
+      // clínica) y eso mismo transiciona la vista a "no-clinic" — el flujo
+      // natural para que pueda crear su propia clínica o esperar otra
+      // invitación.
+      fetchClinic();
+    } catch (err: unknown) {
+      setConfirmLeaveOpen(false);
+      setPopupConfig({
+        isOpen: true,
+        type: 'error',
+        title: 'Error',
+        message: getErrorMessage(err, 'No se pudo salir de la clínica.'),
+      });
+    } finally {
+      setLeaving(false);
     }
   };
 
@@ -328,9 +358,13 @@ export const ClinicManagement: React.FC = () => {
             </p>
           </div>
         </div>
-        {clinic.isOwner && (
+        {clinic.isOwner ? (
           <button className="btn-outline-sm" onClick={handleManagePayments} disabled={portalLoading}>
             {portalLoading ? 'Abriendo...' : 'Gestionar pagos'}
+          </button>
+        ) : (
+          <button className="btn-outline-sm danger" onClick={() => setConfirmLeaveOpen(true)}>
+            Salir de la clínica
           </button>
         )}
       </section>
@@ -429,6 +463,16 @@ export const ClinicManagement: React.FC = () => {
         confirmText="Quitar"
         onConfirm={handleRemoveConfirmed}
         onCancel={() => setDoctorToRemove(null)}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmLeaveOpen}
+        variant="danger"
+        title="Salir de la clínica"
+        message="¿Seguro que quieres salir de la clínica? Perderás el acceso a ProPatient hasta que te suscribas por tu cuenta o te inviten de nuevo."
+        confirmText={leaving ? 'Saliendo...' : 'Sí, salir'}
+        onConfirm={handleLeaveClinic}
+        onCancel={() => setConfirmLeaveOpen(false)}
       />
 
       <Popup

@@ -303,6 +303,7 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 				clinicRoutes.GET("/invitations/:token", handlers.GetClinicInvite(db))
 				clinicRoutes.POST("/invitations/:token/accept", handlers.AcceptClinicInvite(db, billingClient))
 				clinicRoutes.DELETE("/doctors/:id", handlers.RemoveDoctorFromClinic(db, billingClient))
+				clinicRoutes.POST("/leave", handlers.LeaveClinic(db, billingClient))
 			}
 
 			// Exportar/eliminar mi cuenta (derechos ARCO): también fuera de
