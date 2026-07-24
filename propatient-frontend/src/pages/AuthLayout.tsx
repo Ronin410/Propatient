@@ -20,11 +20,15 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
           del formulario en celular en vez de aplastarlo a un lado (ver
           AuthLayout.scss). */}
       <div className="auth-layout-visual">
-        {/* Marca Superior */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {/* Marca Superior — lleva a la landing pública (con acceso al
+            directorio de doctores), no se queda como texto estático. */}
+        <Link
+          to="/"
+          style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none', color: 'inherit', width: 'fit-content' }}
+        >
           <img src={logo} alt="ProPatient" style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
           <span style={{ fontSize: '18px', fontWeight: 500, letterSpacing: '0.3px' }}>ProPatient</span>
-        </div>
+        </Link>
 
         {/* Mensaje Central */}
         <div className="auth-layout-visual-message">

@@ -80,6 +80,39 @@ func TestReferral_ApplyReferralCode_AvailableBeforeSubscriptionActive(t *testing
 	assert.Equal(t, true, decodeJSON(t, w)["applied"])
 }
 
+// TestReferral_ApplyReferralCode_AlreadyHadSubscriptionBefore_ReturnsAppliedFalse
+// confirma la restricción pedida: el regalo solo aplica a la PRIMERA
+// suscripción de quien captura el código. Un doctor que ya tuvo una
+// suscripción de Stripe antes (aunque hoy esté cancelada, simulado aquí
+// con stripe_subscription_id ya lleno — ver referral.ApplyCodeIfValid)
+// ya no puede canjear un código, ni el suyo propio para compartir se ve
+// afectado por esto.
+func TestReferral_ApplyReferralCode_AlreadyHadSubscriptionBefore_ReturnsAppliedFalse(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	referrer := testutil.CreateTestDoctor(t, db, "doc_ref_apply_referrer3", "password123")
+	require.NoError(t, db.Model(&referrer).Update("referral_code", "OLDPAID1").Error)
+
+	// Simula un doctor que ya pagó una suscripción alguna vez y hoy está
+	// cancelada — customer.subscription.deleted nunca borra
+	// StripeSubscriptionID, solo cambia el status.
+	referred := testutil.CreateTestDoctor(t, db, "doc_ref_apply_referred3", "password123")
+	require.NoError(t, db.Model(&referred).Updates(map[string]any{
+		"subscription_status":    "canceled",
+		"stripe_subscription_id": "sub_old_canceled_123",
+	}).Error)
+	token := testutil.TokenFor(t, referred.ID, referred.Username)
+
+	w := doRequest(t, router, http.MethodPost, "/api/billing/apply-referral-code", token, map[string]any{"code": "OLDPAID1"})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, false, decodeJSON(t, w)["applied"])
+
+	var count int64
+	db.Model(&models.Referral{}).Where("referred_doctor_id = ?", referred.ID).Count(&count)
+	assert.Zero(t, count, "no debe crearse ninguna referencia pendiente")
+}
+
 // TestReferral_GetReferralCode_ForbiddenWithoutActiveSubscription
 // confirma que un doctor en prueba (no "active") no puede ver ni
 // compartir su código todavía.

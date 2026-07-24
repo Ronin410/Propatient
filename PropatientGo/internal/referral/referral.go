@@ -63,13 +63,29 @@ func GenerateCode(db *gorm.DB) (string, error) {
 
 // ApplyCodeIfValid intenta enganchar al doctor recién registrado
 // (referredDoctorID) con el dueño de rawCode. Nunca regresa error: un
-// código vacío, inválido, propio, o de un referidor que ya alcanzó su
-// tope, simplemente no hace nada — aplicar un código de invitación jamás
-// debe bloquear el registro de un doctor. Devuelve true solo si de
-// verdad se enganchó.
+// código vacío, inválido, propio, de alguien que ya tuvo una suscripción
+// antes, o de un referidor que ya alcanzó su tope, simplemente no hace
+// nada — aplicar un código de invitación jamás debe bloquear el registro
+// de un doctor. Devuelve true solo si de verdad se enganchó.
 func ApplyCodeIfValid(db *gorm.DB, referredDoctorID uint, rawCode string) bool {
 	code := strings.ToUpper(strings.TrimSpace(rawCode))
 	if code == "" {
+		return false
+	}
+
+	// El regalo solo aplica a la PRIMERA suscripción de quien captura el
+	// código. StripeSubscriptionID nunca se borra al cancelar (ver
+	// customer.subscription.deleted en el webhook, que solo cambia el
+	// status), así que si ya tiene uno guardado significa que ya pagó
+	// alguna vez — aunque hoy esté cancelada y esté por resuscribirse — y
+	// el código deja de ser válido para él. Su propio código para
+	// compartir con otros no se ve afectado por esto (ver
+	// handlers.GetReferralCode, que no pasa por aquí).
+	var referred models.Doctor
+	if err := db.Select("id, stripe_subscription_id").First(&referred, referredDoctorID).Error; err != nil {
+		return false
+	}
+	if referred.StripeSubscriptionID != "" {
 		return false
 	}
 
