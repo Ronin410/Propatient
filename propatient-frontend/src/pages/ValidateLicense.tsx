@@ -10,6 +10,7 @@ export const ValidateLicense = () => {
   const [rfc, setRfc] = useState('');
   const [curp, setCurp] = useState('');
   const [ineFile, setIneFile] = useState<File | null>(null);
+  const [cedulaFile, setCedulaFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -55,6 +56,11 @@ export const ValidateLicense = () => {
       return;
     }
 
+    if (!cedulaFile) {
+      setError("La foto o archivo de tu cédula profesional es obligatoria.");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -63,6 +69,7 @@ export const ValidateLicense = () => {
       formData.append('rfc', rfc.trim().toUpperCase());
       formData.append('curp', curp.trim().toUpperCase());
       formData.append('ineDocument', ineFile);
+      formData.append('cedulaDocument', cedulaFile);
 
       await api.post('/user/update-license-full', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
@@ -184,16 +191,38 @@ export const ValidateLicense = () => {
             <label style={{ ...labelStyle, marginBottom: '10px' }}>
               Adjuntar Identificación Oficial (INE / Pasaporte) *
             </label>
-            <input 
-              type="file" 
-              accept="image/*,application/pdf" 
-              onChange={(e) => setIneFile(e.target.files?.[0] || null)} 
+            <input
+              type="file"
+              accept="image/*,application/pdf"
+              onChange={(e) => setIneFile(e.target.files?.[0] || null)}
               style={{ fontSize: '14px', maxWidth: '100%' }}
-              required 
+              required
             />
           </div>
 
-          <button 
+          <div style={{
+            background: 'var(--bg-subtle)',
+            padding: '20px',
+            borderRadius: '8px',
+            border: '2px dashed var(--border, #ccc)',
+            textAlign: 'center'
+          }}>
+            <label style={{ ...labelStyle, marginBottom: '10px' }}>
+              Adjuntar Cédula Profesional (documento oficial) *
+            </label>
+            <input
+              type="file"
+              accept="image/*,application/pdf"
+              onChange={(e) => setCedulaFile(e.target.files?.[0] || null)}
+              style={{ fontSize: '14px', maxWidth: '100%' }}
+              required
+            />
+            <p style={{ fontSize: '12px', color: 'var(--text, #666)', marginTop: '8px', marginBottom: 0 }}>
+              Necesitamos ver la cédula en sí (no solo tu identificación) para poder cotejar el número que capturaste arriba.
+            </p>
+          </div>
+
+          <button
             type="submit" 
             className="btn-primary" 
             disabled={isLoading} 

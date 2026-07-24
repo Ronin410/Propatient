@@ -25,6 +25,11 @@ func presignDoctorFiles(ctx context.Context, storageClient storage.Client, docto
 			doctor.LogoUrl = url
 		}
 	}
+	if doctor.SignatureUrl != "" {
+		if url, err := storageClient.URL(ctx, doctor.SignatureUrl); err == nil {
+			doctor.SignatureUrl = url
+		}
+	}
 }
 
 // presignAppointmentFiles hace lo mismo para la receta y los documentos

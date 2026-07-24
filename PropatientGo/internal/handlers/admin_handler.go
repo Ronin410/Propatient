@@ -53,16 +53,17 @@ func SuperAdminLoginHandler(db *gorm.DB) gin.HandlerFunc {
 // revisar una cédula: nunca el hash de contraseña ni datos clínicos (este
 // endpoint no tiene ninguna relación con pacientes).
 type pendingDoctorResponse struct {
-	ID              uint   `json:"id"`
-	FullName        string `json:"fullName"`
-	Email           string `json:"email"`
-	Username        string `json:"username"`
-	LicenseNumber   string `json:"licenseNumber"`
-	RFC             string `json:"rfc"`
-	CURP            string `json:"curp"`
-	University      string `json:"university"`
-	IneDocumentURL  string `json:"ineDocumentUrl"`
-	CedulaValidated string `json:"cedulaValidated"`
+	ID                uint   `json:"id"`
+	FullName          string `json:"fullName"`
+	Email             string `json:"email"`
+	Username          string `json:"username"`
+	LicenseNumber     string `json:"licenseNumber"`
+	RFC               string `json:"rfc"`
+	CURP              string `json:"curp"`
+	University        string `json:"university"`
+	IneDocumentURL    string `json:"ineDocumentUrl"`
+	CedulaDocumentURL string `json:"cedulaDocumentUrl"`
+	CedulaValidated   string `json:"cedulaValidated"`
 }
 
 // ListPendingDoctors devuelve los doctores con cédula "CAPTURADA": ya
@@ -83,17 +84,24 @@ func ListPendingDoctors(db *gorm.DB, storageClient storage.Client) gin.HandlerFu
 					ineURL = url
 				}
 			}
+			cedulaURL := ""
+			if d.CedulaDocumentPath != "" {
+				if url, err := storageClient.URL(c.Request.Context(), d.CedulaDocumentPath); err == nil {
+					cedulaURL = url
+				}
+			}
 			response = append(response, pendingDoctorResponse{
-				ID:              d.ID,
-				FullName:        d.FullName,
-				Email:           d.Email,
-				Username:        d.Username,
-				LicenseNumber:   d.LicenseNumber,
-				RFC:             d.RFC,
-				CURP:            d.CURP,
-				University:      d.University,
-				IneDocumentURL:  ineURL,
-				CedulaValidated: d.CedulaValidated,
+				ID:                d.ID,
+				FullName:          d.FullName,
+				Email:             d.Email,
+				Username:          d.Username,
+				LicenseNumber:     d.LicenseNumber,
+				RFC:               d.RFC,
+				CURP:              d.CURP,
+				University:        d.University,
+				IneDocumentURL:    ineURL,
+				CedulaDocumentURL: cedulaURL,
+				CedulaValidated:   d.CedulaValidated,
 			})
 		}
 

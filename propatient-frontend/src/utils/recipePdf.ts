@@ -64,6 +64,7 @@ interface DoctorInfo {
   phone?: string;
   logoUrl?: string;
   recipeLegend?: string;
+  signatureUrl?: string;
 }
 
 // Calcula la edad en años a partir de un birthDate "YYYY-MM-DD". Devuelve
@@ -134,6 +135,22 @@ export async function buildRecipeDocDefinition({
     }
   }
 
+  // Firma manuscrita (imagen) del doctor: es opcional — si no la configuró
+  // o si falla al cargarla, el bloque de firma cae de vuelta a la línea +
+  // nombre en texto que ya existía (ver signatureBlock más abajo), nunca
+  // se rompe la generación de la receta por esto.
+  let signatureBase64 = '';
+  if (doctorInfo?.signatureUrl) {
+    const cleanSignatureUrl = toAbsoluteFileUrl(doctorInfo.signatureUrl);
+    try {
+      signatureBase64 = await getBase64FromUrlWithTimeout(cleanSignatureUrl);
+    } catch (err) {
+      console.error(`No se pudo cargar la firma del doctor desde ${cleanSignatureUrl}, se usará el texto de respaldo:`, err);
+      signatureBase64 = '';
+    }
+  }
+  const hasValidSignature = signatureBase64 && signatureBase64.startsWith('data:image');
+
   const recipeContent = Object.keys(dynamicNotes)
     .filter((label) => recipeSections[label] !== false && dynamicNotes[label]?.trim() !== '')
     .map((label) => [
@@ -165,7 +182,12 @@ export async function buildRecipeDocDefinition({
   // texto y la firma solo aparece una vez, donde de verdad termina.
   const signatureBlock = {
     stack: [
-      { text: '_______________________________________', alignment: 'center', color: '#cbd5e0' },
+      // Con firma-imagen configurada: la imagen reemplaza la línea
+      // decorativa (ya "es" la firma). Sin ella: se conserva la línea en
+      // blanco de siempre, para firmar a mano sobre el PDF impreso.
+      hasValidSignature
+        ? { image: signatureBase64, fit: [160, 60], alignment: 'center', margin: [0, 0, 0, 2] }
+        : { text: '_______________________________________', alignment: 'center', color: '#cbd5e0' },
       { text: doctorFullName ? `DR. ${doctorFullName}`.toUpperCase() : 'MÉDICO GENERAL', alignment: 'center', fontSize: 10, bold: true, color: '#2d3748', margin: [0, 2, 0, 2] },
       { text: 'FIRMA DEL MÉDICO', alignment: 'center', fontSize: 8, color: '#718096' },
       { text: `Dirección: ${doctorInfo?.address || 'N/A'} | Tel: ${doctorInfo?.phone || 'N/A'}`, alignment: 'center', fontSize: 8, color: '#718096', margin: [0, 4, 0, 0] },

@@ -16,6 +16,7 @@ interface PendingDoctor {
   curp: string;
   university: string;
   ineDocumentUrl: string;
+  cedulaDocumentUrl: string;
   cedulaValidated: string;
 }
 
@@ -113,6 +114,27 @@ export const AdminPendingDoctors: React.FC = () => {
               ) : (
                 <p className="admin-ine-missing">Sin identificación adjunta</p>
               )}
+              {doc.cedulaDocumentUrl ? (
+                <a href={doc.cedulaDocumentUrl} target="_blank" rel="noopener noreferrer" className="admin-ine-link">
+                  <span className="material-icons-outlined">description</span>
+                  Ver documento de cédula profesional
+                </a>
+              ) : (
+                <p className="admin-ine-missing">Sin documento de cédula adjunto (registro anterior a este control)</p>
+              )}
+              {/* Abre el buscador público de la SEP para cotejar el número
+                  de cédula contra la fuente oficial — no se prellena (el
+                  portal de la SEP no expone un parámetro de búsqueda
+                  documentado y estable), así que el revisor lo teclea ahí. */}
+              <a
+                href="https://www.cedulaprofesional.sep.gob.mx/cedula/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="admin-ine-link"
+              >
+                <span className="material-icons-outlined">verified</span>
+                Verificar en el portal de la SEP
+              </a>
             </div>
 
             <div className="admin-doctor-actions">

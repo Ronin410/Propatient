@@ -72,6 +72,7 @@ func TestSuperAdmin_CedulaReviewLifecycle(t *testing.T) {
 	doc.CedulaValidated = "CAPTURADA"
 	doc.LicenseNumber = "1234567"
 	doc.IneDocumentPath = "identidad/ine_doctor_test.png"
+	doc.CedulaDocumentPath = "identidad/cedula_doctor_test.png"
 	require.NoError(t, db.Save(&doc).Error)
 
 	admin := testutil.CreateTestSuperAdmin(t, db, "admin_lifecycle", "clavesegura123")
@@ -84,6 +85,10 @@ func TestSuperAdmin_CedulaReviewLifecycle(t *testing.T) {
 	require.Len(t, pending, 1)
 	assert.Equal(t, "1234567", pending[0]["licenseNumber"])
 	assert.NotEmpty(t, pending[0]["ineDocumentUrl"])
+	// El documento de la cédula en sí (distinto del INE) también debe
+	// verse en el panel, para que el revisor pueda cotejarlo contra el
+	// número de licencia capturado.
+	assert.NotEmpty(t, pending[0]["cedulaDocumentUrl"])
 
 	docIDStr := strconv.FormatUint(uint64(doc.ID), 10)
 	w = doRequest(t, router, http.MethodPut, "/api/admin/doctors/"+docIDStr+"/approve", adminToken, nil)

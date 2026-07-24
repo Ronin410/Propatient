@@ -278,6 +278,21 @@ func UpdateLicenseFullHandler(db *gorm.DB, storageClient storage.Client) gin.Han
 			return
 		}
 
+		// 3.1 RECUPERAR EL DOCUMENTO DE LA CÉDULA PROFESIONAL EN SÍ (distinto
+		// de la identificación oficial de arriba) — le da al revisor humano
+		// en AdminPendingDoctors algo concreto contra qué cotejar el número
+		// capturado en licenseNumber, en vez de solo confiar en el texto.
+		cedulaFile, err := c.FormFile("cedulaDocument")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "La foto o documento de tu cédula profesional es requerido."})
+			return
+		}
+
+		if err := storage.ValidateUploadedFile(cedulaFile, storage.UploadKindCedulaDocument); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
 		// 4. CREAR NOMBRE ÚNICO E INMUTABLE PARA EL ARCHIVO LIGADO AL DOCTOR
 		ext := filepath.Ext(file.Filename)
 		key := fmt.Sprintf("identidad/ine_doctor_%d_%d%s", doctorID, time.Now().Unix(), ext)
@@ -286,6 +301,14 @@ func UpdateLicenseFullHandler(db *gorm.DB, storageClient storage.Client) gin.Han
 		storedRef, err := storageClient.Save(c.Request.Context(), key, file)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo almacenar el archivo de identidad en el servidor."})
+			return
+		}
+
+		cedulaExt := filepath.Ext(cedulaFile.Filename)
+		cedulaKey := fmt.Sprintf("identidad/cedula_doctor_%d_%d%s", doctorID, time.Now().Unix(), cedulaExt)
+		cedulaStoredRef, err := storageClient.Save(c.Request.Context(), cedulaKey, cedulaFile)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo almacenar el documento de la cédula en el servidor."})
 			return
 		}
 
@@ -300,7 +323,8 @@ func UpdateLicenseFullHandler(db *gorm.DB, storageClient storage.Client) gin.Han
 		doctor.LicenseNumber = licenseNumber
 		doctor.RFC = rfc
 		doctor.CURP = curp
-		doctor.IneDocumentPath = storedRef   // Guardamos la referencia (path local o key de S3), nunca la ruta física de disco
+		doctor.IneDocumentPath = storedRef // Guardamos la referencia (path local o key de S3), nunca la ruta física de disco
+		doctor.CedulaDocumentPath = cedulaStoredRef
 		doctor.CedulaValidated = "CAPTURADA" // Cambia el estado para que el Login detecte el mensaje de espera
 
 		// Persistir cambios con GORM

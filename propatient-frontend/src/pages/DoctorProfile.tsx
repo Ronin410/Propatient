@@ -25,6 +25,7 @@ interface ProfileData {
   resume: string;
   avatarUrl?: string;
   logoUrl?: string;
+  signatureUrl?: string;
   googleCalendarConnected?: boolean;
   publicListed?: boolean;
   publicBio?: string;
@@ -87,14 +88,17 @@ export const DoctorProfile = () => {
 
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  
+  const [signaturePreview, setSignaturePreview] = useState<string | null>(null);
+
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [signatureFile, setSignatureFile] = useState<File | null>(null);
 
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
 
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const signatureInputRef = useRef<HTMLInputElement>(null);
 
   const [connectingCalendar, setConnectingCalendar] = useState(false);
   const pushSubscription = usePushSubscription();
@@ -131,6 +135,10 @@ export const DoctorProfile = () => {
           if (res.data.logoUrl) {
             const fullLogo = toAbsoluteFileUrl(res.data.logoUrl);
             setLogoPreview(fullLogo);
+          }
+          if (res.data.signatureUrl) {
+            const fullSignature = toAbsoluteFileUrl(res.data.signatureUrl);
+            setSignaturePreview(fullSignature);
           }
 
           profile.fullName = res.data.fullName;
@@ -299,7 +307,7 @@ export const DoctorProfile = () => {
     setProfile(prev => ({ ...prev, latitude: lat, longitude: lng }));
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'avatar' | 'logo') => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'avatar' | 'logo' | 'signature') => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       const previewUrl = URL.createObjectURL(file);
@@ -307,9 +315,12 @@ export const DoctorProfile = () => {
       if (type === 'avatar') {
         setAvatarFile(file);         // <--- GUARDAR EL ARCHIVO REAL
         setAvatarPreview(previewUrl);
-      } else {
+      } else if (type === 'logo') {
         setLogoFile(file);           // <--- GUARDAR EL ARCHIVO REAL
         setLogoPreview(previewUrl);
+      } else {
+        setSignatureFile(file);
+        setSignaturePreview(previewUrl);
       }
     }
   };
@@ -355,6 +366,9 @@ export const DoctorProfile = () => {
       if (logoFile) {
         formData.append('logo', logoFile);
       }
+      if (signatureFile) {
+        formData.append('signature', signatureFile);
+      }
 
       // 4. Enviar usando multipart/form-data
       const response = await api.put('/doctor/me', formData, {
@@ -375,6 +389,7 @@ export const DoctorProfile = () => {
           ...prev,
           avatarUrl: data.avatarUrl || prev.avatarUrl,
           logoUrl: data.logoUrl || prev.logoUrl,
+          signatureUrl: data.signatureUrl || prev.signatureUrl,
           publicListed: data.publicListed,
           publicBio: data.publicBio,
           publicSlug: data.publicSlug || prev.publicSlug,
@@ -384,6 +399,7 @@ export const DoctorProfile = () => {
 
         if (data.avatarUrl) setAvatarPreview(toAbsoluteFileUrl(data.avatarUrl));
         if (data.logoUrl) setLogoPreview(toAbsoluteFileUrl(data.logoUrl));
+        if (data.signatureUrl) setSignaturePreview(toAbsoluteFileUrl(data.signatureUrl));
 
         setPopupConfig({
           isOpen: true,
@@ -505,6 +521,15 @@ export const DoctorProfile = () => {
               </div>
               <input type="file" ref={logoInputRef} accept="image/*" style={{ display: 'none' }} onChange={(e) => handleFileChange(e, 'logo')} />
               <p className="upload-hint">Preferiblemente PNG transparente.</p>
+            </div>
+
+            <div className="upload-box">
+              <span className="box-title">Firma (Recetas)</span>
+              <div className="logo-rectangle" onClick={() => signatureInputRef.current?.click()}>
+                {signaturePreview ? <img src={signaturePreview} alt="Firma" /> : <span className="material-icons-outlined" style={{color:'var(--color-secondary)', fontSize: '28px'}}>draw</span>}
+              </div>
+              <input type="file" ref={signatureInputRef} accept="image/*" style={{ display: 'none' }} onChange={(e) => handleFileChange(e, 'signature')} />
+              <p className="upload-hint">Foto de tu firma, preferiblemente PNG transparente. Se imprime en cada receta.</p>
             </div>
           </div>
         </div>

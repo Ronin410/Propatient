@@ -101,6 +101,26 @@ func UpdateCurrentDoctor(db *gorm.DB, storageClient storage.Client, geoClient ge
 			doctor.LogoUrl = storedRef
 		}
 
+		// 3. Procesar y guardar la FIRMA (imagen de la firma manuscrita del
+		// doctor, estampada en cada receta) si viene en la petición
+		signatureFile, err := c.FormFile("signature")
+		if err == nil && signatureFile != nil {
+			if err := storage.ValidateUploadedFile(signatureFile, storage.UploadKindAvatarOrLogo); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+
+			ext := filepath.Ext(signatureFile.Filename)
+			key := fmt.Sprintf("profiles/doc_%d_signature_%d%s", doctorID, time.Now().Unix(), ext)
+
+			storedRef, err := storageClient.Save(c.Request.Context(), key, signatureFile)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al guardar la firma"})
+				return
+			}
+			doctor.SignatureUrl = storedRef
+		}
+
 		// 4. Leer los campos de texto regulares utilizando PostForm (ya que vienen en multipart)
 		doctor.FullName = c.PostForm("fullName")
 		doctor.MedicalSpecialty = c.PostForm("medicalSpecialty")
@@ -168,6 +188,7 @@ func UpdateCurrentDoctor(db *gorm.DB, storageClient storage.Client, geoClient ge
 			"message":          "Perfil actualizado con éxito",
 			"avatarUrl":        doctor.AvatarUrl,
 			"logoUrl":          doctor.LogoUrl,
+			"signatureUrl":     doctor.SignatureUrl,
 			"fullName":         doctor.FullName,
 			"medicalSpecialty": doctor.MedicalSpecialty,
 			"phone":            doctor.Phone,

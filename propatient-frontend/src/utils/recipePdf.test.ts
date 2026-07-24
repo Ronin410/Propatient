@@ -127,6 +127,19 @@ describe('buildRecipeDocDefinition', () => {
     expect(flat).toContain('NO. DE RECETA: 000042');
   });
 
+  it('cae de vuelta a la línea de firma en texto si la imagen de firma no carga', async () => {
+    const doc = await buildRecipeDocDefinition({
+      doctorInfo: { fullName: 'Juan Pérez', signatureUrl: '/uploads/firma_doc_1.png' },
+      patientInfo: patient,
+      dynamicNotes: {},
+      recipeSections: {},
+    });
+
+    const flat = flattenText(doc.content);
+    expect(flat).toContain('FIRMA DEL MÉDICO');
+    expect(flat).toContain('DR. JUAN PÉREZ');
+  });
+
   it('no imprime ningún folio si todavía no se pudo asignar uno', async () => {
     const doc = await buildRecipeDocDefinition({
       doctorInfo: { fullName: 'Juan Pérez' },

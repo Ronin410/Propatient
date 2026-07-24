@@ -44,6 +44,13 @@ var (
 			"application/pdf": true,
 		}),
 	}
+	UploadKindCedulaDocument = UploadKind{
+		label:        "la cédula profesional",
+		maxSizeBytes: 10 << 20, // 10 MiB
+		allowedContentTypes: mergeContentTypes(imageContentTypes, map[string]bool{
+			"application/pdf": true,
+		}),
+	}
 	UploadKindRecipePDF = UploadKind{
 		label:        "la receta",
 		maxSizeBytes: 5 << 20, // 5 MiB

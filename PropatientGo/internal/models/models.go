@@ -38,10 +38,22 @@ type Doctor struct {
 	ProfileCompleted bool           `gorm:"default:false" json:"profileCompleted"`
 	CedulaValidated  string         `gorm:"type:varchar(20);default:'PENDIENTE'" json:"cedulaValidated"`
 	IneDocumentPath  string         `json:"ineDocumentPath"`
-	Resume           string         `json:"resume"`
-	RecipeLegend     string         `json:"recipeLegend"`
-	AvatarUrl        string         `json:"avatarUrl"`
-	LogoUrl          string         `json:"logoUrl"`
+	// CedulaDocumentPath es la foto/PDF del documento de la cédula
+	// profesional en sí (distinto de IneDocumentPath, que es solo la
+	// identificación oficial) — le da al revisor de AdminPendingDoctors
+	// algo concreto contra qué cotejar el número capturado en LicenseNumber.
+	CedulaDocumentPath string `json:"cedulaDocumentPath"`
+	Resume             string `json:"resume"`
+	RecipeLegend       string `json:"recipeLegend"`
+	AvatarUrl          string `json:"avatarUrl"`
+	LogoUrl            string `json:"logoUrl"`
+	// SignatureUrl es una imagen (idealmente PNG transparente) de la firma
+	// manuscrita del doctor, subida una sola vez desde su perfil y
+	// estampada en cada receta (ver buildRecipeDocDefinition en el
+	// frontend) — no es una firma criptográfica, solo una representación
+	// visual más fiel que el texto "FIRMA DEL MÉDICO" que se usa como
+	// respaldo si no la ha configurado.
+	SignatureUrl string `json:"signatureUrl"`
 
 	// Integración con Google Calendar (OAuth de servidor, no el login).
 	// El refresh token nunca se envía al frontend; solo se expone si está
