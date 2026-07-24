@@ -465,6 +465,74 @@ func TestClinic_LeaveClinic_NoClinic_Returns400(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
+// TestClinic_DeleteClinic_OnlyOwner_Returns403 confirma que un miembro no
+// puede eliminar la clínica.
+func TestClinic_DeleteClinic_OnlyOwner_Returns403(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	owner := testutil.CreateTestDoctor(t, db, "doc_clinic_owner_del1", "password123")
+	clinic := models.Clinic{Name: "Clínica D", OwnerDoctorID: owner.ID, SubscriptionStatus: "active"}
+	require.NoError(t, db.Create(&clinic).Error)
+	require.NoError(t, db.Model(&owner).Updates(map[string]any{"clinic_id": clinic.ID, "is_clinic_owner": true}).Error)
+
+	member := testutil.CreateTestDoctor(t, db, "doc_clinic_member_del1", "password123")
+	require.NoError(t, db.Model(&member).Update("clinic_id", clinic.ID).Error)
+
+	token := testutil.TokenFor(t, member.ID, member.Username)
+	w := doRequest(t, router, http.MethodDelete, "/api/clinic", token, nil)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+// TestClinic_DeleteClinic_Success confirma el punto central de este
+// cambio: eliminar la clínica cancela su suscripción de Stripe (si seguía
+// viva), libera a TODOS los doctores (dueño incluido) y borra la fila de
+// la clínica — a diferencia de solo cancelar el pago desde el portal,
+// que dejaba a todos apuntando a una clínica ya muerta sin salida (ver
+// StripeWebhook, caso customer.subscription.deleted).
+func TestClinic_DeleteClinic_Success(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	mock := newMockBillingClient()
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mustLocalStorage(t), clinicBillingConfig(), mock, geocoding.NewClient(), nil, nil)
+
+	owner := testutil.CreateTestDoctor(t, db, "doc_clinic_owner_del2", "password123")
+	clinic := models.Clinic{
+		Name:                 "Clínica D2",
+		OwnerDoctorID:        owner.ID,
+		SubscriptionStatus:   "active",
+		StripeSubscriptionID: "sub_clinic_d2",
+	}
+	require.NoError(t, db.Create(&clinic).Error)
+	require.NoError(t, db.Model(&owner).Updates(map[string]any{"clinic_id": clinic.ID, "is_clinic_owner": true}).Error)
+
+	member := testutil.CreateTestDoctor(t, db, "doc_clinic_member_del2", "password123")
+	require.NoError(t, db.Model(&member).Update("clinic_id", clinic.ID).Error)
+
+	token := testutil.TokenFor(t, owner.ID, owner.Username)
+	w := doRequest(t, router, http.MethodDelete, "/api/clinic", token, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	assert.Contains(t, mock.canceledSubscriptions, "sub_clinic_d2")
+
+	var reloadedOwner models.Doctor
+	require.NoError(t, db.First(&reloadedOwner, owner.ID).Error)
+	assert.Nil(t, reloadedOwner.ClinicID)
+	assert.False(t, reloadedOwner.IsClinicOwner)
+	assert.Equal(t, "canceled", reloadedOwner.SubscriptionStatus)
+
+	var reloadedMember models.Doctor
+	require.NoError(t, db.First(&reloadedMember, member.ID).Error)
+	assert.Nil(t, reloadedMember.ClinicID)
+	assert.Equal(t, "canceled", reloadedMember.SubscriptionStatus)
+
+	var count int64
+	db.Model(&models.Clinic{}).Where("id = ?", clinic.ID).Count(&count)
+	assert.Zero(t, count, "la clínica debe quedar borrada (soft-delete)")
+
+	w = doRequest(t, router, http.MethodGet, "/api/clinic", token, nil)
+	assert.Equal(t, http.StatusNotFound, w.Code, "el ex-dueño ya no debe ver ninguna clínica")
+}
+
 // TestClinic_Middleware_BlocksMember_WhenClinicSubscriptionNotActive
 // confirma que el acceso de un doctor de clínica depende de la
 // suscripción de la clínica, no de la suya propia.

@@ -188,9 +188,10 @@ type PushSubscription struct {
 // prueba: a diferencia de un doctor individual, el cobro arranca en
 // cuanto se completa el Checkout.
 type Clinic struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	Name      string    `json:"name"`
+	ID        uint           `gorm:"primaryKey" json:"id"`
+	CreatedAt time.Time      `json:"created_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+	Name      string         `json:"name"`
 
 	OwnerDoctorID uint `gorm:"not null;index" json:"ownerDoctorId"`
 

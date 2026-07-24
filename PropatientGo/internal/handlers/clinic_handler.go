@@ -556,7 +556,7 @@ func LeaveClinic(db *gorm.DB, client billing.Client) gin.HandlerFunc {
 			return
 		}
 		if doctor.IsClinicOwner {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "El dueño no puede salirse de su propia clínica — cancélala desde el portal de facturación en Mi Clínica"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "El dueño no puede salirse de su propia clínica — usa \"Eliminar clínica\" en Mi Clínica para disolverla por completo"})
 			return
 		}
 
@@ -577,5 +577,62 @@ func LeaveClinic(db *gorm.DB, client billing.Client) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "Saliste de la clínica"})
+	}
+}
+
+// DeleteClinic disuelve la clínica por completo — solo el dueño. A
+// diferencia de cancelar el pago desde el portal de Stripe (que solo
+// marca Clinic.SubscriptionStatus como "canceled" pero deja a todos los
+// doctores con su ClinicID apuntando a una clínica ya muerta, sin ninguna
+// forma de salir de ahí — ver StripeWebhook, caso
+// customer.subscription.deleted), esto: cancela la suscripción de Stripe
+// si seguía viva, libera a TODOS los doctores (dueño incluido, para que
+// pueda volver a ser un doctor individual o crear otra clínica) y borra
+// la fila de la clínica.
+func DeleteClinic(db *gorm.DB, client billing.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ownerID := c.MustGet("doctorID").(uint)
+
+		var owner models.Doctor
+		if err := db.First(&owner, ownerID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Doctor no encontrado"})
+			return
+		}
+		if owner.ClinicID == nil || !owner.IsClinicOwner {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Solo el dueño de la clínica puede eliminarla"})
+			return
+		}
+
+		var clinic models.Clinic
+		if err := db.First(&clinic, *owner.ClinicID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "La clínica ya no existe"})
+			return
+		}
+
+		// Mejor esfuerzo: si Stripe no responde, se sigue disolviendo la
+		// clínica igual — no tiene caso dejar a todos bloqueados por un
+		// problema al cancelar un cobro que de cualquier forma ya no
+		// tendrá ninguna clínica detrás para justificarlo.
+		if client != nil && clinic.StripeSubscriptionID != "" {
+			if err := client.CancelSubscription(c.Request.Context(), clinic.StripeSubscriptionID); err != nil {
+				log.Printf("⚠️ No se pudo cancelar la suscripción de Stripe al eliminar la clínica %d: %v", clinic.ID, err)
+			}
+		}
+
+		if err := db.Model(&models.Doctor{}).Where("clinic_id = ?", clinic.ID).Updates(map[string]interface{}{
+			"clinic_id":           nil,
+			"is_clinic_owner":     false,
+			"subscription_status": "canceled",
+		}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo liberar a los doctores de la clínica"})
+			return
+		}
+
+		if err := db.Delete(&clinic).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo eliminar la clínica"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Clínica eliminada"})
 	}
 }

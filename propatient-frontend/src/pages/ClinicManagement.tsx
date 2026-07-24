@@ -54,11 +54,19 @@ export const ClinicManagement: React.FC = () => {
   const [portalLoading, setPortalLoading] = useState(false);
 
   // Salir de la clínica por cuenta propia (solo para un doctor que NO es
-  // dueño — el dueño cancela la clínica completa desde "Gestionar pagos",
-  // ver handleManagePayments) — mismo efecto que doctorToRemove pero
-  // iniciado por el propio doctor, sin depender de que el dueño lo quite.
+  // dueño — el dueño disuelve la clínica completa con "Eliminar clínica",
+  // ver confirmDeleteClinicOpen más abajo) — mismo efecto que
+  // doctorToRemove pero iniciado por el propio doctor, sin depender de
+  // que el dueño lo quite.
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);
+
+  // Eliminar la clínica por completo (solo el dueño) — a diferencia de
+  // cancelar el pago desde "Gestionar pagos" (que solo detiene el cobro
+  // pero deja a todos apuntando a una clínica ya cancelada, sin salida),
+  // esto libera a todos los doctores y borra la clínica de verdad.
+  const [confirmDeleteClinicOpen, setConfirmDeleteClinicOpen] = useState(false);
+  const [deletingClinic, setDeletingClinic] = useState(false);
 
   // Ubicación única de la clínica — solo el dueño la edita; el directorio
   // público la muestra para TODOS los doctores de la clínica en vez de la
@@ -215,6 +223,28 @@ export const ClinicManagement: React.FC = () => {
       });
     } finally {
       setLeaving(false);
+    }
+  };
+
+  const handleDeleteClinic = async () => {
+    setDeletingClinic(true);
+    try {
+      await api.delete('/clinic');
+      setConfirmDeleteClinicOpen(false);
+      // Igual que handleLeaveClinic: fetchClinic() vuelve a traer 404 y la
+      // vista transiciona sola a "no-clinic" — el dueño queda libre para
+      // crear una clínica nueva o volver a suscribirse por su cuenta.
+      fetchClinic();
+    } catch (err: unknown) {
+      setConfirmDeleteClinicOpen(false);
+      setPopupConfig({
+        isOpen: true,
+        type: 'error',
+        title: 'Error',
+        message: getErrorMessage(err, 'No se pudo eliminar la clínica.'),
+      });
+    } finally {
+      setDeletingClinic(false);
     }
   };
 
@@ -455,6 +485,20 @@ export const ClinicManagement: React.FC = () => {
         </table>
       </section>
 
+      {clinic.isOwner && (
+        <section className="card clinic-danger-zone">
+          <h3>Eliminar clínica</h3>
+          <p className="clinic-muted">
+            Cancela la suscripción, quita a todos los doctores (incluido tú) y borra la clínica por
+            completo. Cada doctor tendrá que suscribirse por su cuenta o esperar otra invitación —
+            esta acción no se puede deshacer.
+          </p>
+          <button className="btn-outline-sm danger" onClick={() => setConfirmDeleteClinicOpen(true)}>
+            Eliminar clínica
+          </button>
+        </section>
+      )}
+
       <ConfirmDialog
         isOpen={!!doctorToRemove}
         variant="danger"
@@ -473,6 +517,16 @@ export const ClinicManagement: React.FC = () => {
         confirmText={leaving ? 'Saliendo...' : 'Sí, salir'}
         onConfirm={handleLeaveClinic}
         onCancel={() => setConfirmLeaveOpen(false)}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmDeleteClinicOpen}
+        variant="danger"
+        title="Eliminar clínica"
+        message={`¿Seguro que quieres eliminar "${clinic.name}"? Se cancela la suscripción, se quita a los ${clinic.doctors.length} doctor${clinic.doctors.length === 1 ? '' : 'es'} (tú incluido) y la clínica se borra por completo. Esta acción no se puede deshacer.`}
+        confirmText={deletingClinic ? 'Eliminando...' : 'Sí, eliminar'}
+        onConfirm={handleDeleteClinic}
+        onCancel={() => setConfirmDeleteClinicOpen(false)}
       />
 
       <Popup
