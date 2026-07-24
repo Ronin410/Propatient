@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { getErrorMessage } from '../utils/errorMessage';
@@ -7,14 +8,19 @@ import { Popup } from '../components/Popup';
 import './BillingPage.scss';
 
 interface BillingStatus {
-  subscriptionStatus: 'trialing' | 'active' | 'past_due' | 'canceled';
-  trialEndsAt: string | null;
-  hasPaymentMethod: boolean;
+  // true si el doctor pertenece a una clínica: su acceso depende de la
+  // suscripción de la clínica, no de una propia — ver GetBillingStatus,
+  // que en ese caso no manda nada más (los demás campos quedan opcionales
+  // porque simplemente no aplican).
+  managedByClinic: boolean;
+  subscriptionStatus?: 'trialing' | 'active' | 'past_due' | 'canceled';
+  trialEndsAt?: string | null;
+  hasPaymentMethod?: boolean;
   // Fecha real de la próxima renovación, consultada a Stripe en vivo (ver
   // GetBillingStatus en el backend) — null si no hay suscripción activa,
   // o si Stripe no respondió a tiempo (mejor esfuerzo, el resto del
   // estatus se sigue mostrando igual).
-  currentPeriodEnd: string | null;
+  currentPeriodEnd?: string | null;
 }
 
 interface ReferralInfo {
@@ -25,7 +31,7 @@ interface ReferralInfo {
   maxReferrals: number;
 }
 
-function daysLeft(dateStr: string | null): number {
+function daysLeft(dateStr: string | null | undefined): number {
   if (!dateStr) return 0;
   const ms = new Date(dateStr).getTime() - Date.now();
   return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
@@ -142,6 +148,26 @@ export const BillingPage: React.FC = () => {
             El periodo de prueba o la suscripción del consultorio ya no está activa.
             Pídele al doctor que renueve su suscripción para poder seguir usando ProPatient.
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status?.managedByClinic) {
+    return (
+      <div className="billing-container">
+        <div className="card billing-card">
+          <span className="material-icons-outlined billing-icon">apartment</span>
+          <h1>Suscripción</h1>
+          <p>
+            Tu consultorio forma parte de una clínica — el pago y la administración de la
+            suscripción los gestiona el dueño de la clínica desde "Mi Clínica", no aquí.
+          </p>
+          <div className="billing-actions">
+            <Link to="/clinica" className="btn-primary" style={{ display: 'inline-block', textDecoration: 'none' }}>
+              Ir a Mi Clínica
+            </Link>
+          </div>
         </div>
       </div>
     );

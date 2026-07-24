@@ -29,8 +29,18 @@ func GetBillingStatus(db *gorm.DB, client billing.Client) gin.HandlerFunc {
 		doctorID := c.MustGet("doctorID").(uint)
 
 		var doctor models.Doctor
-		if err := db.Select("subscription_status, trial_ends_at, stripe_customer_id, stripe_subscription_id").First(&doctor, doctorID).Error; err != nil {
+		if err := db.Select("subscription_status, trial_ends_at, stripe_customer_id, stripe_subscription_id, clinic_id").First(&doctor, doctorID).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Doctor no encontrado"})
+			return
+		}
+
+		// Un doctor de clínica no tiene nada que gestionar aquí — su acceso
+		// depende de la suscripción de la clínica, no de la suya propia (ver
+		// CreateCheckoutSession/CreatePortalSession, que ya rechazan esto).
+		// El frontend usa esta bandera para mostrar un aviso en vez de la
+		// pantalla normal de prueba/pago.
+		if doctor.ClinicID != nil {
+			c.JSON(http.StatusOK, gin.H{"managedByClinic": true})
 			return
 		}
 
@@ -44,6 +54,7 @@ func GetBillingStatus(db *gorm.DB, client billing.Client) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
+			"managedByClinic":    false,
 			"subscriptionStatus": doctor.SubscriptionStatus,
 			"trialEndsAt":        doctor.TrialEndsAt,
 			"hasPaymentMethod":   doctor.StripeCustomerID != "",
@@ -66,6 +77,14 @@ func CreateCheckoutSession(db *gorm.DB, client billing.Client, cfg billing.Confi
 		var doctor models.Doctor
 		if err := db.First(&doctor, doctorID).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Doctor no encontrado"})
+			return
+		}
+		// Un doctor de clínica ya está cubierto por la suscripción de la
+		// clínica (ver AcceptClinicInvite/activateClinicSubscription, que
+		// cancelan y limpian su propia suscripción individual al unirse) —
+		// no debe poder arrancar una segunda suscripción individual encima.
+		if doctor.ClinicID != nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "Tu consultorio forma parte de una clínica; la suscripción la gestiona el dueño de la clínica desde Mi Clínica."})
 			return
 		}
 
@@ -100,6 +119,13 @@ func CreatePortalSession(db *gorm.DB, client billing.Client) gin.HandlerFunc {
 		var doctor models.Doctor
 		if err := db.First(&doctor, doctorID).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Doctor no encontrado"})
+			return
+		}
+		// Mismo criterio que CreateCheckoutSession: un doctor de clínica no
+		// tiene suscripción individual propia que gestionar aquí (ver
+		// handlers.CreateClinicPortalSession para el portal de la clínica).
+		if doctor.ClinicID != nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "Tu consultorio forma parte de una clínica; la suscripción la gestiona el dueño de la clínica desde Mi Clínica."})
 			return
 		}
 		if doctor.StripeCustomerID == "" {

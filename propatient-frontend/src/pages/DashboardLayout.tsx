@@ -74,6 +74,22 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
       });
   }, [isStaff, sessionDoctorName, setDoctorName]);
 
+  // Si el doctor pertenece a una clínica, "Suscripción" no aplica — su
+  // acceso depende de la suscripción de la clínica, no de una propia (ver
+  // GetBillingStatus/CreateCheckoutSession, que ya lo rechazan del lado
+  // del backend). Se consulta aparte del efecto de arriba porque ese se
+  // salta la llamada por completo si sessionDoctorName ya está guardado.
+  const [doctorClinicId, setDoctorClinicId] = useState<number | null>(null);
+  useEffect(() => {
+    if (isStaff) return;
+    api.get('/doctor/me')
+      .then((res) => setDoctorClinicId(res.data?.clinicId ?? null))
+      .catch(() => {
+        // Sin red o sin permiso: se asume que no hay clínica y se deja ver
+        // "Suscripción" — mismo criterio de mejor esfuerzo que arriba.
+      });
+  }, [isStaff]);
+
   // Nombre dinámico del contexto (login/loginStaff/Perfil/el autocompletado
   // de arriba lo actualizan ahí, ver AuthContext) — usar el contexto en vez
   // de leer localStorage directo aquí es lo que hace que un cambio de
@@ -102,7 +118,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
     ...(!isStaff ? [
       { label: 'Personal', icon: 'badge', route: '/personal' },
       { label: 'Reseñas', icon: 'reviews', route: '/resenas' },
-      { label: 'Suscripción', icon: 'credit_card', route: '/billing' },
+      // Oculto para un doctor de clínica: su suscripción la gestiona el
+      // dueño desde "Mi Clínica", no aquí (ver doctorClinicId arriba).
+      ...(doctorClinicId == null ? [{ label: 'Suscripción', icon: 'credit_card', route: '/billing' }] : []),
       { label: 'Mi Clínica', icon: 'apartment', route: '/clinica' },
       { label: 'Perfil', icon: 'settings', route: '/profile' },
       { label: 'Ajustes Notas', icon: 'tune', route: '/ajustes-notas' }

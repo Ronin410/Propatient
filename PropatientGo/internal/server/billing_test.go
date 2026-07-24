@@ -8,6 +8,7 @@ import (
 	"propatient-api/internal/billing"
 	"propatient-api/internal/geocoding"
 	"propatient-api/internal/googlecalendar"
+	"propatient-api/internal/models"
 	"propatient-api/internal/server"
 	"propatient-api/internal/storage"
 	"propatient-api/internal/testutil"
@@ -178,6 +179,65 @@ func TestBilling_TrialingSubscription_OmitsCurrentPeriodEnd(t *testing.T) {
 	body := decodeJSON(t, w)
 	assert.Equal(t, "trialing", body["subscriptionStatus"])
 	assert.Nil(t, body["currentPeriodEnd"])
+}
+
+// TestBilling_GetStatus_ClinicDoctor_ReturnsManagedByClinic confirma que
+// un doctor de clínica ve una respuesta distinta (managedByClinic: true,
+// sin los demás campos de suscripción individual) — su acceso depende de
+// la suscripción de la clínica, no de la suya propia.
+func TestBilling_GetStatus_ClinicDoctor_ReturnsManagedByClinic(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_billing_clinic_status", "password123")
+	clinic := models.Clinic{Name: "Clínica de prueba", OwnerDoctorID: doc.ID, SubscriptionStatus: "active"}
+	require.NoError(t, db.Create(&clinic).Error)
+	require.NoError(t, db.Model(&doc).Update("clinic_id", clinic.ID).Error)
+	token := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doRequest(t, router, http.MethodGet, "/api/billing/status", token, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	body := decodeJSON(t, w)
+	assert.Equal(t, true, body["managedByClinic"])
+	assert.Nil(t, body["subscriptionStatus"])
+}
+
+// TestBilling_CreateCheckoutSession_ClinicDoctor_Returns409 confirma el
+// punto central de este cambio: un doctor de clínica no puede arrancar una
+// segunda suscripción individual encima de la de su clínica.
+func TestBilling_CreateCheckoutSession_ClinicDoctor_Returns409(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	mock := newMockBillingClient()
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mustLocalStorage(t), clinicBillingConfig(), mock, geocoding.NewClient(), nil, nil)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_billing_clinic_checkout", "password123")
+	clinic := models.Clinic{Name: "Clínica de prueba", OwnerDoctorID: doc.ID, SubscriptionStatus: "active"}
+	require.NoError(t, db.Create(&clinic).Error)
+	require.NoError(t, db.Model(&doc).Update("clinic_id", clinic.ID).Error)
+	token := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doRequest(t, router, http.MethodPost, "/api/billing/checkout", token, nil)
+	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+}
+
+// TestBilling_CreatePortalSession_ClinicDoctor_Returns409 es el mismo
+// criterio que el checkout, pero para el portal de facturación individual.
+func TestBilling_CreatePortalSession_ClinicDoctor_Returns409(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	mock := newMockBillingClient()
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mustLocalStorage(t), clinicBillingConfig(), mock, geocoding.NewClient(), nil, nil)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_billing_clinic_portal", "password123")
+	clinic := models.Clinic{Name: "Clínica de prueba", OwnerDoctorID: doc.ID, SubscriptionStatus: "active"}
+	require.NoError(t, db.Create(&clinic).Error)
+	require.NoError(t, db.Model(&doc).Updates(map[string]any{
+		"clinic_id":          clinic.ID,
+		"stripe_customer_id": "cus_old_individual_123",
+	}).Error)
+	token := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doRequest(t, router, http.MethodPost, "/api/billing/portal", token, nil)
+	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
 }
 
 func mustLocalStorage(t *testing.T) storage.Client {
