@@ -219,12 +219,18 @@ notificaciones simplemente no aparece.
   Porkbun, SSL emitido, `FRONTEND_URL`/`VITE_API_URL` actualizados, y
   `https://propatient.pro` agregado a los orígenes autorizados de Google
   OAuth. Confirmado funcionando en producción.
-- **Confirma que la base de datos no siga en el plan "free" de Render** si
-  vas a depender de estos datos en serio: el plan free de Postgres en
-  Render tiene almacenamiento limitado y (verifica en tu dashboard) puede
-  no incluir backups automáticos ni garantía de retención a largo plazo.
-  Sube al plan pagado antes de tener expedientes clínicos reales que no
-  puedas permitirte perder.
+- **⏳ EN PROCESO — subir la base de datos del plan "free" de Render a uno
+  pagado** (decidido, el usuario está haciéndolo desde el dashboard de
+  Render). El plan free de Postgres no incluye backups automáticos ni
+  garantía de retención a largo plazo — con expedientes clínicos reales
+  no es aceptable perderlos. **Pendiente exacto: en cuanto el usuario
+  confirme el nombre del plan de pago que eligió, actualizar
+  `render.yaml` línea 14 (`plan: free` → el plan real) para que el
+  Blueprint no intente regresar la base al plan gratuito en una futura
+  sincronización.** El upgrade en sí se hace 100% desde el dashboard de
+  Render, sin tocar código ni variables de entorno (salvo que Render pida
+  migrar a una base nueva en vez de subir en el mismo lugar — en ese caso
+  sí habría que actualizar `DATABASE_URL` en el servicio backend).
 - **Plan "free" del propio backend**: los servicios web free de Render se
   "duermen" tras un rato sin tráfico, y la primera petición después de eso
   tarda varios segundos (cold start). Aceptable para un piloto chico,
@@ -269,6 +275,23 @@ frontend reales, con tests automatizados):
   paciente; el doctor aprueba cada reseña antes de que se publique en su
   perfil. Requiere el WhatsApp Business real de la sección 1.4 para
   funcionar con pacientes reales.
+- **Contenido mínimo del expediente, aplicado en backend (NOM-004)**: una
+  cita ya no puede quedar "COMPLETED" sin diagnóstico ni notas de
+  consulta con contenido, ni sin un código CIE-10 asociado — antes solo
+  era una validación del frontend, fácil de saltarse llamando a la API
+  directo. Sigue pendiente que un especialista compare esto contra la
+  lista exacta de campos que pide la norma (ver sección 6.2).
+- **Validación de cédula profesional, proceso de revisión mejorado**:
+  además de la identificación oficial (INE), ahora también se exige subir
+  el documento de la cédula en sí, y el panel de revisión
+  (`/admin/pendientes`) incluye un enlace directo al buscador público de
+  la SEP para cotejar el número contra la fuente oficial. Sigue siendo
+  revisión 100% manual — no existe una API oficial de la SEP para
+  automatizarla.
+- **Firma-imagen en recetas**: el doctor puede subir una imagen de su
+  firma manuscrita desde su Perfil (junto a avatar/logo) y se estampa en
+  cada receta en PDF. No es una firma criptográfica (tipo e.firma/FIEL) —
+  eso quedó evaluado como un proyecto grande aparte, no se ha hecho.
 
 ---
 
@@ -415,12 +438,15 @@ por alto porque no es "legal" en el sentido usual, es normativa de salud.
   confirmación en `DoctorProfile.tsx`), pero confírmalo formalmente con un
   abogado de salud: hay excepciones (ej. menores de edad, ciertos
   padecimientos) donde el periodo es más largo.
-- **Contenido mínimo obligatorio** del expediente: la norma especifica
-  campos que debe tener (ficha de identificación, antecedentes,
-  exploración física, diagnósticos, notas de evolución, etc.). Vale la
-  pena que un especialista compare esto contra las "Notas de consulta
-  configurables" del sistema (`SettingsNotes`) para confirmar que un
-  doctor pueda cumplir la norma con la configuración que arme.
+- **Contenido mínimo obligatorio** del expediente — ✅ aplicado a nivel
+  backend: una cita no puede finalizarse sin diagnóstico o notas clínicas
+  con contenido, ni sin código CIE-10 (ver sección 3). La norma también
+  especifica campos concretos (ficha de identificación, antecedentes,
+  exploración física, diagnósticos, notas de evolución, etc.) — sigue
+  pendiente que un especialista compare esa lista exacta contra las
+  "Notas de consulta configurables" del sistema (`SettingsNotes`) para
+  confirmar que un doctor pueda cumplir la norma completa con la
+  configuración que arme.
 - **Quién puede acceder**: la norma regula el acceso al expediente
   (paciente, representante legal, autoridad competente). El sistema ya
   aísla expedientes por doctor (un doctor no ve pacientes de otro) y
@@ -509,7 +535,10 @@ Privacidad mencionándolo, aunque sea breve.
 - [ ] Verificación de Google del scope de Calendar (ver `GOOGLE-CALENDAR-VERIFICACION.md`)
 - [x] Conectar `propatient.pro` en Render (DNS en Porkbun) y actualizar
       `FRONTEND_URL`/`VITE_API_URL`/Google OAuth con el dominio nuevo ✅
-- [ ] Base de datos y backend fuera del plan free de Render
+- [ ] Base de datos fuera del plan free de Render — ⏳ en proceso, falta
+      que el usuario confirme el plan elegido para actualizar
+      `render.yaml` (ver sección 2). Backend (servicio web) todavía en
+      plan free, sin resolver.
 - [ ] Aviso de Privacidad completo y revisado por abogado (LFPDPPP, sección 6.1)
 - [ ] Transferencias internacionales de datos declaradas (Google, Twilio, Resend, Stripe, S3 — sección 6.1)
 - [ ] Retención de expediente clínico conforme a NOM-004-SSA3-2012 (sección 6.2)
