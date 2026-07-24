@@ -19,6 +19,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // followUpEventDuration es la duración por defecto que se le asigna a una
@@ -1169,5 +1170,55 @@ func SaveRecipePDF(db *gorm.DB, storageClient storage.Client) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Receta en PDF almacenada y asociada correctamente",
 		})
+	}
+}
+
+// GetOrAssignRecipeNumber devuelve el folio de receta de esta cita — ver
+// Appointment.RecipeNumber. Si la cita ya tenía uno (de una generación
+// anterior de la MISMA receta), regresa ese mismo número; si es la primera
+// vez, lo toma del contador propio del doctor (Doctor.LastRecipeNumber),
+// incrementándolo de forma atómica dentro de una transacción con bloqueo
+// de fila — así dos peticiones casi simultáneas (doble clic, dos pestañas)
+// nunca terminan asignando el mismo folio a dos recetas distintas. El
+// frontend llama esto ANTES de armar el PDF (ver
+// utils/recipePdf.generateAndSaveRecipePDF), para poder imprimir el folio
+// dentro de la propia receta.
+func GetOrAssignRecipeNumber(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.Param("id")
+		doctorID := c.MustGet("doctorID").(uint)
+
+		var appointment models.Appointment
+		if err := db.Where("id = ? AND doctor_id = ?", id, doctorID).First(&appointment).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Cita no encontrada"})
+			return
+		}
+
+		if appointment.RecipeNumber != nil {
+			c.JSON(http.StatusOK, gin.H{"recipeNumber": *appointment.RecipeNumber})
+			return
+		}
+
+		var recipeNumber uint
+		err := db.Transaction(func(tx *gorm.DB) error {
+			var doctor models.Doctor
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&doctor, doctorID).Error; err != nil {
+				return err
+			}
+			recipeNumber = doctor.LastRecipeNumber + 1
+			if err := tx.Model(&doctor).Update("last_recipe_number", recipeNumber).Error; err != nil {
+				return err
+			}
+			return tx.Model(&models.Appointment{}).
+				Where("id = ? AND doctor_id = ?", id, doctorID).
+				Update("recipe_number", recipeNumber).Error
+		})
+		if err != nil {
+			log.Printf("⚠️ No se pudo asignar folio de receta a la cita %s (doctor %d): %v", id, doctorID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo asignar el folio de la receta"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"recipeNumber": recipeNumber})
 	}
 }

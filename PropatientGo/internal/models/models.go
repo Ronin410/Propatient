@@ -132,6 +132,15 @@ type Doctor struct {
 	// asignar), igual que generateDoctorSlug hace con PublicSlug.
 	ReferralCode string `gorm:"index" json:"-"`
 
+	// Contador propio para el folio de recetas (ver
+	// handlers.GetOrAssignRecipeNumber y Appointment.RecipeNumber): cada
+	// vez que este doctor genera una receta NUEVA se incrementa dentro de
+	// una transacción con bloqueo de fila, para que dos recetas suyas
+	// nunca terminen con el mismo folio aunque las genere casi al mismo
+	// tiempo desde dos pestañas. json:"-" porque no aporta nada fuera de
+	// ese cálculo — el folio que sí importa mostrar es el de la cita.
+	LastRecipeNumber uint `gorm:"default:0" json:"-"`
+
 	Patients []Patient `gorm:"many2many:doctor_patients;" json:"-"`
 }
 
@@ -402,13 +411,21 @@ type Appointment struct {
 	// Diagnosis sigue siendo el texto libre que se ve/imprime; este campo
 	// es la versión estructurada para catálogo/interoperabilidad futura
 	// (HL7), no reemplaza al texto. "" si el doctor no usó el buscador.
-	DiagnosisCode      string            `json:"diagnosisCode"`
-	TreatmentPlan      string            `gorm:"type:text" json:"treatmentPlan"`
-	DynamicNotes       datatypes.JSON    `json:"dynamic_notes" gorm:"type:jsonb"`
-	Notes              string            `gorm:"type:text" json:"notes"`
-	RegistrationStatus string            `gorm:"default:'REGISTERED'" json:"registrationStatus"`
-	RecipePDFPath      string            `json:"recipePdfPath"`
-	MedicalDocuments   []MedicalDocument `gorm:"foreignKey:AppointmentID" json:"documents"`
+	DiagnosisCode      string         `json:"diagnosisCode"`
+	TreatmentPlan      string         `gorm:"type:text" json:"treatmentPlan"`
+	DynamicNotes       datatypes.JSON `json:"dynamic_notes" gorm:"type:jsonb"`
+	Notes              string         `gorm:"type:text" json:"notes"`
+	RegistrationStatus string         `gorm:"default:'REGISTERED'" json:"registrationStatus"`
+	RecipePDFPath      string         `json:"recipePdfPath"`
+	// Folio único de la receta de ESTA cita, tomado del contador propio del
+	// doctor (Doctor.LastRecipeNumber) la primera vez que genera la receta
+	// — ver handlers.GetOrAssignRecipeNumber. Puntero: nil mientras nunca
+	// se ha generado ninguna receta para esta cita. Se queda fijo aunque
+	// el doctor vuelva a generar/imprimir la misma receta después (sigue
+	// siendo la misma receta, no una nueva), así ningún folio se repite
+	// entre dos recetas de verdad distintas del mismo doctor.
+	RecipeNumber     *uint             `json:"recipeNumber"`
+	MedicalDocuments []MedicalDocument `gorm:"foreignKey:AppointmentID" json:"documents"`
 	// Fecha sugerida de cita de control, marcada opcionalmente al finalizar
 	// la consulta. Puntero para poder distinguir "sin seguimiento" (nil) de
 	// una fecha real, y para poder limpiarla mandando JSON null.

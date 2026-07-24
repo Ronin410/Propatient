@@ -1,6 +1,28 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { buildRecipeDocDefinition } from './recipePdf';
 import type { Patient } from '../types';
+
+// jsdom no implementa la carga real de <img> (no hay red de verdad en los
+// tests): sin este stub, cada intento de logo (el del doctor o el
+// respaldo de ProPatient, ver recipePdf.ts) se quedaría esperando el
+// timeout completo de getBase64FromUrlWithTimeout en cada test. Con esto,
+// "cargar" cualquier imagen falla de inmediato — se sigue ejerciendo el
+// mismo camino real de manejo de errores del código, solo sin la espera.
+beforeAll(() => {
+  class FakeImage {
+    onload: (() => void) | null = null;
+    onerror: ((err?: unknown) => void) | null = null;
+    crossOrigin = '';
+    set src(_value: string) {
+      setTimeout(() => this.onerror?.(new Error('jsdom no carga imágenes reales')), 0);
+    }
+  }
+  vi.stubGlobal('Image', FakeImage);
+});
+
+afterAll(() => {
+  vi.unstubAllGlobals();
+});
 
 // Recorre el árbol de contenido de pdfmake (mezcla de objetos, arrays y
 // columnas anidadas) y concatena todos los `text` encontrados, para poder
@@ -90,5 +112,30 @@ describe('buildRecipeDocDefinition', () => {
 
     const flat = flattenText(doc.content);
     expect(flat).toContain('MÉDICO GENERAL');
+  });
+
+  it('imprime el folio de la receta cuando el backend ya lo asignó', async () => {
+    const doc = await buildRecipeDocDefinition({
+      doctorInfo: { fullName: 'Juan Pérez' },
+      patientInfo: patient,
+      dynamicNotes: {},
+      recipeSections: {},
+      recipeNumber: 42,
+    });
+
+    const flat = flattenText(doc.content);
+    expect(flat).toContain('NO. DE RECETA: 000042');
+  });
+
+  it('no imprime ningún folio si todavía no se pudo asignar uno', async () => {
+    const doc = await buildRecipeDocDefinition({
+      doctorInfo: { fullName: 'Juan Pérez' },
+      patientInfo: patient,
+      dynamicNotes: {},
+      recipeSections: {},
+    });
+
+    const flat = flattenText(doc.content);
+    expect(flat).not.toContain('NO. DE RECETA');
   });
 });

@@ -3,6 +3,7 @@ import * as pdfFonts from 'pdfmake/build/vfs_fonts';
 import api from '../api/axios';
 import type { Patient } from '../types';
 import { toAbsoluteFileUrl } from './fileUrl';
+import propatientLogo from '../assets/logo.png';
 
 // Sincronización robusta para el bundle de Vite (movida desde ConsultationManager.tsx)
 if (pdfFonts && (pdfFonts as any).pdfMake) {
@@ -35,6 +36,15 @@ export function getBase64FromUrl(url: string): Promise<string> {
     };
     img.onerror = (error) => reject(error);
   });
+}
+
+// Con timeout: una imagen rota o un backend lento no debe dejar la receta
+// esperando indefinidamente antes de caer al respaldo de texto.
+function getBase64FromUrlWithTimeout(url: string, timeoutMs = 4000): Promise<string> {
+  return Promise.race([
+    getBase64FromUrl(url),
+    new Promise<string>((_, reject) => setTimeout(() => reject(new Error('Tiempo de espera agotado al cargar la imagen')), timeoutMs)),
+  ]);
 }
 
 interface DoctorInfo {
@@ -71,6 +81,12 @@ interface BuildRecipeParams {
   diagnosis?: string;
   dynamicNotes: Record<string, string>;
   recipeSections: Record<string, boolean>;
+  // Folio único asignado por el backend para ESTA cita (ver
+  // GetOrAssignRecipeNumber) — nunca se calcula aquí, para que no se pueda
+  // repetir entre recetas del mismo doctor. undefined si todavía no se pudo
+  // consultar (ej. falla de red): la receta se sigue generando, solo sin
+  // folio impreso.
+  recipeNumber?: number;
 }
 
 // Arma el docDefinition de pdfmake para la receta médica.
@@ -80,15 +96,29 @@ export async function buildRecipeDocDefinition({
   diagnosis,
   dynamicNotes,
   recipeSections,
+  recipeNumber,
 }: BuildRecipeParams): Promise<any> {
-  let doctorLogoBase64 = '';
+  // Logo a mostrar en el encabezado: el propio del doctor si lo tiene
+  // configurado; si no, o si falla al cargarlo, el de ProPatient — nunca
+  // el texto plano "MÉDICO GENERAL" salvo que ambas cargas de imagen
+  // fallen (sin conexión, etc.), para que la receta siempre se vea con
+  // una marca real en vez de un placeholder de texto.
+  let logoBase64 = '';
   if (doctorInfo?.logoUrl) {
     try {
       const cleanFullUrl = toAbsoluteFileUrl(doctorInfo.logoUrl);
-      doctorLogoBase64 = await getBase64FromUrl(cleanFullUrl);
+      logoBase64 = await getBase64FromUrlWithTimeout(cleanFullUrl);
     } catch (err) {
-      console.error('No se pudo mapear el logo del doctor, usando respaldo de texto:', err);
-      doctorLogoBase64 = ''; // Si falla, mantiene el texto de respaldo para que no truene la receta
+      console.error('No se pudo cargar el logo del doctor, se usará el de ProPatient:', err);
+      logoBase64 = '';
+    }
+  }
+  if (!logoBase64 || !logoBase64.startsWith('data:image')) {
+    try {
+      logoBase64 = await getBase64FromUrlWithTimeout(propatientLogo);
+    } catch (err) {
+      console.error('No se pudo cargar el logo de respaldo de ProPatient, se usará texto:', err);
+      logoBase64 = '';
     }
   }
 
@@ -100,7 +130,7 @@ export async function buildRecipeDocDefinition({
     ])
     .flat();
 
-  const hasValidBase64 = doctorLogoBase64 && doctorLogoBase64.startsWith('data:image');
+  const hasValidBase64 = logoBase64 && logoBase64.startsWith('data:image');
   const age = calculateAge(patientInfo?.birthDate);
   const doctorFullName = doctorInfo?.fullName?.trim();
 
@@ -108,6 +138,11 @@ export async function buildRecipeDocDefinition({
     { text: `${doctorInfo?.medicalSpecialty || 'Médico Cirujano y Partero'}`, style: 'doctorSpecialty' },
     { text: `CÉDULA PROFESIONAL: ${doctorInfo?.licenseNumber || 'N/A'}`, style: 'doctorSub' },
     ...(doctorInfo?.university?.trim() ? [{ text: doctorInfo.university, style: 'doctorSub' }] : []),
+    // Folio de la receta: identifica a ESTA receta en particular contra
+    // el resto de las que ha emitido el mismo doctor (ver
+    // GetOrAssignRecipeNumber en el backend) — ayuda a detectar copias o
+    // recetas alteradas, ya que dos recetas legítimas nunca comparten folio.
+    ...(recipeNumber != null ? [{ text: `NO. DE RECETA: ${String(recipeNumber).padStart(6, '0')}`, style: 'doctorSub' }] : []),
   ];
 
   // La firma va como parte normal del contenido (no como "footer" de
@@ -134,7 +169,7 @@ export async function buildRecipeDocDefinition({
       {
         columns: [
           hasValidBase64
-            ? { image: doctorLogoBase64, fit: [60, 60], alignment: 'left' }
+            ? { image: logoBase64, fit: [60, 60], alignment: 'left' }
             : { text: 'MÉDICO GENERAL', fontSize: 13, bold: true, color: '#1a365d' },
           [
             { text: doctorFullName ? `DR. ${doctorFullName}`.toUpperCase() : 'MÉDICO GENERAL', style: 'doctorName' },
@@ -145,7 +180,7 @@ export async function buildRecipeDocDefinition({
       },
       {
         canvas: [{ type: 'line', x1: 0, y1: 0, x2: 532, y2: 0, lineWidth: 1.5, lineColor: '#1a365d' }],
-        margin: [0, 10, 0, 12],
+        margin: [0, 6, 0, 4],
       },
       {
         style: 'patientTable',
@@ -169,8 +204,8 @@ export async function buildRecipeDocDefinition({
           vLineWidth: () => 0.5,
           hLineColor: () => '#cbd5e0',
           vLineColor: () => '#cbd5e0',
-          paddingTop: () => 7,
-          paddingBottom: () => 7,
+          paddingTop: () => 5,
+          paddingBottom: () => 5,
           paddingLeft: () => 10,
           paddingRight: () => 10,
           fillColor: (rowIndex: number) => (rowIndex === 0 ? '#f0f5fa' : null),
@@ -205,12 +240,29 @@ export async function generateAndSaveRecipePDF(
   appointmentId: string,
   opts: { diagnosis?: string; dynamicNotes: Record<string, string>; recipeSections: Record<string, boolean> }
 ): Promise<any> {
+  // Folio: se pide/reserva ANTES de armar el PDF para poder imprimirlo ya
+  // dentro de la receta (ver GetOrAssignRecipeNumber) — si el doctor vuelve
+  // a generar la misma receta (ej. corrige una nota y le da "Generar
+  // Receta" otra vez), el backend regresa el mismo folio ya asignado en
+  // vez de uno nuevo, así que reintentar nunca "gasta" números de más.
+  // Mejor esfuerzo: si falla la consulta, la receta se sigue generando,
+  // solo sin folio impreso, para que un problema de red no bloquee la
+  // consulta médica.
+  let recipeNumber: number | undefined;
+  try {
+    const res = await api.get(`/appointments/${appointmentId}/recipe-number`);
+    recipeNumber = res.data?.recipeNumber;
+  } catch (err) {
+    console.error('No se pudo obtener el folio de la receta, se generará sin folio:', err);
+  }
+
   const docDefinition = await buildRecipeDocDefinition({
     doctorInfo,
     patientInfo,
     diagnosis: opts.diagnosis,
     dynamicNotes: opts.dynamicNotes,
     recipeSections: opts.recipeSections,
+    recipeNumber,
   });
 
   const pdfInstance = pdfMake.createPdf(docDefinition);

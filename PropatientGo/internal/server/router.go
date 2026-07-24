@@ -377,6 +377,7 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 					appointments.GET("/:id/upload-link", auth.RequireDoctorRole(), handlers.GetAppointmentUploadLink(db))
 					appointments.PUT("/:id/documents/:docId", auth.RequireDoctorRole(), handlers.UpdateAppointmentDocument(db))
 					appointments.POST("/:id/save-recipe-pdf", auth.RequireDoctorRole(), handlers.SaveRecipePDF(db, storageClient))
+					appointments.GET("/:id/recipe-number", auth.RequireDoctorRole(), handlers.GetOrAssignRecipeNumber(db))
 					// Versiones anteriores del contenido clínico (NOM-024): solo el doctor.
 					appointments.GET("/:id/note-history", auth.RequireDoctorRole(), handlers.GetAppointmentNoteHistory(db))
 				}
