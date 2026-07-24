@@ -462,6 +462,11 @@ export function useConsultation(appointmentId: string | undefined) {
       }
     }
 
+    if (!diagnosisCode.trim()) {
+      alert('Debes asociar un código CIE-10 al diagnóstico (sección "Diagnóstico (CIE-10)") antes de finalizar la consulta.');
+      return;
+    }
+
     if (patientForm.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(patientForm.email)) {
       alert('El correo electrónico del paciente no tiene un formato válido.');
       return;

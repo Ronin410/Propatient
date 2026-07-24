@@ -752,6 +752,16 @@ func UpdateAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient wh
 			return
 		}
 
+		// Diagnóstico estructurado (catálogo CIE-10, ver Cie10Code): antes
+		// era solo un campo opcional para interoperabilidad futura; ahora se
+		// exige al finalizar, para que el expediente quede siempre con un
+		// código estandarizado y no dependa de que el doctor haya usado el
+		// buscador por su cuenta.
+		if appointment.Status == "COMPLETED" && strings.TrimSpace(appointment.DiagnosisCode) == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Debes asociar un código CIE-10 al diagnóstico antes de finalizar la consulta."})
+			return
+		}
+
 		// Solo se valida contra el horario laboral si de verdad se está
 		// moviendo la fecha/hora (reprogramar) — un PUT que solo guarda
 		// notas de consulta o marca seguimiento no debe fallar por esto.

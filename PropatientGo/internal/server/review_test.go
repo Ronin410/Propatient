@@ -41,7 +41,7 @@ func TestReview_FullLifecycle(t *testing.T) {
 	appointmentID := int(decodeJSON(t, w)["id"].(float64))
 
 	w = doRequest(t, router, http.MethodPut, "/api/appointments/"+strconv.Itoa(appointmentID), token, map[string]any{
-		"status": "COMPLETED",
+		"status": "COMPLETED", "diagnosis": "Consulta general", "diagnosisCode": "Z00.0",
 	})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
@@ -54,7 +54,7 @@ func TestReview_FullLifecycle(t *testing.T) {
 	// Guardar de nuevo la misma cita (ej. otro cambio de notas) no debe
 	// mandar una segunda invitación.
 	w = doRequest(t, router, http.MethodPut, "/api/appointments/"+strconv.Itoa(appointmentID), token, map[string]any{
-		"status": "COMPLETED", "notes": "nota extra",
+		"status": "COMPLETED", "diagnosis": "Consulta general", "diagnosisCode": "Z00.0", "notes": "nota extra",
 	})
 	require.Equal(t, http.StatusOK, w.Code)
 	var reviewCount int64

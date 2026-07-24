@@ -599,8 +599,9 @@ export const ConsultationManager: React.FC = () => {
               Diagnóstico (CIE-10)
             </h3>
             <p className="cie10-subtitle">
-              Opcional — busca por código o por nombre para asociar un diagnóstico del catálogo
-              oficial a esta cita. El texto libre de "Notas de la Consulta" no cambia.
+              Obligatorio para finalizar — busca por código o por nombre para asociar un
+              diagnóstico del catálogo oficial a esta cita. El texto libre de "Notas de la
+              Consulta" no cambia.
             </p>
             {!isCompleted && (
               <div className="cie10-search-wrapper">

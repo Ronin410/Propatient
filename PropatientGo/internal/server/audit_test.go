@@ -210,21 +210,69 @@ func TestUpdateAppointment_RequiresClinicalContentToComplete(t *testing.T) {
 	})
 	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 
-	// Con diagnóstico: se acepta.
+	// Con diagnóstico pero sin código CIE-10: sigue rechazado (ver
+	// TestUpdateAppointment_RequiresCie10CodeToComplete).
 	w = doRequest(t, router, http.MethodPut, fmt.Sprintf("/api/appointments/%d", apptID), token, map[string]any{
 		"status":    "COMPLETED",
 		"diagnosis": "Gripe común",
+	})
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+
+	// Con diagnóstico Y código CIE-10: se acepta.
+	w = doRequest(t, router, http.MethodPut, fmt.Sprintf("/api/appointments/%d", apptID), token, map[string]any{
+		"status":        "COMPLETED",
+		"diagnosis":     "Gripe común",
+		"diagnosisCode": "J00",
 	})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
 	apptID2 := createTestAppointment(t, router, token, patientID)
 
-	// Sin diagnóstico pero con una nota de consulta con contenido: también se acepta.
+	// Sin diagnóstico pero con una nota de consulta con contenido y el
+	// código CIE-10: también se acepta.
 	w = doRequest(t, router, http.MethodPut, fmt.Sprintf("/api/appointments/%d", apptID2), token, map[string]any{
 		"status":        "COMPLETED",
 		"dynamic_notes": map[string]string{"Padecimiento actual": "Paciente refiere tos y fiebre."},
+		"diagnosisCode": "J00",
 	})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+}
+
+// TestUpdateAppointment_RequiresCie10CodeToComplete confirma, por separado,
+// que el código CIE-10 es su propio requisito (independiente de si ya hay
+// diagnóstico/notas) — el catálogo y el buscador ya existían (ver
+// Cie10Code), pero antes de esto el doctor podía finalizar la consulta sin
+// usarlo nunca.
+func TestUpdateAppointment_RequiresCie10CodeToComplete(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_cie10_required", "password123")
+	token := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doRequest(t, router, http.MethodPost, "/api/patients", token, map[string]any{
+		"firstName": "Paciente", "lastName": "Cie10", "email": "cie10_required_patient@test.local",
+	})
+	require.Equal(t, http.StatusCreated, w.Code)
+	patientID := int(decodeJSON(t, w)["id"].(float64))
+
+	apptID := createTestAppointment(t, router, token, patientID)
+
+	// Diagnóstico con contenido de sobra, pero sin código CIE-10: rechazado.
+	w = doRequest(t, router, http.MethodPut, fmt.Sprintf("/api/appointments/%d", apptID), token, map[string]any{
+		"status":    "COMPLETED",
+		"diagnosis": "Faringitis aguda, tratada con reposo y líquidos abundantes.",
+	})
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+
+	// Con el código: se acepta.
+	w = doRequest(t, router, http.MethodPut, fmt.Sprintf("/api/appointments/%d", apptID), token, map[string]any{
+		"status":        "COMPLETED",
+		"diagnosis":     "Faringitis aguda, tratada con reposo y líquidos abundantes.",
+		"diagnosisCode": "J02.9",
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, "J02.9", decodeJSON(t, w)["diagnosisCode"])
 }
 
 // TestNoteHistory_ScopedToDoctor confirma que un doctor no puede ver el
