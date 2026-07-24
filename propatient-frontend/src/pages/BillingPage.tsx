@@ -247,6 +247,19 @@ export const BillingPage: React.FC = () => {
               )}
             </div>
 
+            {status.subscriptionStatus === 'active' && (
+              <div className="billing-referral">
+                <h2>¿Necesitas tu factura (CFDI) de esta suscripción?</h2>
+                <p>
+                  Poco después de cada pago, Facturapi te escribe por correo pidiéndote tus datos
+                  fiscales (RFC, régimen fiscal, código postal) para generar tu CFDI automáticamente.
+                  Complétalos ahí en cuanto te lleguen — si esperas demasiado, ya no se puede generar
+                  la factura de ese cobro en automático y hay que tramitarla a mano. Si no te llegó el
+                  correo o tienes dudas, escríbenos.
+                </p>
+              </div>
+            )}
+
             {status.subscriptionStatus !== 'active' && (
               <div className="billing-referral">
                 <h2>¿Tienes un código de invitación?</h2>
