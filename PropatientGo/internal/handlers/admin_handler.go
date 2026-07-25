@@ -380,24 +380,34 @@ func fetchMonthlyStatsByDoctor(db *gorm.DB) (map[uint]adminMonthlyStats, error) 
 // suscripción y su actividad del mes — nunca datos clínicos de pacientes,
 // este endpoint no tiene ninguna relación con expedientes.
 type adminDoctorResponse struct {
-	ID                 uint              `json:"id"`
-	FullName           string            `json:"fullName"`
-	Email              string            `json:"email"`
-	Username           string            `json:"username"`
-	CedulaValidated    string            `json:"cedulaValidated"`
-	SubscriptionStatus string            `json:"subscriptionStatus"` // ya resuelto: propio, o el de su clínica si aplica
-	TrialEndsAt        *time.Time        `json:"trialEndsAt"`
-	IsClinicMember     bool              `json:"isClinicMember"`
-	IsClinicOwner      bool              `json:"isClinicOwner"`
-	ClinicName         string            `json:"clinicName,omitempty"`
-	CreatedAt          time.Time         `json:"createdAt"`
-	MonthlyStats       adminMonthlyStats `json:"monthlyStats"`
+	ID                 uint   `json:"id"`
+	FullName           string `json:"fullName"`
+	Email              string `json:"email"`
+	Username           string `json:"username"`
+	CedulaValidated    string `json:"cedulaValidated"`
+	SubscriptionStatus string `json:"subscriptionStatus"` // ya resuelto: propio, o el de su clínica si aplica
+	// TrialEndsAt cubre tanto la prueba real de 14 días como cualquier
+	// acceso gratuito otorgado a mano (ver GrantFreeAccess) — ambos usan
+	// el mismo campo, así que esta fecha es "hasta cuándo tiene acceso
+	// sin pagar" sin importar cuál de los dos fue.
+	TrialEndsAt *time.Time `json:"trialEndsAt"`
+	// CurrentPeriodEnd es la fecha de renovación de una suscripción de
+	// Stripe YA ACTIVA (pagada de verdad) — consultada en vivo a Stripe,
+	// igual que en GetBillingStatus, porque no se guarda en la base de
+	// datos. nil si no aplica (no está "active", es de clínica, Stripe no
+	// está configurado, o la consulta falló).
+	CurrentPeriodEnd *time.Time        `json:"currentPeriodEnd"`
+	IsClinicMember   bool              `json:"isClinicMember"`
+	IsClinicOwner    bool              `json:"isClinicOwner"`
+	ClinicName       string            `json:"clinicName,omitempty"`
+	CreatedAt        time.Time         `json:"createdAt"`
+	MonthlyStats     adminMonthlyStats `json:"monthlyStats"`
 }
 
 // ListAllDoctors devuelve TODOS los doctores registrados (no solo los
 // pendientes de cédula, ver ListPendingDoctors) con su estatus de
 // suscripción y su actividad de citas del mes en curso.
-func ListAllDoctors(db *gorm.DB) gin.HandlerFunc {
+func ListAllDoctors(db *gorm.DB, client billing.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var doctors []models.Doctor
 		if err := db.Order("created_at desc").Find(&doctors).Error; err != nil {
@@ -430,6 +440,20 @@ func ListAllDoctors(db *gorm.DB) gin.HandlerFunc {
 					clinicName = cl.Name
 				}
 			}
+
+			// Mejor esfuerzo, un doctor a la vez: a este volumen (panel
+			// interno, se consulta rara vez) es aceptable; si la lista de
+			// doctores activos crece mucho, esto habría que paralelizarlo
+			// o dejar de consultarlo en vivo aquí.
+			var currentPeriodEnd *time.Time
+			if !isClinicMember && subStatus == "active" && d.StripeSubscriptionID != "" && client != nil {
+				if end, err := client.GetSubscriptionPeriodEnd(c.Request.Context(), d.StripeSubscriptionID); err == nil {
+					currentPeriodEnd = &end
+				} else {
+					log.Printf("⚠️ No se pudo consultar la fecha de renovación de Stripe del doctor %d: %v", d.ID, err)
+				}
+			}
+
 			response = append(response, adminDoctorResponse{
 				ID:                 d.ID,
 				FullName:           d.FullName,
@@ -438,6 +462,7 @@ func ListAllDoctors(db *gorm.DB) gin.HandlerFunc {
 				CedulaValidated:    d.CedulaValidated,
 				SubscriptionStatus: subStatus,
 				TrialEndsAt:        d.TrialEndsAt,
+				CurrentPeriodEnd:   currentPeriodEnd,
 				IsClinicMember:     isClinicMember,
 				IsClinicOwner:      d.IsClinicOwner,
 				ClinicName:         clinicName,

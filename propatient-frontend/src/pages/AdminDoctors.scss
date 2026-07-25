@@ -234,6 +234,12 @@
   &.sub-clinic { background: #3b2d5f; color: #c4b5fd; }
 }
 
+.admin-sub-date {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
 // En celular, la tabla de 5 columnas se apila igual que se resolvió antes
 // en StaffManagement.scss: etiqueta arriba, valor abajo, para que nada se
 // corte fuera de la pantalla.

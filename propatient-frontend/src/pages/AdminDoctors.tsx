@@ -21,7 +21,13 @@ interface AdminDoctor {
   username: string;
   cedulaValidated: string;
   subscriptionStatus: string;
+  // Cubre tanto la prueba real de 14 días como un acceso gratuito
+  // otorgado a mano (ver GrantFreeAccess) — ambos casos llegan como
+  // "trialing" con esta misma fecha.
   trialEndsAt: string | null;
+  // Fecha de renovación de una suscripción de Stripe ya activa (pagada
+  // de verdad), consultada en vivo — null si no aplica.
+  currentPeriodEnd: string | null;
   isClinicMember: boolean;
   isClinicOwner: boolean;
   clinicName?: string;
@@ -52,6 +58,9 @@ const subscriptionLabels: Record<string, string> = {
 };
 
 const subscriptionLabel = (status: string) => subscriptionLabels[status] || status || '—';
+
+const formatDate = (iso: string) =>
+  new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
 
 export const AdminDoctors: React.FC = () => {
   const navigate = useNavigate();
@@ -232,6 +241,12 @@ export const AdminDoctors: React.FC = () => {
                       <span className={`status-badge sub-${doc.subscriptionStatus}`}>
                         {subscriptionLabel(doc.subscriptionStatus)}
                       </span>
+                      {!doc.isClinicMember && doc.subscriptionStatus === 'trialing' && doc.trialEndsAt && (
+                        <div className="admin-sub-date">Hasta {formatDate(doc.trialEndsAt)}</div>
+                      )}
+                      {!doc.isClinicMember && doc.subscriptionStatus === 'active' && doc.currentPeriodEnd && (
+                        <div className="admin-sub-date">Renueva {formatDate(doc.currentPeriodEnd)}</div>
+                      )}
                     </td>
                     <td data-label="Citas del mes">
                       <div className="stats-total">{doc.monthlyStats.total} citas</div>

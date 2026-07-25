@@ -381,6 +381,40 @@ func TestListAllDoctors_ReturnsAllWithMonthlyStatsAndSubscription(t *testing.T) 
 	assert.Equal(t, float64(2), stats["bookedPublic"])
 }
 
+// TestListAllDoctors_ShowsCurrentPeriodEndForActiveSubscription confirma
+// que un doctor con suscripción individual activa de verdad muestra la
+// fecha de renovación (consultada en vivo a Stripe, ver
+// GetSubscriptionPeriodEnd) — para que el admin sepa hasta cuándo tiene
+// acceso pagado, igual que ya se ve la fecha de un acceso gratuito
+// otorgado a mano (TrialEndsAt).
+func TestListAllDoctors_ShowsCurrentPeriodEndForActiveSubscription(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	mockBilling := newMockBillingClient()
+	periodEnd := time.Now().UTC().AddDate(0, 0, 25)
+	mockBilling.periodEnd = periodEnd
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, nil, billing.Config{}, mockBilling, geocoding.NewClient(), nil, nil)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_admin_period_end", "password123")
+	require.NoError(t, db.Model(&doc).Updates(map[string]any{
+		"subscription_status":    "active",
+		"stripe_subscription_id": "sub_admin_period_end",
+	}).Error)
+
+	admin := testutil.CreateTestSuperAdmin(t, db, "admin_period_end", "clavesegura123")
+	adminToken := testutil.TokenForSuperAdmin(t, admin.ID, admin.Username)
+
+	w := doRequest(t, router, http.MethodGet, "/api/admin/doctors", adminToken, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var doctors []map[string]any
+	decodeJSONList(t, w, &doctors)
+	require.Len(t, doctors, 1)
+	require.NotNil(t, doctors[0]["currentPeriodEnd"])
+	parsed, err := time.Parse(time.RFC3339, doctors[0]["currentPeriodEnd"].(string))
+	require.NoError(t, err)
+	assert.WithinDuration(t, periodEnd, parsed, time.Second)
+}
+
 // TestListAllDoctors_ClinicMemberUsesClinicSubscriptionStatus confirma que
 // un doctor perteneciente a una clínica muestra el estatus de suscripción
 // de LA CLÍNICA, no el suyo propio (que deja de ser relevante en cuanto se
