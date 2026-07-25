@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import adminApi from '../api/adminAxios';
 import { getErrorMessage } from '../utils/errorMessage';
+import { Popup } from '../components/Popup';
 import './AdminDoctors.scss';
 
 interface MonthlyStats {
@@ -59,6 +60,13 @@ export const AdminDoctors: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Acceso gratuito manual (ver GrantFreeAccess en el backend) — solo un
+  // renglón a la vez tiene el selector de fecha abierto.
+  const [grantingId, setGrantingId] = useState<number | null>(null);
+  const [grantUntil, setGrantUntil] = useState('');
+  const [grantSubmitting, setGrantSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -83,6 +91,35 @@ export const AdminDoctors: React.FC = () => {
   const handleLogout = () => {
     localStorage.removeItem('admin_token');
     navigate('/admin/login');
+  };
+
+  const startGranting = (doc: AdminDoctor) => {
+    setGrantingId(doc.id);
+    // Prellenar con la fecha ya guardada (si tenía) o con hoy + 30 días,
+    // para no forzar a escribirla siempre desde cero.
+    const base = doc.trialEndsAt ? new Date(doc.trialEndsAt) : new Date();
+    if (!doc.trialEndsAt) base.setDate(base.getDate() + 30);
+    setGrantUntil(base.toISOString().slice(0, 10));
+  };
+
+  const cancelGranting = () => {
+    setGrantingId(null);
+    setGrantUntil('');
+  };
+
+  const handleConfirmGrant = async (doctorId: number) => {
+    if (!grantUntil) return;
+    setGrantSubmitting(true);
+    try {
+      await adminApi.put(`/admin/doctors/${doctorId}/grant-free-access`, { until: grantUntil });
+      setFeedback({ type: 'success', message: `Acceso gratuito otorgado hasta el ${grantUntil}.` });
+      cancelGranting();
+      fetchData();
+    } catch (err: unknown) {
+      setFeedback({ type: 'error', message: getErrorMessage(err, 'No se pudo otorgar el acceso gratuito.') });
+    } finally {
+      setGrantSubmitting(false);
+    }
   };
 
   return (
@@ -170,6 +207,7 @@ export const AdminDoctors: React.FC = () => {
                   <th>Suscripción</th>
                   <th>Citas del mes</th>
                   <th>Origen (doctor / público)</th>
+                  <th>Acceso gratuito</th>
                 </tr>
               </thead>
               <tbody>
@@ -204,6 +242,36 @@ export const AdminDoctors: React.FC = () => {
                     <td data-label="Origen">
                       {doc.monthlyStats.bookedByDoctor} doctor / {doc.monthlyStats.bookedPublic} público
                     </td>
+                    <td data-label="Acceso gratuito">
+                      {doc.isClinicMember ? (
+                        <span className="admin-grant-disabled">Depende de la clínica</span>
+                      ) : grantingId === doc.id ? (
+                        <div className="admin-grant-form">
+                          <input
+                            type="date"
+                            value={grantUntil}
+                            min={new Date().toISOString().slice(0, 10)}
+                            onChange={(e) => setGrantUntil(e.target.value)}
+                          />
+                          <div className="admin-grant-buttons">
+                            <button
+                              className="admin-grant-confirm"
+                              disabled={grantSubmitting || !grantUntil}
+                              onClick={() => handleConfirmGrant(doc.id)}
+                            >
+                              {grantSubmitting ? 'Guardando...' : 'Confirmar'}
+                            </button>
+                            <button className="admin-grant-cancel" disabled={grantSubmitting} onClick={cancelGranting}>
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button className="admin-grant-btn" onClick={() => startGranting(doc)}>
+                          Dar acceso gratis
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -212,6 +280,14 @@ export const AdminDoctors: React.FC = () => {
           </section>
         )}
       </main>
+
+      <Popup
+        isOpen={!!feedback}
+        type={feedback?.type || 'success'}
+        title={feedback?.type === 'error' ? 'Error' : 'Listo'}
+        message={feedback?.message || ''}
+        onClose={() => setFeedback(null)}
+      />
     </div>
   );
 };

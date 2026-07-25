@@ -153,6 +153,68 @@
   .stats-breakdown { font-size: 0.78rem; color: #94a3b8; }
 }
 
+.admin-grant-disabled {
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.admin-grant-btn {
+  background: none;
+  border: 1px solid #2a3441;
+  color: #38bdf8;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover { border-color: #38bdf8; }
+}
+
+.admin-grant-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+
+  input[type='date'] {
+    background: #10151c;
+    border: 1px solid #2a3441;
+    color: #e2e8f0;
+    border-radius: 6px;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.8rem;
+  }
+}
+
+.admin-grant-buttons {
+  display: flex;
+  gap: 0.5rem;
+
+  button {
+    border-radius: 6px;
+    padding: 0.35rem 0.7rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+
+    &:disabled { opacity: 0.6; cursor: not-allowed; }
+  }
+
+  .admin-grant-confirm {
+    background: #14532d;
+    color: #4ade80;
+    border-color: #1e6b3a;
+  }
+
+  .admin-grant-cancel {
+    background: none;
+    color: #94a3b8;
+    border-color: #2a3441;
+  }
+}
+
 .status-badge {
   display: inline-block;
   padding: 0.2rem 0.6rem;

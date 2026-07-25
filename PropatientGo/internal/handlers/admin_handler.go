@@ -2,10 +2,12 @@ package handlers
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
 	"propatient-api/internal/auth"
+	"propatient-api/internal/billing"
 	"propatient-api/internal/models"
 	"propatient-api/internal/storage"
 
@@ -185,6 +187,84 @@ func RejectDoctorCedula(db *gorm.DB) gin.HandlerFunc {
 		}(doctor.Email, doctor.FullName, req.Reason)
 
 		c.JSON(http.StatusOK, gin.H{"message": "Cédula rechazada"})
+	}
+}
+
+type grantFreeAccessRequest struct {
+	// Until: fecha (YYYY-MM-DD) hasta la que el doctor tiene acceso sin
+	// pagar. Reutiliza el mismo mecanismo que ya usa la prueba gratis de
+	// 14 días (SubscriptionStatus "trialing" + TrialEndsAt) — no hace
+	// falta un campo ni un estado nuevo, RequireActiveSubscription ya
+	// sabe leer esto.
+	Until string `json:"until" binding:"required"`
+}
+
+// GrantFreeAccess le da acceso manual y gratuito a un doctor hasta una
+// fecha fija, decidida por el superadmin — pensado para casos que no
+// encajan en el código de invitación automático (ver internal/referral):
+// familiares o conocidos cercanos ayudando a difundir la plataforma,
+// alguien a quien los 14 días de prueba no le alcanzaron, o un trato
+// informal ("tráeme a 3 colegas y te doy 2 meses gratis"). Funciona sobre
+// cualquier estado previo — "canceled"/"past_due" (destrabar a alguien que
+// ya se había quedado fuera) igual que "trialing" o "active".
+//
+// Si el doctor ya tenía una suscripción de Stripe activa, se cancela antes
+// de marcarlo como "trialing" (mejor esfuerzo) — para no cobrarle Y darle
+// acceso gratis al mismo tiempo. No aplica a un doctor de clínica: su
+// acceso depende de la suscripción de la clínica completa, no de él solo.
+func GrantFreeAccess(db *gorm.DB, client billing.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.Param("id")
+
+		var req grantFreeAccessRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Falta la fecha hasta la que quieres dar acceso gratuito."})
+			return
+		}
+		until, err := time.Parse("2006-01-02", req.Until)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "La fecha debe tener el formato AAAA-MM-DD."})
+			return
+		}
+		// Fin del día en vez de las 00:00, para que "hasta el 31" incluya
+		// todo el 31 y no expire al despertar ese mismo día.
+		until = time.Date(until.Year(), until.Month(), until.Day(), 23, 59, 59, 0, time.UTC)
+		if !until.After(time.Now().UTC()) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "La fecha debe ser en el futuro."})
+			return
+		}
+
+		var doctor models.Doctor
+		if err := db.First(&doctor, id).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Doctor no encontrado"})
+			return
+		}
+		if doctor.ClinicID != nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "Este doctor pertenece a una clínica; su acceso depende de la suscripción de la clínica, no se puede dar por separado."})
+			return
+		}
+
+		if client != nil && doctor.StripeSubscriptionID != "" {
+			if err := client.CancelSubscription(c.Request.Context(), doctor.StripeSubscriptionID); err != nil {
+				log.Printf("⚠️ No se pudo cancelar la suscripción de Stripe del doctor %d al darle acceso gratuito: %v", doctor.ID, err)
+			}
+		}
+
+		updates := map[string]interface{}{
+			"subscription_status":    "trialing",
+			"trial_ends_at":          until,
+			"stripe_subscription_id": "",
+		}
+		if err := db.Model(&doctor).Updates(updates).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo actualizar el acceso del doctor"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message":            "Acceso gratuito otorgado",
+			"subscriptionStatus": "trialing",
+			"trialEndsAt":        until,
+		})
 	}
 }
 

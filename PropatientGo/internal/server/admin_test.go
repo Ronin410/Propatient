@@ -6,6 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"propatient-api/internal/billing"
+	"propatient-api/internal/geocoding"
+	"propatient-api/internal/googlecalendar"
 	"propatient-api/internal/models"
 	"propatient-api/internal/server"
 	"propatient-api/internal/testutil"
@@ -146,6 +149,116 @@ func TestSuperAdmin_CannotApproveDoctorNotPendingReview(t *testing.T) {
 	docIDStr := strconv.FormatUint(uint64(doc.ID), 10)
 	w := doRequest(t, router, http.MethodPut, "/api/admin/doctors/"+docIDStr+"/approve", adminToken, nil)
 	assert.Equal(t, http.StatusConflict, w.Code)
+}
+
+// TestGrantFreeAccess_UnlocksCanceledDoctor cubre el caso central: un
+// doctor con la suscripción vencida (bloqueado por
+// RequireActiveSubscription) recupera acceso completo en cuanto el
+// superadmin le da acceso gratuito hasta una fecha futura.
+func TestGrantFreeAccess_UnlocksCanceledDoctor(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	mockBilling := newMockBillingClient()
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, nil, billing.Config{}, mockBilling, geocoding.NewClient(), nil, nil)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_grant_free", "password123")
+	require.NoError(t, db.Model(&doc).Update("subscription_status", "canceled").Error)
+	token := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	// Bloqueado antes del acceso gratuito.
+	w := doRequest(t, router, http.MethodGet, "/api/patients", token, nil)
+	assert.Equal(t, http.StatusPaymentRequired, w.Code)
+
+	admin := testutil.CreateTestSuperAdmin(t, db, "admin_grant_free", "clavesegura123")
+	adminToken := testutil.TokenForSuperAdmin(t, admin.ID, admin.Username)
+
+	untilDate := time.Now().UTC().AddDate(0, 0, 30)
+	docIDStr := strconv.FormatUint(uint64(doc.ID), 10)
+	w = doRequest(t, router, http.MethodPut, "/api/admin/doctors/"+docIDStr+"/grant-free-access", adminToken, map[string]any{
+		"until": untilDate.Format("2006-01-02"),
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var reloaded struct {
+		SubscriptionStatus string
+		TrialEndsAt        *time.Time
+	}
+	require.NoError(t, db.Table("doctors").Select("subscription_status, trial_ends_at").Where("id = ?", doc.ID).Scan(&reloaded).Error)
+	assert.Equal(t, "trialing", reloaded.SubscriptionStatus)
+	require.NotNil(t, reloaded.TrialEndsAt)
+	// El handler fija las 23:59:59 de ese día (ver GrantFreeAccess), no la
+	// misma hora del día en que se llamó.
+	expectedUntil := time.Date(untilDate.Year(), untilDate.Month(), untilDate.Day(), 23, 59, 59, 0, time.UTC)
+	assert.WithinDuration(t, expectedUntil, *reloaded.TrialEndsAt, 2*time.Minute)
+
+	// Ya no está bloqueado.
+	w = doRequest(t, router, http.MethodGet, "/api/patients", token, nil)
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestGrantFreeAccess_CancelsExistingStripeSubscription confirma que a un
+// doctor que YA pagaba de verdad no se le sigue cobrando mientras tiene
+// acceso gratuito otorgado a mano.
+func TestGrantFreeAccess_CancelsExistingStripeSubscription(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	mockBilling := newMockBillingClient()
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, nil, billing.Config{}, mockBilling, geocoding.NewClient(), nil, nil)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_grant_free_active", "password123")
+	require.NoError(t, db.Model(&doc).Updates(map[string]any{
+		"subscription_status":    "active",
+		"stripe_subscription_id": "sub_test_grant_free",
+	}).Error)
+
+	admin := testutil.CreateTestSuperAdmin(t, db, "admin_grant_free_active", "clavesegura123")
+	adminToken := testutil.TokenForSuperAdmin(t, admin.ID, admin.Username)
+
+	until := time.Now().UTC().AddDate(0, 1, 0).Format("2006-01-02")
+	docIDStr := strconv.FormatUint(uint64(doc.ID), 10)
+	w := doRequest(t, router, http.MethodPut, "/api/admin/doctors/"+docIDStr+"/grant-free-access", adminToken, map[string]any{
+		"until": until,
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	assert.True(t, mockBilling.wasCanceled("sub_test_grant_free"))
+
+	var reloaded struct {
+		SubscriptionStatus   string
+		StripeSubscriptionID string
+	}
+	require.NoError(t, db.Table("doctors").Select("subscription_status, stripe_subscription_id").Where("id = ?", doc.ID).Scan(&reloaded).Error)
+	assert.Equal(t, "trialing", reloaded.SubscriptionStatus)
+	assert.Empty(t, reloaded.StripeSubscriptionID)
+}
+
+// TestGrantFreeAccess_RejectsClinicMemberAndPastDate cubre las dos
+// validaciones: no aplica a un doctor de clínica (su acceso depende de la
+// clínica completa), y la fecha tiene que ser futura.
+func TestGrantFreeAccess_RejectsClinicMemberAndPastDate(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_grant_free_clinic", "password123")
+	clinic := models.Clinic{Name: "Clínica de prueba", OwnerDoctorID: doc.ID}
+	require.NoError(t, db.Create(&clinic).Error)
+	require.NoError(t, db.Model(&doc).Update("clinic_id", clinic.ID).Error)
+
+	admin := testutil.CreateTestSuperAdmin(t, db, "admin_grant_free_clinic", "clavesegura123")
+	adminToken := testutil.TokenForSuperAdmin(t, admin.ID, admin.Username)
+
+	docIDStr := strconv.FormatUint(uint64(doc.ID), 10)
+	futureDate := time.Now().UTC().AddDate(0, 0, 10).Format("2006-01-02")
+	w := doRequest(t, router, http.MethodPut, "/api/admin/doctors/"+docIDStr+"/grant-free-access", adminToken, map[string]any{
+		"until": futureDate,
+	})
+	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+
+	doc2 := testutil.CreateTestDoctor(t, db, "doc_grant_free_past", "password123")
+	pastDate := time.Now().UTC().AddDate(0, 0, -1).Format("2006-01-02")
+	doc2IDStr := strconv.FormatUint(uint64(doc2.ID), 10)
+	w = doRequest(t, router, http.MethodPut, "/api/admin/doctors/"+doc2IDStr+"/grant-free-access", adminToken, map[string]any{
+		"until": pastDate,
+	})
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 }
 
 // createAdminTestAppointment crea una cita de prueba con fecha DENTRO del
