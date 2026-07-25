@@ -88,7 +88,16 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  // Centrado vertical del formulario SIN "justify-content: center": con
+  // overflow-y:auto, justify-content:center reparte el excedente de un
+  // formulario más alto que la pantalla por IGUAL arriba y abajo del
+  // contenedor — la mitad de arriba queda fuera del área de scroll y
+  // scrollTop:0 (el tope real del scroll) ya no corresponde al inicio
+  // real del contenido, así que nunca se puede llegar a ver el título ni
+  // el primer campo por más que se suba el scroll. El margin:auto de
+  // abajo en .auth-layout-card sigue centrando cuando sí cabe, pero se
+  // colapsa a 0 en vez de recortar cuando no cabe (así lo define el
+  // spec de flexbox), dejando el scroll llegar de verdad hasta arriba.
   padding: 40px 20px;
   background-color: var(--bg-cream);
   max-height: 100vh;
@@ -134,8 +143,13 @@
   max-width: 410px;
   position: relative;
   padding-top: 40px;
+  // Ver el comentario en .auth-layout-card-container: este margin (no
+  // justify-content en el padre) es lo que centra la tarjeta cuando cabe
+  // y deja de estorbar cuando no cabe.
+  margin: auto 0;
 
   @media (max-width: 768px) {
     padding-top: 0;
+    margin: 0;
   }
 }
