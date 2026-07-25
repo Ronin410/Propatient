@@ -370,7 +370,7 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 					// Agenda: disponible también para personal (agendar/cancelar,
 					// sin ver el contenido clínico de la consulta).
 					appointments.GET("", handlers.GetAppointments(db, storageClient))
-					appointments.POST("", handlers.CreateAppointment(db, calendarClient))
+					appointments.POST("", handlers.CreateAppointment(db, calendarClient, whatsappClient, whatsappTemplates))
 					appointments.PUT("/:id/cancel", handlers.CancelAppointment(db, calendarClient, whatsappClient, whatsappTemplates))
 					appointments.PUT("/:id/confirm", handlers.ConfirmAppointment(db, calendarClient, whatsappClient, whatsappTemplates))
 					// Contenido clínico de la consulta: solo el doctor.

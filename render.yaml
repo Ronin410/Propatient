@@ -110,6 +110,8 @@ services:
         sync: false
       - key: TWILIO_TEMPLATE_APPOINTMENT_RESCHEDULED
         sync: false
+      - key: TWILIO_TEMPLATE_APPOINTMENT_BOOKED_BY_DOCTOR
+        sync: false
       - key: TWILIO_TEMPLATE_REMINDER_PATIENT
         sync: false
       - key: TWILIO_TEMPLATE_REVIEW_REQUEST

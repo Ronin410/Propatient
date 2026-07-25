@@ -34,27 +34,42 @@ func GetAppointmentUploadLink(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		if appointment.UploadToken == "" || appointment.UploadTokenExpiresAt == nil || appointment.UploadTokenExpiresAt.Before(time.Now().UTC()) {
-			token, err := generateInviteToken()
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo generar el link"})
-				return
-			}
-			expires := time.Now().UTC().Add(uploadLinkValidity)
-			if err := db.Model(&appointment).Updates(map[string]interface{}{
-				"upload_token":            token,
-				"upload_token_expires_at": expires,
-			}).Error; err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo generar el link"})
-				return
-			}
-			appointment.UploadToken = token
+		if _, err := ensureAppointmentUploadToken(db, &appointment); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo generar el link"})
+			return
 		}
 
 		c.JSON(http.StatusOK, gin.H{
 			"uploadUrl": fmt.Sprintf("%s/public-upload/%s", frontendRedirectBase(), appointment.UploadToken),
 		})
 	}
+}
+
+// ensureAppointmentUploadToken genera (o reutiliza, mientras no haya
+// vencido) el token del link público de "sube tus documentos antes de la
+// cita" — compartido entre GetAppointmentUploadLink (el doctor lo copia/
+// comparte a mano desde ConsultationManager) y CreateAppointment (se manda
+// solo por WhatsApp en cuanto el doctor agenda, ver
+// sendDoctorBookedAppointmentWhatsApp). Muta appointment.UploadToken in situ.
+func ensureAppointmentUploadToken(db *gorm.DB, appointment *models.Appointment) (string, error) {
+	if appointment.UploadToken != "" && appointment.UploadTokenExpiresAt != nil && appointment.UploadTokenExpiresAt.After(time.Now().UTC()) {
+		return appointment.UploadToken, nil
+	}
+
+	token, err := generateInviteToken()
+	if err != nil {
+		return "", err
+	}
+	expires := time.Now().UTC().Add(uploadLinkValidity)
+	if err := db.Model(appointment).Updates(map[string]interface{}{
+		"upload_token":            token,
+		"upload_token_expires_at": expires,
+	}).Error; err != nil {
+		return "", err
+	}
+	appointment.UploadToken = token
+	appointment.UploadTokenExpiresAt = &expires
+	return token, nil
 }
 
 // findAppointmentByUploadToken resuelve una cita por su token de subida

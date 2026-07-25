@@ -107,7 +107,7 @@ type CreateAppointmentRequest struct {
 	PatientEmail     string `json:"patientEmail"`
 }
 
-func CreateAppointment(db *gorm.DB, calClient googlecalendar.Client) gin.HandlerFunc {
+func CreateAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient whatsapp.Client, waTemplates whatsapp.Templates) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req CreateAppointmentRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -198,7 +198,62 @@ func CreateAppointment(db *gorm.DB, calClient googlecalendar.Client) gin.Handler
 
 		audit.Log(db, c, doctorID, &patient.ID, audit.ActionCreated, audit.EntityAppointment, appointment.ID, "Cita agendada")
 
+		var doctor models.Doctor
+		if db.First(&doctor, doctorID).Error == nil {
+			// El link de "sube tus documentos antes de la cita" se genera
+			// desde ya (en vez de solo cuando el doctor lo pide a mano desde
+			// ConsultationManager) para poder incluirlo directo en el
+			// WhatsApp de confirmación de abajo.
+			uploadToken, tokenErr := ensureAppointmentUploadToken(db, &appointment)
+
+			// En segundo plano: mismo patrón que ConfirmAppointment/
+			// CreatePublicAppointment — no debe bloquear la respuesta al
+			// doctor ni usar el contexto de la petición (que muere en
+			// cuanto esta función regresa).
+			go func(doctor models.Doctor, patient models.Patient, appointment models.Appointment, uploadToken string, tokenErr error) {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("⚠️ Pánico recuperado al mandar el aviso de cita agendada %d: %v", appointment.ID, r)
+					}
+				}()
+				if tokenErr != nil {
+					log.Printf("⚠️ No se pudo generar el link de documentos para la cita %d: %v", appointment.ID, tokenErr)
+				}
+				sendDoctorBookedAppointmentWhatsApp(context.Background(), waClient, waTemplates, doctor, patient, appointment, uploadToken)
+			}(doctor, patient, appointment, uploadToken, tokenErr)
+		}
+
 		c.JSON(http.StatusCreated, appointment)
+	}
+}
+
+// sendDoctorBookedAppointmentWhatsApp avisa al paciente que el doctor le
+// agendó una cita — a diferencia de una solicitud pública (que pasa por
+// "pendiente de confirmar"), una cita agendada por el propio doctor queda
+// lista de una vez, así que este es el ÚNICO aviso que recibe el paciente
+// (antes no recibía ninguno). Incluye el link para subir documentos antes
+// de la consulta cuando se pudo generar. Mejor esfuerzo, igual que el
+// resto de los avisos de WhatsApp de esta app.
+func sendDoctorBookedAppointmentWhatsApp(ctx context.Context, waClient whatsapp.Client, waTemplates whatsapp.Templates, doctor models.Doctor, patient models.Patient, appointment models.Appointment, uploadToken string) {
+	if waClient == nil || patient.Phone == "" {
+		return
+	}
+
+	when := auth.FormatSpanishDateTime(appointment.AppointmentDateTime)
+	uploadURL := ""
+	if uploadToken != "" {
+		uploadURL = fmt.Sprintf("%s/public-upload/%s", frontendRedirectBase(), uploadToken)
+	}
+
+	body := fmt.Sprintf("¡Hola %s! Tu cita con Dr(a). %s quedó agendada para el %s.", patient.FirstName, doctor.FullName, when)
+	if uploadURL != "" {
+		body += fmt.Sprintf(" Antes de tu consulta, súbenos aquí cualquier estudio o documento que quieras que el doctor revise: %s", uploadURL)
+	}
+	body += " — ProPatient"
+
+	vars := map[string]string{"1": patient.FirstName, "2": doctor.FullName, "3": when, "4": uploadURL}
+	if err := whatsapp.SendWithFallback(ctx, waClient, patient.Phone, waTemplates.AppointmentBookedByDoctor, vars, body); err != nil {
+		log.Printf("⚠️ No se pudo enviar el WhatsApp de cita agendada al paciente (cita %d): %v", appointment.ID, err)
 	}
 }
 
