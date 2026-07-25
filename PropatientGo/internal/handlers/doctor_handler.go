@@ -80,6 +80,14 @@ func UpdateCurrentDoctor(db *gorm.DB, storageClient storage.Client, geoClient ge
 				return
 			}
 			doctor.AvatarUrl = storedRef
+		} else if c.PostForm("removeAvatar") == "true" && doctor.AvatarUrl != "" {
+			// Quitar sin reemplazar: solo aplica si esta misma petición no
+			// trajo un archivo nuevo (subir uno nuevo ya reemplaza al
+			// anterior, no hace falta borrarlo aparte).
+			if err := storageClient.Delete(c.Request.Context(), doctor.AvatarUrl); err != nil {
+				log.Printf("⚠️ No se pudo borrar el archivo de avatar anterior del doctor %d: %v", doctorID, err)
+			}
+			doctor.AvatarUrl = ""
 		}
 
 		// 2. Procesar y guardar el LOGO de la clínica si viene en la petición
@@ -99,6 +107,11 @@ func UpdateCurrentDoctor(db *gorm.DB, storageClient storage.Client, geoClient ge
 				return
 			}
 			doctor.LogoUrl = storedRef
+		} else if c.PostForm("removeLogo") == "true" && doctor.LogoUrl != "" {
+			if err := storageClient.Delete(c.Request.Context(), doctor.LogoUrl); err != nil {
+				log.Printf("⚠️ No se pudo borrar el archivo de logo anterior del doctor %d: %v", doctorID, err)
+			}
+			doctor.LogoUrl = ""
 		}
 
 		// 3. Procesar y guardar la FIRMA (imagen de la firma manuscrita del
@@ -119,6 +132,11 @@ func UpdateCurrentDoctor(db *gorm.DB, storageClient storage.Client, geoClient ge
 				return
 			}
 			doctor.SignatureUrl = storedRef
+		} else if c.PostForm("removeSignature") == "true" && doctor.SignatureUrl != "" {
+			if err := storageClient.Delete(c.Request.Context(), doctor.SignatureUrl); err != nil {
+				log.Printf("⚠️ No se pudo borrar el archivo de firma anterior del doctor %d: %v", doctorID, err)
+			}
+			doctor.SignatureUrl = ""
 		}
 
 		// 4. Leer los campos de texto regulares utilizando PostForm (ya que vienen en multipart)

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 
 // 1. Definimos la estructura del estatus del médico
 interface UserStatus {
@@ -100,6 +100,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setDoctorNameState(null);
     setRole('MEDICO');
   };
+
+  // "auth_token" vive en localStorage, compartido por TODAS las pestañas
+  // del mismo origen — si en la pestaña B inicias sesión con otro doctor
+  // (o cierras sesión), la pestaña A queda con el token viejo en memoria
+  // pero cada petición nueva de axios ya manda el token nuevo (lo lee de
+  // localStorage en cada request, ver api/axios.ts), así que A terminaría
+  // mostrando datos de B sin avisar. El evento "storage" del navegador
+  // solo se dispara en las OTRAS pestañas (nunca en la que hizo el
+  // cambio), así que es el lugar correcto para detectar esto y recargar
+  // en vez de seguir operando con una sesión que ya no es la vigente.
+  useEffect(() => {
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key !== 'auth_token' || event.newValue === event.oldValue) return;
+      window.alert('Tu sesión cambió en otra pestaña (inicio o cierre de sesión). Esta pestaña se va a recargar.');
+      window.location.reload();
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   // Función útil para cuando el doctor complete el perfil o valide su cédula
   const updateUserStatus = (newStatus: Partial<UserStatus>) => {

@@ -396,6 +396,19 @@
         margin-top: 8px;
         max-width: 220px;
       }
+
+      .btn-remove-image {
+        margin-top: 8px;
+        background: none;
+        border: none;
+        color: var(--color-danger);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 2px 4px;
+
+        &:hover { text-decoration: underline; }
+      }
     }
   }
 }

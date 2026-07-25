@@ -92,7 +92,13 @@ export const LocationPicker: React.FC<LocationPickerProps> = ({ address, latitud
         <MapContainer
           center={position || DEFAULT_CENTER}
           zoom={position ? 15 : 5}
-          scrollWheelZoom
+          // Desactivado a propósito: con scroll-to-zoom activo, pasar el
+          // mouse sobre el mapa "atrapa" la rueda del mouse/trackpad y
+          // hace zoom en vez de dejar que la página sega bajando — dentro
+          // de un formulario largo (ver CompleteProfile.tsx) esto se
+          // sentía como si el formulario estuviera cortado. Se puede
+          // seguir haciendo zoom con los botones +/- o doble clic.
+          scrollWheelZoom={false}
           style={{ height: '100%', width: '100%' }}
         >
           <TileLayer

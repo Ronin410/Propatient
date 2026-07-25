@@ -94,6 +94,13 @@ export const DoctorProfile = () => {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [signatureFile, setSignatureFile] = useState<File | null>(null);
 
+  // Bandera para pedirle al backend que borre la imagen actual (ver
+  // "removeAvatar"/"removeLogo"/"removeSignature" en UpdateCurrentDoctor).
+  // Se manda solo si no se eligió un archivo nuevo en la misma petición.
+  const [removeAvatar, setRemoveAvatar] = useState(false);
+  const [removeLogo, setRemoveLogo] = useState(false);
+  const [removeSignature, setRemoveSignature] = useState(false);
+
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
 
   const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -315,13 +322,38 @@ export const DoctorProfile = () => {
       if (type === 'avatar') {
         setAvatarFile(file);         // <--- GUARDAR EL ARCHIVO REAL
         setAvatarPreview(previewUrl);
+        setRemoveAvatar(false);
       } else if (type === 'logo') {
         setLogoFile(file);           // <--- GUARDAR EL ARCHIVO REAL
         setLogoPreview(previewUrl);
+        setRemoveLogo(false);
       } else {
         setSignatureFile(file);
         setSignaturePreview(previewUrl);
+        setRemoveSignature(false);
       }
+    }
+  };
+
+  // Quitar una imagen ya guardada sin subir una nueva — el archivo real se
+  // borra al guardar (ver handleSubmit), aquí solo se limpia la vista previa
+  // y se arma la bandera que se manda al backend.
+  const handleRemoveImage = (type: 'avatar' | 'logo' | 'signature') => {
+    if (type === 'avatar') {
+      setAvatarFile(null);
+      setAvatarPreview(null);
+      setRemoveAvatar(true);
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+    } else if (type === 'logo') {
+      setLogoFile(null);
+      setLogoPreview(null);
+      setRemoveLogo(true);
+      if (logoInputRef.current) logoInputRef.current.value = '';
+    } else {
+      setSignatureFile(null);
+      setSignaturePreview(null);
+      setRemoveSignature(true);
+      if (signatureInputRef.current) signatureInputRef.current.value = '';
     }
   };
 
@@ -359,15 +391,22 @@ export const DoctorProfile = () => {
         formData.append('longitude', String(profile.longitude));
       }
 
-      // 3. Adjuntar los archivos (si se han seleccionado)
+      // 3. Adjuntar los archivos (si se han seleccionado), o pedir que se
+      // borre la actual si el doctor la quitó sin reemplazarla.
       if (avatarFile) {
         formData.append('avatar', avatarFile);
+      } else if (removeAvatar) {
+        formData.append('removeAvatar', 'true');
       }
       if (logoFile) {
         formData.append('logo', logoFile);
+      } else if (removeLogo) {
+        formData.append('removeLogo', 'true');
       }
       if (signatureFile) {
         formData.append('signature', signatureFile);
+      } else if (removeSignature) {
+        formData.append('removeSignature', 'true');
       }
 
       // 4. Enviar usando multipart/form-data
@@ -384,12 +423,15 @@ export const DoctorProfile = () => {
         if (data.fullName) {
           setDoctorName(data.fullName);
         }
-        // 5. Mapear las URLs que te regresa Go y limpiar la memoria intermedia
+        // 5. Mapear las URLs que te regresa Go y limpiar la memoria intermedia.
+        // El backend siempre manda estas tres llaves (aunque vengan vacías
+        // tras un "quitar imagen"), así que se asignan tal cual en vez de
+        // caer de vuelta al valor previo.
         setProfile(prev => ({
           ...prev,
-          avatarUrl: data.avatarUrl || prev.avatarUrl,
-          logoUrl: data.logoUrl || prev.logoUrl,
-          signatureUrl: data.signatureUrl || prev.signatureUrl,
+          avatarUrl: data.avatarUrl,
+          logoUrl: data.logoUrl,
+          signatureUrl: data.signatureUrl,
           publicListed: data.publicListed,
           publicBio: data.publicBio,
           publicSlug: data.publicSlug || prev.publicSlug,
@@ -397,9 +439,9 @@ export const DoctorProfile = () => {
           longitude: data.longitude ?? prev.longitude
         }));
 
-        if (data.avatarUrl) setAvatarPreview(toAbsoluteFileUrl(data.avatarUrl));
-        if (data.logoUrl) setLogoPreview(toAbsoluteFileUrl(data.logoUrl));
-        if (data.signatureUrl) setSignaturePreview(toAbsoluteFileUrl(data.signatureUrl));
+        setAvatarPreview(data.avatarUrl ? toAbsoluteFileUrl(data.avatarUrl) : null);
+        setLogoPreview(data.logoUrl ? toAbsoluteFileUrl(data.logoUrl) : null);
+        setSignaturePreview(data.signatureUrl ? toAbsoluteFileUrl(data.signatureUrl) : null);
 
         setPopupConfig({
           isOpen: true,
@@ -410,6 +452,10 @@ export const DoctorProfile = () => {
 
         setAvatarFile(null);
         setLogoFile(null);
+        setSignatureFile(null);
+        setRemoveAvatar(false);
+        setRemoveLogo(false);
+        setRemoveSignature(false);
       }
       setMessage({ type: 'success', text: 'Perfil actualizado correctamente.' });
     } catch (err: unknown) {
@@ -512,6 +558,11 @@ export const DoctorProfile = () => {
               </div>
               <input type="file" ref={avatarInputRef} accept="image/*" style={{ display: 'none' }} onChange={(e) => handleFileChange(e, 'avatar')} />
               <p className="upload-hint">Formatos JPG o PNG.</p>
+              {avatarPreview && (
+                <button type="button" className="btn-remove-image" onClick={() => handleRemoveImage('avatar')}>
+                  Quitar foto
+                </button>
+              )}
             </div>
 
             <div className="upload-box">
@@ -521,6 +572,11 @@ export const DoctorProfile = () => {
               </div>
               <input type="file" ref={logoInputRef} accept="image/*" style={{ display: 'none' }} onChange={(e) => handleFileChange(e, 'logo')} />
               <p className="upload-hint">Preferiblemente PNG transparente.</p>
+              {logoPreview && (
+                <button type="button" className="btn-remove-image" onClick={() => handleRemoveImage('logo')}>
+                  Quitar logo
+                </button>
+              )}
             </div>
 
             <div className="upload-box">
@@ -530,6 +586,11 @@ export const DoctorProfile = () => {
               </div>
               <input type="file" ref={signatureInputRef} accept="image/*" style={{ display: 'none' }} onChange={(e) => handleFileChange(e, 'signature')} />
               <p className="upload-hint">Foto de tu firma, preferiblemente PNG transparente. Se imprime en cada receta.</p>
+              {signaturePreview && (
+                <button type="button" className="btn-remove-image" onClick={() => handleRemoveImage('signature')}>
+                  Quitar firma
+                </button>
+              )}
             </div>
           </div>
         </div>
