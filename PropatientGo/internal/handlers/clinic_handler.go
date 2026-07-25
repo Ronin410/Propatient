@@ -19,6 +19,39 @@ import (
 
 const clinicInviteValidity = 72 * time.Hour
 
+// maskEmail oculta la mayor parte del correo para mostrarlo en un mensaje
+// de error sin exponerlo por completo (ej. "al**@gmail.com").
+func maskEmail(email string) string {
+	at := strings.IndexByte(email, '@')
+	if at <= 1 {
+		return email
+	}
+	visible := 2
+	if visible > at {
+		visible = at
+	}
+	return email[:visible] + strings.Repeat("*", at-visible) + email[at:]
+}
+
+// clinicInviteWrongAccountMessage distingue una invitación genuinamente
+// inválida/consumida de una que sí existe pero le pertenece a OTRA cuenta
+// que no es la que tiene la sesión abierta ahora mismo — típicamente
+// porque el navegador quedó con la sesión de otro doctor (ver el aviso de
+// cambio de sesión entre pestañas en AuthContext.tsx). En ese segundo
+// caso el mensaje genérico "invitación no válida" es engañoso, ya que la
+// invitación sí es válida, solo hace falta iniciar sesión con la cuenta
+// correcta.
+func clinicInviteWrongAccountMessage(db *gorm.DB, token string) (string, bool) {
+	if token == "" {
+		return "", false
+	}
+	var tokenOwner models.Doctor
+	if err := db.Select("id, email").Where("clinic_invite_token = ?", token).First(&tokenOwner).Error; err != nil {
+		return "", false
+	}
+	return fmt.Sprintf("Esta invitación es para la cuenta %s. Cierra sesión e inicia con esa cuenta para aceptarla.", maskEmail(tokenOwner.Email)), true
+}
+
 // syncClinicDoctorCount recalcula cuántos doctores tiene la clínica y
 // sincroniza el concepto de "doctor extra" en Stripe (se crea/actualiza/
 // borra según cruce o no billing.ClinicBaseIncludedDoctors). Se llama
@@ -216,6 +249,22 @@ func GetClinic(db *gorm.DB) gin.HandlerFunc {
 			})
 		}
 
+		// Invitaciones a doctores que YA TENÍAN cuenta cuando se les invitó
+		// (ver InviteDoctorToClinic) y todavía no aceptan — antes eran
+		// invisibles para el dueño (solo se veían las de correos sin
+		// cuenta), lo que hacía parecer que la invitación se había perdido.
+		var pendingAccountInvitees []models.Doctor
+		db.Select("email, clinic_invite_token_expires_at").
+			Where("pending_clinic_id = ? AND clinic_invite_token != '' AND clinic_invite_token_expires_at > ?", clinic.ID, time.Now().UTC()).
+			Order("clinic_invite_token_expires_at DESC").Find(&pendingAccountInvitees)
+		accountInviteItems := make([]gin.H, 0, len(pendingAccountInvitees))
+		for _, inv := range pendingAccountInvitees {
+			accountInviteItems = append(accountInviteItems, gin.H{
+				"email":     inv.Email,
+				"expiresAt": inv.ClinicInviteTokenExpiresAt,
+			})
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"id":                  clinic.ID,
 			"name":                clinic.Name,
@@ -232,10 +281,11 @@ func GetClinic(db *gorm.DB) gin.HandlerFunc {
 			// Ubicación única de la clínica (ver UpdateClinicLocation) — el
 			// directorio público la usa para TODOS los doctores de esta
 			// clínica en vez de la dirección individual de cada quien.
-			"address":             clinic.Address,
-			"latitude":            clinic.Latitude,
-			"longitude":           clinic.Longitude,
-			"pendingEmailInvites": emailInviteItems,
+			"address":               clinic.Address,
+			"latitude":              clinic.Latitude,
+			"longitude":             clinic.Longitude,
+			"pendingEmailInvites":   emailInviteItems,
+			"pendingAccountInvites": accountInviteItems,
 		})
 	}
 }
@@ -480,6 +530,10 @@ func GetClinicInvite(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		if doctor.ClinicInviteToken == "" || doctor.ClinicInviteToken != token || doctor.PendingClinicID == nil {
+			if msg, isWrongAccount := clinicInviteWrongAccountMessage(db, token); isWrongAccount {
+				c.JSON(http.StatusForbidden, gin.H{"error": msg, "wrongAccount": true})
+				return
+			}
 			c.JSON(http.StatusNotFound, gin.H{"error": "Invitación no válida"})
 			return
 		}
@@ -558,6 +612,10 @@ func AcceptClinicInvite(db *gorm.DB, client billing.Client) gin.HandlerFunc {
 			return
 		}
 		if doctor.ClinicInviteToken == "" || doctor.ClinicInviteToken != token || doctor.PendingClinicID == nil {
+			if msg, isWrongAccount := clinicInviteWrongAccountMessage(db, token); isWrongAccount {
+				c.JSON(http.StatusForbidden, gin.H{"error": msg, "wrongAccount": true})
+				return
+			}
 			c.JSON(http.StatusNotFound, gin.H{"error": "Invitación no válida"})
 			return
 		}

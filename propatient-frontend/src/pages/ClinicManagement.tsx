@@ -19,6 +19,11 @@ interface PendingEmailInvite {
   invitedAt: string;
 }
 
+interface PendingAccountInvite {
+  email: string;
+  expiresAt: string;
+}
+
 interface ClinicInfo {
   id: number;
   name: string;
@@ -33,6 +38,7 @@ interface ClinicInfo {
   latitude: number | null;
   longitude: number | null;
   pendingEmailInvites: PendingEmailInvite[];
+  pendingAccountInvites: PendingAccountInvite[];
 }
 
 // "No configurado" (503) es distinto de "no perteneces a ninguna" (404):
@@ -472,6 +478,23 @@ export const ClinicManagement: React.FC = () => {
                     <span className="clinic-pending-invite-date">
                       {' '}
                       · invitado el {new Date(inv.invitedAt).toLocaleDateString()}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {clinic.pendingAccountInvites.length > 0 && (
+            <div className="clinic-pending-invites">
+              <h4>Ya tienen cuenta, esperando que acepten la invitación</h4>
+              <ul>
+                {clinic.pendingAccountInvites.map((inv) => (
+                  <li key={inv.email}>
+                    {inv.email}
+                    <span className="clinic-pending-invite-date">
+                      {' '}
+                      · vence el {new Date(inv.expiresAt).toLocaleDateString()}
                     </span>
                   </li>
                 ))}

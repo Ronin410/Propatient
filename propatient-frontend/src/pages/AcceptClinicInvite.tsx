@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
@@ -17,11 +18,15 @@ interface ClinicInviteInfo {
 export const AcceptClinicInvite: React.FC = () => {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
-  const { isStaff } = useAuth();
+  const { isStaff, logout } = useAuth();
 
   const [invite, setInvite] = useState<ClinicInviteInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // true si el error es porque la sesión abierta es de OTRA cuenta (no la
+  // invitada) — ver clinicInviteWrongAccountMessage en el backend. En ese
+  // caso ofrecemos cerrar sesión en vez de un genérico "no válida".
+  const [wrongAccount, setWrongAccount] = useState(false);
   const [accepting, setAccepting] = useState(false);
   const [acceptError, setAcceptError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -30,9 +35,17 @@ export const AcceptClinicInvite: React.FC = () => {
     if (!token || isStaff) return;
     api.get(`/clinic/invitations/${token}`)
       .then((res) => setInvite(res.data))
-      .catch((err) => setLoadError(getErrorMessage(err, 'Esta invitación no es válida.')))
+      .catch((err) => {
+        setLoadError(getErrorMessage(err, 'Esta invitación no es válida.'));
+        setWrongAccount(axios.isAxiosError(err) && !!err.response?.data?.wrongAccount);
+      })
       .finally(() => setLoading(false));
   }, [token, isStaff]);
+
+  const handleLogoutAndRetry = () => {
+    logout();
+    navigate('/login');
+  };
 
   const handleAccept = async () => {
     setAccepting(true);
@@ -77,7 +90,15 @@ export const AcceptClinicInvite: React.FC = () => {
           <span className="material-icons-outlined clinic-icon">apartment</span>
           <h1>Invitación no disponible</h1>
           <p className="clinic-error">{loadError}</p>
-          <p><Link to="/inicio">Ir a mi panel</Link></p>
+          {wrongAccount ? (
+            <div className="clinic-create-form">
+              <button type="button" className="btn-primary" onClick={handleLogoutAndRetry}>
+                Cerrar sesión e iniciar con esa cuenta
+              </button>
+            </div>
+          ) : (
+            <p><Link to="/inicio">Ir a mi panel</Link></p>
+          )}
         </div>
       </div>
     );
