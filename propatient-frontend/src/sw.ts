@@ -1,7 +1,21 @@
 /// <reference lib="webworker" />
+import { clientsClaim } from 'workbox-core';
 import { precacheAndRoute } from 'workbox-precaching';
 
 declare const self: ServiceWorkerGlobalScope;
+
+// registerType: 'autoUpdate' (ver vite.config.ts) solo actualiza solo con
+// la estrategia generateSW — con injectManifest (la que usa este archivo,
+// necesaria por los listeners de push/notificationclick de abajo) hay que
+// llamar esto a mano. Sin esto, un service worker nuevo se queda
+// "esperando" y el navegador sigue sirviendo el bundle viejo cacheado
+// hasta que TODAS las pestañas/instancias del sitio se cierren por
+// completo — algo que casi nunca pasa en iOS (Safari en segundo plano y
+// la PWA agregada a inicio casi nunca se "cierran" de verdad), así que un
+// iPhone se queda viendo una versión vieja del sitio mucho más tiempo que
+// Android/Chrome.
+self.skipWaiting();
+clientsClaim();
 
 // Cacheo estático de la app (JS/CSS/HTML) para que la PWA sea instalable
 // y arranque rápido — vite-plugin-pwa inyecta la lista de archivos aquí en
