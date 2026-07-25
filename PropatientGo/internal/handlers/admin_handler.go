@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"propatient-api/internal/auth"
@@ -114,7 +116,7 @@ func ListPendingDoctors(db *gorm.DB, storageClient storage.Client) gin.HandlerFu
 // ApproveDoctorCedula marca a un doctor como VALIDADA y le avisa por
 // correo. Solo tiene efecto si estaba en CAPTURADA — evita "aprobar" a un
 // doctor que ni siquiera ha terminado su onboarding.
-func ApproveDoctorCedula(db *gorm.DB) gin.HandlerFunc {
+func ApproveDoctorCedula(db *gorm.DB, client billing.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 
@@ -133,6 +135,14 @@ func ApproveDoctorCedula(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Si a este correo lo habían invitado a una clínica ANTES de que
+		// tuviera cuenta (ver handlers.inviteClinicByEmail), esta es la
+		// señal de que ya es una cuenta real: se une solo, sin que el
+		// dueño tenga que volver a invitarlo ni el doctor tenga que
+		// confirmar nada — mejor esfuerzo, un fallo aquí no debe tumbar la
+		// aprobación de la cédula en sí.
+		joinPendingClinicIfInvited(c.Request.Context(), db, client, &doctor)
+
 		go func(email, name string) {
 			defer func() { recover() }()
 			if email == "" {
@@ -144,6 +154,41 @@ func ApproveDoctorCedula(db *gorm.DB) gin.HandlerFunc {
 		}(doctor.Email, doctor.FullName)
 
 		c.JSON(http.StatusOK, gin.H{"message": "Cédula aprobada"})
+	}
+}
+
+// joinPendingClinicIfInvited busca una ClinicEmailInvite sin consumir ni
+// vencida para el correo de este doctor y, si existe, lo une a esa
+// clínica (mismo camino que aceptar una invitación normal, ver
+// joinDoctorToClinic) y marca la invitación como consumida. No hace nada
+// si el doctor ya pertenece a alguna clínica (evita pisar una que se
+// haya unido por otro medio mientras tanto).
+func joinPendingClinicIfInvited(ctx context.Context, db *gorm.DB, client billing.Client, doctor *models.Doctor) {
+	if doctor.ClinicID != nil || doctor.Email == "" {
+		return
+	}
+
+	var invite models.ClinicEmailInvite
+	err := db.Where("email = ? AND consumed_at IS NULL AND expires_at > ?", strings.ToLower(doctor.Email), time.Now().UTC()).
+		Order("created_at DESC").First(&invite).Error
+	if err != nil {
+		return // sin invitación pendiente, nada que hacer
+	}
+
+	var clinic models.Clinic
+	if err := db.First(&clinic, invite.ClinicID).Error; err != nil {
+		log.Printf("⚠️ Invitación de clínica por correo apunta a una clínica inexistente (invite %d, clínica %d)", invite.ID, invite.ClinicID)
+		return
+	}
+
+	if err := joinDoctorToClinic(ctx, db, client, doctor, &clinic); err != nil {
+		log.Printf("⚠️ No se pudo unir automáticamente al doctor %d a la clínica %d tras aprobar su cédula: %v", doctor.ID, clinic.ID, err)
+		return
+	}
+
+	now := time.Now().UTC()
+	if err := db.Model(&invite).Update("consumed_at", now).Error; err != nil {
+		log.Printf("⚠️ El doctor %d se unió a la clínica %d pero no se pudo marcar la invitación %d como consumida: %v", doctor.ID, clinic.ID, invite.ID, err)
 	}
 }
 

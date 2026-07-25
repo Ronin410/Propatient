@@ -124,6 +124,43 @@ func TestClinic_GetClinic_OwnerSeesDoctorsAndBreakdown(t *testing.T) {
 	assert.Len(t, doctors, 2)
 }
 
+// TestClinic_GetClinic_ShowsPendingEmailInvites confirma que el dueño ve
+// las invitaciones a correos que todavía no tienen cuenta (ver
+// inviteClinicByEmail), y que una ya consumida deja de aparecer.
+func TestClinic_GetClinic_ShowsPendingEmailInvites(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	owner := testutil.CreateTestDoctor(t, db, "doc_clinic_owner_pending", "password123")
+	clinic := models.Clinic{Name: "Clínica Pendientes", OwnerDoctorID: owner.ID, SubscriptionStatus: "active"}
+	require.NoError(t, db.Create(&clinic).Error)
+	require.NoError(t, db.Model(&owner).Updates(map[string]any{"clinic_id": clinic.ID, "is_clinic_owner": true}).Error)
+
+	pending := models.ClinicEmailInvite{
+		ClinicID: clinic.ID, Email: "pendiente@correo.local", InvitedByDoctorID: owner.ID,
+		ExpiresAt: time.Now().UTC().Add(30 * 24 * time.Hour),
+	}
+	require.NoError(t, db.Create(&pending).Error)
+
+	consumedAt := time.Now().UTC()
+	consumed := models.ClinicEmailInvite{
+		ClinicID: clinic.ID, Email: "ya-consumida@correo.local", InvitedByDoctorID: owner.ID,
+		ExpiresAt: time.Now().UTC().Add(30 * 24 * time.Hour), ConsumedAt: &consumedAt,
+	}
+	require.NoError(t, db.Create(&consumed).Error)
+
+	token := testutil.TokenFor(t, owner.ID, owner.Username)
+	w := doRequest(t, router, http.MethodGet, "/api/clinic", token, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	body := decodeJSON(t, w)
+	invites, ok := body["pendingEmailInvites"].([]any)
+	require.True(t, ok)
+	require.Len(t, invites, 1)
+	invite := invites[0].(map[string]any)
+	assert.Equal(t, "pendiente@correo.local", invite["email"])
+}
+
 // TestClinic_GetClinic_NonMember_Returns404 confirma que un doctor sin
 // clínica no ve nada.
 func TestClinic_GetClinic_NonMember_Returns404(t *testing.T) {
@@ -158,9 +195,12 @@ func TestClinic_InviteDoctorToClinic_OnlyOwnerCanInvite(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, w.Code)
 }
 
-// TestClinic_InviteDoctorToClinic_InviteeMustHaveAccount confirma que solo
-// se puede invitar a un doctor que ya tiene cuenta en ProPatient.
-func TestClinic_InviteDoctorToClinic_InviteeMustHaveAccount(t *testing.T) {
+// TestClinic_InviteDoctorToClinic_NoAccountYet_CreatesEmailInvite confirma
+// el comportamiento nuevo: invitar a un correo que todavía no tiene cuenta
+// ya no rechaza la invitación — la guarda como ClinicEmailInvite para que
+// se resuelva sola en cuanto esa cuenta se registre y su cédula sea
+// aprobada (ver TestApproveDoctorCedula_AutoJoinsPendingClinicEmailInvite).
+func TestClinic_InviteDoctorToClinic_NoAccountYet_CreatesEmailInvite(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	router := server.NewRouter(db)
 
@@ -171,7 +211,21 @@ func TestClinic_InviteDoctorToClinic_InviteeMustHaveAccount(t *testing.T) {
 
 	token := testutil.TokenFor(t, owner.ID, owner.Username)
 	w := doRequest(t, router, http.MethodPost, "/api/clinic/invite", token, map[string]any{"email": "nadie@nunca-existio.local"})
-	assert.Equal(t, http.StatusNotFound, w.Code)
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+
+	var invite models.ClinicEmailInvite
+	require.NoError(t, db.Where("email = ?", "nadie@nunca-existio.local").First(&invite).Error)
+	assert.Equal(t, clinic.ID, invite.ClinicID)
+	assert.Equal(t, owner.ID, invite.InvitedByDoctorID)
+	assert.Nil(t, invite.ConsumedAt)
+	assert.True(t, invite.ExpiresAt.After(time.Now().UTC()))
+
+	// Invitar de nuevo al mismo correo reutiliza la fila (no duplica).
+	w = doRequest(t, router, http.MethodPost, "/api/clinic/invite", token, map[string]any{"email": "nadie@nunca-existio.local"})
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	var count int64
+	db.Model(&models.ClinicEmailInvite{}).Where("email = ?", "nadie@nunca-existio.local").Count(&count)
+	assert.Equal(t, int64(1), count)
 }
 
 // TestClinic_InviteDoctorToClinic_Success_SetsPendingFields confirma que

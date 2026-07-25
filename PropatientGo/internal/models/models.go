@@ -228,6 +228,26 @@ type Clinic struct {
 	StripeExtraItemID    string `json:"-"`
 }
 
+// ClinicEmailInvite es una invitación a la clínica para un correo que
+// TODAVÍA no tiene cuenta en ProPatient — a diferencia de
+// Doctor.ClinicInviteToken (que vive en la fila del doctor ya
+// registrado, con un token que confirma su consentimiento explícito),
+// esta no tiene a qué doctor amarrarse todavía. Se resuelve sola, sin
+// paso de aceptación, en cuanto ese correo se registra Y su cédula queda
+// aprobada (ver handlers.ApproveDoctorCedula) — nunca antes, para no
+// meter a la clínica a una cuenta sin verificar.
+type ClinicEmailInvite struct {
+	ID                uint      `gorm:"primaryKey" json:"id"`
+	CreatedAt         time.Time `json:"createdAt"`
+	ClinicID          uint      `gorm:"index;not null" json:"clinicId"`
+	Email             string    `gorm:"index;not null" json:"email"`
+	InvitedByDoctorID uint      `json:"invitedByDoctorId"`
+	ExpiresAt         time.Time `json:"expiresAt"`
+	// ConsumedAt queda nil mientras espera; se marca (nunca se borra la
+	// fila, sirve de bitácora) en cuanto un doctor con ese correo se une.
+	ConsumedAt *time.Time `json:"consumedAt"`
+}
+
 // Review es la reseña que un paciente deja de un doctor después de una
 // consulta ya completada. La fila nace en cuanto la cita pasa a
 // COMPLETED (ver UpdateAppointment), con Token pero sin calificación

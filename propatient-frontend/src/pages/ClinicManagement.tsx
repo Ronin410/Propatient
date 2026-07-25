@@ -14,6 +14,11 @@ interface ClinicDoctor {
   isOwner: boolean;
 }
 
+interface PendingEmailInvite {
+  email: string;
+  invitedAt: string;
+}
+
 interface ClinicInfo {
   id: number;
   name: string;
@@ -27,6 +32,7 @@ interface ClinicInfo {
   address: string;
   latitude: number | null;
   longitude: number | null;
+  pendingEmailInvites: PendingEmailInvite[];
 }
 
 // "No configurado" (503) es distinto de "no perteneces a ninguna" (404):
@@ -166,14 +172,18 @@ export const ClinicManagement: React.FC = () => {
     e.preventDefault();
     setInviting(true);
     try {
-      await api.post('/clinic/invite', { email: inviteEmail });
+      const res = await api.post('/clinic/invite', { email: inviteEmail });
       setInviteEmail('');
       setPopupConfig({
         isOpen: true,
         type: 'success',
         title: 'Invitación enviada',
-        message: `Le enviamos un correo a ${inviteEmail} para que confirme que se une a la clínica.`,
+        // El backend distingue si el correo ya tenía cuenta (confirma con
+        // un clic) o no (se registra y se une solo al aprobarse su
+        // cédula) — el mensaje que manda ya explica cuál de los dos pasó.
+        message: res.data?.message || `Le enviamos un correo a ${inviteEmail}.`,
       });
+      fetchClinic();
     } catch (err: unknown) {
       setPopupConfig({
         isOpen: true,
@@ -438,8 +448,9 @@ export const ClinicManagement: React.FC = () => {
         <section className="card invite-card">
           <h3>Invitar a un doctor</h3>
           <p className="clinic-muted">
-            El doctor debe tener ya una cuenta en ProPatient con ese correo — le llegará un aviso para
-            confirmar que se une.
+            Si ya tiene cuenta en ProPatient con ese correo, le llegará un aviso para confirmar que se
+            une. Si todavía no tiene cuenta, le mandamos una invitación a registrarse — en cuanto su
+            cuenta quede aprobada, se une a la clínica automáticamente, sin ningún paso extra.
           </p>
           <form className="invite-form" onSubmit={handleInvite}>
             <div className="form-group">
@@ -450,6 +461,23 @@ export const ClinicManagement: React.FC = () => {
               {inviting ? 'Enviando...' : 'Enviar invitación'}
             </button>
           </form>
+
+          {clinic.pendingEmailInvites.length > 0 && (
+            <div className="clinic-pending-invites">
+              <h4>Esperando que se registren y sean aprobados</h4>
+              <ul>
+                {clinic.pendingEmailInvites.map((inv) => (
+                  <li key={inv.email}>
+                    {inv.email}
+                    <span className="clinic-pending-invite-date">
+                      {' '}
+                      · invitado el {new Date(inv.invitedAt).toLocaleDateString()}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </section>
       )}
 

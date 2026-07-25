@@ -108,6 +108,67 @@ func TestSuperAdmin_CedulaReviewLifecycle(t *testing.T) {
 	assert.Len(t, pendingAfter, 0)
 }
 
+// TestApproveDoctorCedula_AutoJoinsPendingClinicEmailInvite cubre el flujo
+// completo pedido por el usuario: un correo se invita a una clínica ANTES
+// de tener cuenta (ver inviteClinicByEmail), esa persona se registra y
+// pasa por la revisión de cédula normal, y en cuanto el superadmin la
+// aprueba queda unida a la clínica sola — sin que el dueño tenga que
+// volver a invitarla ni que ella confirme nada. También cancela su
+// suscripción individual si ya tenía una.
+func TestApproveDoctorCedula_AutoJoinsPendingClinicEmailInvite(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	mockBilling := newMockBillingClient()
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, nil, billing.Config{}, mockBilling, geocoding.NewClient(), nil, nil)
+
+	owner := testutil.CreateTestDoctor(t, db, "doc_clinic_owner_autojoin", "password123")
+	clinic := models.Clinic{Name: "Clínica Autojoin", OwnerDoctorID: owner.ID, SubscriptionStatus: "active", StripeSubscriptionID: "sub_clinic_autojoin"}
+	require.NoError(t, db.Create(&clinic).Error)
+	require.NoError(t, db.Model(&owner).Updates(map[string]any{"clinic_id": clinic.ID, "is_clinic_owner": true}).Error)
+
+	invite := models.ClinicEmailInvite{
+		ClinicID: clinic.ID, Email: "nuevo_colega@correo.local", InvitedByDoctorID: owner.ID,
+		ExpiresAt: time.Now().UTC().Add(30 * 24 * time.Hour),
+	}
+	require.NoError(t, db.Create(&invite).Error)
+
+	newcomer := testutil.CreateTestDoctor(t, db, "doc_newcomer_autojoin", "password123")
+	require.NoError(t, db.Model(&newcomer).Updates(map[string]any{
+		"email":                  "nuevo_colega@correo.local",
+		"cedula_validated":       "CAPTURADA",
+		"subscription_status":    "active",
+		"stripe_subscription_id": "sub_newcomer_autojoin",
+	}).Error)
+
+	admin := testutil.CreateTestSuperAdmin(t, db, "admin_autojoin", "clavesegura123")
+	adminToken := testutil.TokenForSuperAdmin(t, admin.ID, admin.Username)
+
+	docIDStr := strconv.FormatUint(uint64(newcomer.ID), 10)
+	w := doRequest(t, router, http.MethodPut, "/api/admin/doctors/"+docIDStr+"/approve", adminToken, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var reloaded struct {
+		CedulaValidated      string
+		ClinicID             *uint
+		IsClinicOwner        bool
+		SubscriptionStatus   string
+		StripeSubscriptionID string
+	}
+	require.NoError(t, db.Table("doctors").
+		Select("cedula_validated, clinic_id, is_clinic_owner, subscription_status, stripe_subscription_id").
+		Where("id = ?", newcomer.ID).Scan(&reloaded).Error)
+	assert.Equal(t, "VALIDADA", reloaded.CedulaValidated)
+	require.NotNil(t, reloaded.ClinicID)
+	assert.Equal(t, clinic.ID, *reloaded.ClinicID)
+	assert.False(t, reloaded.IsClinicOwner)
+	assert.Equal(t, "active", reloaded.SubscriptionStatus)
+	assert.Empty(t, reloaded.StripeSubscriptionID)
+	assert.True(t, mockBilling.wasCanceled("sub_newcomer_autojoin"))
+
+	var reloadedInvite models.ClinicEmailInvite
+	require.NoError(t, db.First(&reloadedInvite, invite.ID).Error)
+	require.NotNil(t, reloadedInvite.ConsumedAt)
+}
+
 // TestSuperAdmin_RejectSendsDoctorBackToPendiente confirma que rechazar
 // regresa al doctor a PENDIENTE (puede volver a subir su documentación) en
 // vez de dejarlo bloqueado sin salida.

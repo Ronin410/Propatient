@@ -201,6 +201,21 @@ func GetClinic(db *gorm.DB) gin.HandlerFunc {
 			extraDoctors = len(doctors) - billing.ClinicBaseIncludedDoctors
 		}
 
+		// Invitaciones a correos que todavía no tenían cuenta cuando se
+		// mandaron (ver inviteClinicByEmail) — visibles mientras no se
+		// consuman ni venzan, para que el dueño sepa a quién ya invitó y
+		// sigue esperando que se registre y se apruebe.
+		var pendingEmailInvites []models.ClinicEmailInvite
+		db.Where("clinic_id = ? AND consumed_at IS NULL AND expires_at > ?", clinic.ID, time.Now().UTC()).
+			Order("created_at DESC").Find(&pendingEmailInvites)
+		emailInviteItems := make([]gin.H, 0, len(pendingEmailInvites))
+		for _, inv := range pendingEmailInvites {
+			emailInviteItems = append(emailInviteItems, gin.H{
+				"email":     inv.Email,
+				"invitedAt": inv.CreatedAt,
+			})
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"id":                  clinic.ID,
 			"name":                clinic.Name,
@@ -217,9 +232,10 @@ func GetClinic(db *gorm.DB) gin.HandlerFunc {
 			// Ubicación única de la clínica (ver UpdateClinicLocation) — el
 			// directorio público la usa para TODOS los doctores de esta
 			// clínica en vez de la dirección individual de cada quien.
-			"address":   clinic.Address,
-			"latitude":  clinic.Latitude,
-			"longitude": clinic.Longitude,
+			"address":             clinic.Address,
+			"latitude":            clinic.Latitude,
+			"longitude":           clinic.Longitude,
+			"pendingEmailInvites": emailInviteItems,
 		})
 	}
 }
@@ -291,11 +307,80 @@ type inviteDoctorToClinicRequest struct {
 	Email string `json:"email" binding:"required,email"`
 }
 
-// InviteDoctorToClinic manda una invitación a un doctor que YA TIENE
-// cuenta en ProPatient (a diferencia de invitar personal, aquí no se crea
-// una cuenta nueva — el doctor invitado inicia sesión con la suya propia
-// y confirma que quiere unirse). Ruta protegida, solo el dueño de la
-// clínica puede invitar.
+// clinicEmailInviteValidity: mucho más larga que clinicInviteValidity
+// (72h) porque aquí se espera a que alguien vea el correo, decida
+// registrarse, complete el onboarding Y su cédula sea aprobada — un
+// proceso de días, no de horas.
+const clinicEmailInviteValidity = 30 * 24 * time.Hour
+
+// inviteClinicByEmail cubre el caso en que el correo invitado todavía no
+// tiene cuenta en ProPatient: en vez de rechazar la invitación, guarda un
+// ClinicEmailInvite y le manda un correo invitándolo a registrarse. En
+// cuanto esa cuenta exista y su cédula sea aprobada (ver
+// ApproveDoctorCedula), se une sola a la clínica — sin que el dueño
+// tenga que volver a invitarlo.
+func inviteClinicByEmail(c *gin.Context, db *gorm.DB, owner models.Doctor, email string) {
+	// Si ya había una invitación pendiente sin consumir para este mismo
+	// correo y clínica, se reutiliza (refresca la fecha) en vez de
+	// duplicarla.
+	var existing models.ClinicEmailInvite
+	found := db.Where("clinic_id = ? AND email = ? AND consumed_at IS NULL", *owner.ClinicID, email).First(&existing).Error == nil
+
+	expires := time.Now().UTC().Add(clinicEmailInviteValidity)
+	if found {
+		if err := db.Model(&existing).Updates(map[string]interface{}{
+			"invited_by_doctor_id": owner.ID,
+			"expires_at":           expires,
+		}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo guardar la invitación"})
+			return
+		}
+	} else {
+		invite := models.ClinicEmailInvite{
+			ClinicID:          *owner.ClinicID,
+			Email:             email,
+			InvitedByDoctorID: owner.ID,
+			ExpiresAt:         expires,
+		}
+		if err := db.Create(&invite).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo guardar la invitación"})
+			return
+		}
+	}
+
+	var clinic models.Clinic
+	db.Select("name").First(&clinic, *owner.ClinicID)
+
+	registerURL := frontendRedirectBase() + "/login"
+	subject := "Te invitaron a unirte a una clínica en ProPatient"
+	body := fmt.Sprintf(`
+		<html>
+		<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+			<div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+				<h2 style="color: #002d42; text-align: center;">¡Te invitaron a ProPatient!</h2>
+				<p>%s te invitó a unirte a la clínica <strong>%s</strong> en ProPatient, un sistema de gestión para consultorios médicos. Como todavía no tienes cuenta, primero necesitas registrarte.</p>
+				<p style="text-align: center; margin: 28px 0;">
+					<a href="%s" style="background-color: #005073; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600;">Registrarme en ProPatient</a>
+				</p>
+				<p>Usa <strong>este mismo correo (%s)</strong> al registrarte. En cuanto tu cuenta esté validada, quedarás agregado a la clínica automáticamente — no necesitas hacer nada más.</p>
+				<p style="font-size: 12px; color: #888;">Si no esperabas esta invitación, puedes ignorarla — no se hace ningún cambio a menos que te registres con este correo.</p>
+			</div>
+		</body>
+		</html>
+	`, owner.FullName, clinic.Name, registerURL, email)
+
+	if err := auth.SendEmail(email, subject, body); err != nil {
+		c.JSON(http.StatusCreated, gin.H{"warning": "La invitación se guardó pero no se pudo enviar el correo."})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"message": "Ese correo todavía no tiene cuenta en ProPatient — le enviamos una invitación para que se registre. En cuanto su cuenta quede aprobada, se une a la clínica automáticamente."})
+}
+
+// InviteDoctorToClinic manda una invitación a un doctor — si ya tiene
+// cuenta en ProPatient, confirma con un clic (AcceptClinicInvite); si el
+// correo todavía no tiene cuenta, ver inviteClinicByEmail. Ruta
+// protegida, solo el dueño de la clínica puede invitar.
 func InviteDoctorToClinic(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ownerID := c.MustGet("doctorID").(uint)
@@ -319,7 +404,7 @@ func InviteDoctorToClinic(db *gorm.DB) gin.HandlerFunc {
 
 		var invitee models.Doctor
 		if err := db.Where("LOWER(email) = ?", email).First(&invitee).Error; err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "No existe una cuenta de doctor con ese correo en ProPatient. Pídele que se registre primero."})
+			inviteClinicByEmail(c, db, owner, email)
 			return
 		}
 		if invitee.ID == ownerID {
@@ -422,11 +507,46 @@ func GetClinicInvite(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
+// joinDoctorToClinic hace el trabajo real de meter a un doctor a una
+// clínica — compartido entre AcceptClinicInvite (el doctor ya tenía
+// cuenta y confirma con un clic) y el enganche automático de
+// ApproveDoctorCedula (el doctor no tenía cuenta cuando lo invitaron por
+// correo, ver ClinicEmailInvite; aquí no hay paso de confirmación
+// separado, la aprobación de su cédula ya es la señal de que es una
+// cuenta real). Cancela su suscripción individual si tenía una activa
+// (para que no le sigan cobrando dos veces) y ajusta el concepto de
+// "doctor extra" de la clínica si hace falta. Mejor esfuerzo en la parte
+// de Stripe — un fallo ahí no debe impedir que el doctor quede
+// vinculado.
+func joinDoctorToClinic(ctx context.Context, db *gorm.DB, client billing.Client, doctor *models.Doctor, clinic *models.Clinic) error {
+	if client != nil && doctor.StripeSubscriptionID != "" {
+		if err := client.CancelSubscription(ctx, doctor.StripeSubscriptionID); err != nil {
+			fmt.Printf("⚠️ No se pudo cancelar la suscripción individual del doctor %d al unirse a la clínica %d: %v\n", doctor.ID, clinic.ID, err)
+		}
+	}
+
+	updates := map[string]interface{}{
+		"clinic_id":                      clinic.ID,
+		"is_clinic_owner":                false,
+		"pending_clinic_id":              nil,
+		"clinic_invite_token":            "",
+		"clinic_invite_token_expires_at": nil,
+		"subscription_status":            "active", // cubierto por la clínica, ya no depende de su propio trial/pago
+		"stripe_subscription_id":         "",
+	}
+	if err := db.Model(doctor).Updates(updates).Error; err != nil {
+		return err
+	}
+
+	if err := syncClinicDoctorCount(ctx, db, client, clinic); err != nil {
+		fmt.Printf("⚠️ No se pudo sincronizar el conteo de doctores de la clínica %d con Stripe: %v\n", clinic.ID, err)
+	}
+	return nil
+}
+
 // AcceptClinicInvite confirma que el doctor autenticado (el propio
 // invitado, con su sesión normal) acepta unirse a la clínica que lo
-// invitó. Cancela su suscripción individual si tenía una activa (para
-// que no le sigan cobrando dos veces) y ajusta el concepto de "doctor
-// extra" de la clínica si hace falta.
+// invitó.
 func AcceptClinicInvite(db *gorm.DB, client billing.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		doctorID := c.MustGet("doctorID").(uint)
@@ -456,31 +576,9 @@ func AcceptClinicInvite(db *gorm.DB, client billing.Client) gin.HandlerFunc {
 			return
 		}
 
-		// Mejor esfuerzo: si Stripe no está configurado o la cancelación
-		// falla, no bloqueamos que el doctor se una — solo se registra el
-		// aviso, igual que el resto de integraciones opcionales de la app.
-		if client != nil && doctor.StripeSubscriptionID != "" {
-			if err := client.CancelSubscription(c.Request.Context(), doctor.StripeSubscriptionID); err != nil {
-				fmt.Printf("⚠️ No se pudo cancelar la suscripción individual del doctor %d al unirse a la clínica %d: %v\n", doctor.ID, clinic.ID, err)
-			}
-		}
-
-		updates := map[string]interface{}{
-			"clinic_id":                      clinic.ID,
-			"is_clinic_owner":                false,
-			"pending_clinic_id":              nil,
-			"clinic_invite_token":            "",
-			"clinic_invite_token_expires_at": nil,
-			"subscription_status":            "active", // cubierto por la clínica, ya no depende de su propio trial/pago
-			"stripe_subscription_id":         "",
-		}
-		if err := db.Model(&doctor).Updates(updates).Error; err != nil {
+		if err := joinDoctorToClinic(c.Request.Context(), db, client, &doctor, &clinic); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo completar la unión a la clínica"})
 			return
-		}
-
-		if err := syncClinicDoctorCount(c.Request.Context(), db, client, &clinic); err != nil {
-			fmt.Printf("⚠️ No se pudo sincronizar el conteo de doctores de la clínica %d con Stripe: %v\n", clinic.ID, err)
 		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "Te uniste a la clínica", "clinicName": clinic.Name})
