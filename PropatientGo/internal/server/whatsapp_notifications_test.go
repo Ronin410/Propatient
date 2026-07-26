@@ -196,6 +196,7 @@ func TestUpdateAppointment_NotifiesPatientWhenRescheduled(t *testing.T) {
 	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), wa, nil)
 
 	doc := testutil.CreateTestDoctor(t, db, "doc_wa_reschedule", "password123")
+	require.NoError(t, db.Model(&doc).Update("phone", "5559876543").Error)
 	docToken := testutil.TokenFor(t, doc.ID, doc.Username)
 
 	patient := models.Patient{FirstName: "Reprogramado", LastName: "Prueba", Phone: "5554440004", Email: "reprogramado.wa@test.local"}
@@ -218,4 +219,10 @@ func TestUpdateAppointment_NotifiesPatientWhenRescheduled(t *testing.T) {
 	})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	wa.waitForCallsTo(t, "5554440004", 1)
+
+	// Debe invitar al paciente a comunicarse con el doctor (con el teléfono
+	// que este cargó en su perfil) si no está de acuerdo con el cambio.
+	body := wa.lastBodyTo(t, "5554440004")
+	assert.Contains(t, body, "no estás de acuerdo con la reprogramación")
+	assert.Contains(t, body, "5559876543")
 }
