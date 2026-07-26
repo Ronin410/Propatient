@@ -265,22 +265,24 @@ export async function buildRecipeDocDefinition({
   };
 }
 
-// Arma la receta, la sube al backend y devuelve tanto el docDefinition como
-// el generador de pdfmake YA CONSTRUIDO (para poder imprimirlo después sin
-// volver a llamar pdfMake.createPdf() sobre el mismo docDefinition —
-// pdfmake muta ese objeto durante el layout, así que reutilizarlo en un
-// createPdf() nuevo produce un PDF con los márgenes corridos/duplicados;
-// visto en producción como la línea divisoria de la receta apareciendo al
-// doble de distancia de lo normal. Ver handleGenerateAndPrintRecipe en
-// useConsultation.ts, que ahora llama pdfDocGen.print() en vez de crear
-// una instancia nueva). Usada tanto por el botón "Generar Receta" como por
-// "Finalizar Consulta".
+// Arma la receta, la sube al backend y devuelve la ruta (recipePdfPath) del
+// archivo tal como quedó guardado ahí — para imprimirla, el llamador debe
+// abrir ESE archivo (ver toAbsoluteFileUrl) en vez de generar un PDF nuevo
+// en el navegador. Antes se llamaba pdfMake.createPdf(docDefinition) una
+// segunda vez para imprimir, reutilizando el mismo docDefinition ya usado
+// para subirlo — pdfmake MUTA ese objeto durante el layout, así que la
+// segunda llamada producía un PDF con los márgenes corridos/duplicados
+// (visto en producción: la línea divisoria de la receta al doble de
+// distancia de lo normal). Abrir el archivo ya guardado en vez de volver a
+// generarlo elimina esa clase de bug por completo: lo que se imprime es,
+// byte por byte, lo mismo que va a quedar en el expediente. Usada tanto
+// por el botón "Generar Receta" como por "Finalizar Consulta".
 export async function generateAndSaveRecipePDF(
   doctorInfo: DoctorInfo,
   patientInfo: Patient | undefined,
   appointmentId: string,
   opts: { diagnosis?: string; dynamicNotes: Record<string, string>; recipeSections: Record<string, boolean> }
-): Promise<{ docDefinition: any; pdfDocGen: ReturnType<typeof pdfMake.createPdf> }> {
+): Promise<{ docDefinition: any; recipePdfPath: string }> {
   // Folio: se pide/reserva ANTES de armar el PDF para poder imprimirlo ya
   // dentro de la receta (ver GetOrAssignRecipeNumber) — si el doctor vuelve
   // a generar la misma receta (ej. corrige una nota y le da "Generar
@@ -306,17 +308,16 @@ export async function generateAndSaveRecipePDF(
     recipeNumber,
   });
 
-  const pdfInstance = pdfMake.createPdf(docDefinition);
-  const blob: Blob = await pdfInstance.getBlob();
+  const blob: Blob = await pdfMake.createPdf(docDefinition).getBlob();
   const formData = new FormData();
   const fileName = `receta_${appointmentId}_doc_${doctorInfo?.id || '0'}.pdf`;
   formData.append('recipe_pdf', blob, fileName);
 
-  await api.post(`/appointments/${appointmentId}/save-recipe-pdf`, formData, {
+  const saveRes = await api.post(`/appointments/${appointmentId}/save-recipe-pdf`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
 
-  return { docDefinition, pdfDocGen: pdfInstance };
+  return { docDefinition, recipePdfPath: saveRes.data?.recipePdfPath };
 }
 
 export { pdfMake };
