@@ -18,6 +18,13 @@ interface DashboardLayoutProps {
   children?: React.ReactNode;
 }
 
+// Mismo número que TWILIO_WHATSAPP_FROM en el backend (ver .env.example) —
+// abre WhatsApp directo con un mensaje precargado en vez de un chat propio
+// dentro de la página: la respuesta le llega al superadmin en la misma
+// bandeja que las de los pacientes, solo que clasificada como
+// "DOCTOR_SUPPORT" (ver handlers.classifyInboundWhatsApp).
+const supportWhatsAppNumber = import.meta.env.VITE_SUPPORT_WHATSAPP_NUMBER as string | undefined;
+
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const { logout, isStaff, doctorName: sessionDoctorName, setDoctorName, loginStaff } = useAuth();
   const { resolvedTheme, toggleTheme } = useTheme();
@@ -218,6 +225,17 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
           )}
 
           <InstallPwaButton className="sidebar-install-btn" />
+          {supportWhatsAppNumber && (
+            <a
+              className="theme-toggle-link"
+              href={`https://wa.me/${supportWhatsAppNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Hola, necesito ayuda con ProPatient.')}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <span className="material-icons-outlined">support_agent</span>
+              ¿Necesitas ayuda?
+            </a>
+          )}
           <button
             className="theme-toggle-link"
             onClick={toggleTheme}

@@ -176,6 +176,7 @@ export const AdminDoctors: React.FC = () => {
         <nav className="admin-nav">
           <Link to="/admin/doctores" className="active">Doctores</Link>
           <Link to="/admin/pendientes">Cédulas pendientes</Link>
+          <Link to="/admin/whatsapp">WhatsApp</Link>
         </nav>
         <button className="admin-logout-btn" onClick={handleLogout}>
           <span className="material-icons-outlined">logout</span>

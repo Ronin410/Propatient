@@ -58,7 +58,7 @@ func TestConfirmAppointment_NotifiesPatientByWhatsApp(t *testing.T) {
 	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, testStorage, billing.Config{}, nil, newMockGeocodingClient(), wa, nil)
 
 	doc := testutil.CreateTestDoctor(t, db, "doc_wa_confirm", "password123")
-	require.NoError(t, db.Model(&doc).Updates(map[string]any{"public_listed": true, "public_slug": "dr-wa-confirm-1"}).Error)
+	require.NoError(t, db.Model(&doc).Updates(map[string]any{"public_listed": true, "public_slug": "dr-wa-confirm-1", "phone": "5551112222"}).Error)
 	docToken := testutil.TokenFor(t, doc.ID, doc.Username)
 
 	w := doRequest(t, router, http.MethodPost, "/api/public/appointments", "", map[string]any{
@@ -98,6 +98,10 @@ func TestConfirmAppointment_NotifiesPatientByWhatsApp(t *testing.T) {
 
 	lastBody := wa.lastBodyTo(t, "5559990000")
 	assert.Contains(t, lastBody, "/public-upload/"+uploadToken)
+
+	// Debe invitar al paciente a comunicarse directo con el doctor si
+	// tiene dudas, con el teléfono que este cargó en su perfil.
+	assert.Contains(t, lastBody, "5551112222")
 }
 
 // TestCancelAppointment_NotifiesPatientWithDistinctWordingByCase cubre las

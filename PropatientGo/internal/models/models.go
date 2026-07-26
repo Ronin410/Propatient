@@ -638,3 +638,40 @@ type Cie10Code struct {
 	Chapter        string `json:"chapter"`
 	SexRestriction string `json:"sexRestriction"` // "H", "M", o "" sin restricción
 }
+
+// WhatsAppMessage guarda tanto los mensajes ENTRANTES que llegan al número
+// de WhatsApp de ProPatient (paciente respondiendo un aviso, o doctor
+// pidiendo soporte) como los OUTBOUND que el superadmin manda de vuelta
+// desde la bandeja — nunca los avisos automáticos normales (confirmación,
+// recordatorio, etc.), esos siguen su propio camino en internal/whatsapp
+// sin pasar por aquí. El propio número de WhatsApp es compartido por todos
+// los doctores, así que la única forma de saber a quién pertenece un
+// mensaje entrante es por teléfono (ver handlers.classifyInboundWhatsApp):
+// Category distingue si el remitente es un doctor pidiendo soporte o
+// alguien más (paciente conocido o número desconocido) — ambos casos caen
+// en bandejas separadas que solo ve el superadmin, nunca el doctor dueño
+// de la cita, para no convertir esto en un canal de soporte por doctor.
+// DoctorID/PatientID son solo un best-effort de contexto para mostrarle al
+// superadmin con quién podría estar relacionado el mensaje (ver el
+// comentario largo en el handler del webhook); no controlan quién puede
+// verlo, eso siempre es "solo superadmin".
+type WhatsAppMessage struct {
+	ID        uint       `gorm:"primaryKey" json:"id"`
+	CreatedAt time.Time  `gorm:"index" json:"createdAt"`
+	Direction string     `gorm:"not null" json:"direction"`      // "INBOUND" | "OUTBOUND"
+	Category  string     `gorm:"index;not null" json:"category"` // "PATIENT" | "DOCTOR_SUPPORT"
+	Phone     string     `gorm:"index;not null" json:"phone"`    // E.164, la otra parte de la conversación (nunca el número de ProPatient)
+	Body      string     `gorm:"not null" json:"body"`
+	TwilioSid string     `gorm:"uniqueIndex" json:"-"` // idempotencia: Twilio puede reintentar el mismo webhook
+	DoctorID  *uint      `gorm:"index" json:"doctorId"`
+	PatientID *uint      `gorm:"index" json:"patientId"`
+	ReadAt    *time.Time `json:"readAt"`
+}
+
+// TableName fija el nombre de la tabla explícitamente — el conversor
+// automático de GORM lo hubiera dejado como "whats_app_messages" (parte
+// cada mayúscula como si fuera una palabra nueva), que no es el nombre que
+// nadie esperaría al escribir SQL a mano contra esta tabla.
+func (WhatsAppMessage) TableName() string {
+	return "whatsapp_messages"
+}

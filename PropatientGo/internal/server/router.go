@@ -228,12 +228,25 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 			adminRoutes.GET("/overview", handlers.GetAdminOverview(db))
 			adminRoutes.PUT("/doctors/:id/grant-free-access", handlers.GrantFreeAccess(db, billingClient))
 			adminRoutes.PUT("/clinics/:id/grant-free-access", handlers.GrantClinicFreeAccess(db, billingClient))
+
+			// Bandeja de WhatsApp: solo superadmin, nunca el doctor dueño de
+			// la cita — ver el comentario largo en models.WhatsAppMessage
+			// sobre por qué las respuestas de un paciente no le llegan a su
+			// doctor directamente.
+			adminRoutes.GET("/whatsapp/threads", handlers.ListWhatsAppThreads(db))
+			adminRoutes.GET("/whatsapp/threads/:phone/messages", handlers.GetWhatsAppThreadMessages(db))
+			adminRoutes.POST("/whatsapp/threads/:phone/messages", handlers.ReplyToWhatsAppThread(db, whatsappClient))
 		}
 
 		// Webhook de Stripe: lo llama Stripe directamente (sin Authorization,
 		// sin sesión de usuario). La firma Stripe-Signature es lo único que
 		// autentica la petición, así que va fuera de /auth y del grupo protegido.
 		api.POST("/billing/webhook", handlers.StripeWebhook(db, billingClient, billingConfig))
+
+		// Webhook de Twilio (WhatsApp entrante): mismo criterio que el de
+		// Stripe arriba — lo llama Twilio directo, X-Twilio-Signature es lo
+		// único que autentica la petición.
+		api.POST("/whatsapp/webhook", handlers.TwilioInboundWebhook(db))
 
 		// Directorio público (landing page): sin autenticación, para que
 		// cualquier visitante pueda ver doctores y agendar una solicitud de
