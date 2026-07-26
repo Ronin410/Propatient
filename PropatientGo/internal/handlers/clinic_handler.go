@@ -265,10 +265,20 @@ func GetClinic(db *gorm.DB) gin.HandlerFunc {
 			})
 		}
 
+		// pastDueGraceEndsAt: hasta cuándo sigue con acceso pese al cobro
+		// fallido (ver billing.PastDuePaymentGraceDuration) — nil si no está
+		// en past_due o si nunca se registró cuándo empezó.
+		var pastDueGraceEndsAt *time.Time
+		if clinic.SubscriptionStatus == "past_due" && clinic.PastDueSince != nil {
+			t := clinic.PastDueSince.Add(billing.PastDuePaymentGraceDuration)
+			pastDueGraceEndsAt = &t
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"id":                  clinic.ID,
 			"name":                clinic.Name,
 			"subscriptionStatus":  clinic.SubscriptionStatus,
+			"pastDueGraceEndsAt":  pastDueGraceEndsAt,
 			"isOwner":             self.IsClinicOwner,
 			"doctors":             items,
 			"baseIncludedDoctors": billing.ClinicBaseIncludedDoctors,

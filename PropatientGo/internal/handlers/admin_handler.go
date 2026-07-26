@@ -299,6 +299,7 @@ func GrantFreeAccess(db *gorm.DB, client billing.Client) gin.HandlerFunc {
 			"subscription_status":    "trialing",
 			"trial_ends_at":          until,
 			"stripe_subscription_id": "",
+			"past_due_since":         gorm.Expr("NULL"),
 		}
 		if err := db.Model(&doctor).Updates(updates).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo actualizar el acceso del doctor"})
@@ -356,6 +357,7 @@ func GrantClinicFreeAccess(db *gorm.DB, client billing.Client) gin.HandlerFunc {
 			"subscription_status":    "trialing",
 			"trial_ends_at":          until,
 			"stripe_subscription_id": "",
+			"past_due_since":         gorm.Expr("NULL"),
 		}
 		if err := db.Model(&clinic).Updates(updates).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo actualizar el acceso de la clínica"})

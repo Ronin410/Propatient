@@ -29,7 +29,7 @@ func GetBillingStatus(db *gorm.DB, client billing.Client) gin.HandlerFunc {
 		doctorID := c.MustGet("doctorID").(uint)
 
 		var doctor models.Doctor
-		if err := db.Select("subscription_status, trial_ends_at, stripe_customer_id, stripe_subscription_id, clinic_id").First(&doctor, doctorID).Error; err != nil {
+		if err := db.Select("subscription_status, trial_ends_at, stripe_customer_id, stripe_subscription_id, clinic_id, past_due_since").First(&doctor, doctorID).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Doctor no encontrado"})
 			return
 		}
@@ -53,12 +53,22 @@ func GetBillingStatus(db *gorm.DB, client billing.Client) gin.HandlerFunc {
 			}
 		}
 
+		var pastDueGraceEndsAt *time.Time
+		if doctor.SubscriptionStatus == "past_due" && doctor.PastDueSince != nil {
+			t := doctor.PastDueSince.Add(billing.PastDuePaymentGraceDuration)
+			pastDueGraceEndsAt = &t
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"managedByClinic":    false,
 			"subscriptionStatus": doctor.SubscriptionStatus,
 			"trialEndsAt":        doctor.TrialEndsAt,
 			"hasPaymentMethod":   doctor.StripeCustomerID != "",
 			"currentPeriodEnd":   currentPeriodEnd,
+			// pastDueGraceEndsAt: hasta cuándo sigue teniendo acceso pese al
+			// cobro fallido (ver billing.PastDuePaymentGraceDuration) — nil
+			// si no está en past_due o si nunca se registró cuándo empezó.
+			"pastDueGraceEndsAt": pastDueGraceEndsAt,
 		})
 	}
 }
@@ -156,13 +166,34 @@ func mapStripeSubscriptionStatus(s stripe.SubscriptionStatus) string {
 	}
 }
 
+// subscriptionStatusUpdates arma las columnas a actualizar cuando Stripe
+// reporta un nuevo estado de suscripción. past_due_since solo se pone la
+// PRIMERA vez que se entra a "past_due" — el CASE mira el valor ANTERIOR
+// de subscription_status (Postgres evalúa el SET completo contra la fila
+// previa a este mismo UPDATE), así el periodo de gracia
+// (billing.PastDuePaymentGraceDuration) no se reinicia con cada reintento
+// de cobro que hace Stripe mientras la suscripción sigue en past_due. Se
+// limpia (NULL) en cualquier otro estado, incluido un pago que se recupera.
+func subscriptionStatusUpdates(newStatus string) map[string]interface{} {
+	updates := map[string]interface{}{"subscription_status": newStatus}
+	if newStatus == "past_due" {
+		updates["past_due_since"] = gorm.Expr("CASE WHEN subscription_status = 'past_due' THEN past_due_since ELSE ? END", time.Now().UTC())
+	} else {
+		// gorm.Expr("NULL") en vez de un nil de Go: un nil dentro de un
+		// map[string]interface{} no siempre se traduce a "SET columna =
+		// NULL" de forma confiable — esta forma sí lo garantiza.
+		updates["past_due_since"] = gorm.Expr("NULL")
+	}
+	return updates
+}
+
 // activateClinicSubscription confirma el pago del plan base de una clínica
 // nueva (ver handlers.CreateClinic, que deliberadamente no toca
 // Doctor.ClinicID hasta este punto) y cancela la suscripción individual del
 // dueño si tenía una — mismo criterio que AcceptClinicInvite, para que no le
 // sigan cobrando dos veces una vez que la clínica ya lo cubre.
 func activateClinicSubscription(c *gin.Context, db *gorm.DB, client billing.Client, clinicID uint, sess *stripe.CheckoutSession) {
-	updates := map[string]interface{}{"subscription_status": "active"}
+	updates := map[string]interface{}{"subscription_status": "active", "past_due_since": gorm.Expr("NULL")}
 	if sess.Customer != nil {
 		updates["stripe_customer_id"] = sess.Customer.ID
 	}
@@ -273,7 +304,7 @@ func StripeWebhook(db *gorm.DB, client billing.Client, cfg billing.Config) gin.H
 				wasFirstPayment = doctorBefore.StripeSubscriptionID == ""
 			}
 
-			updates := map[string]interface{}{"subscription_status": "active"}
+			updates := map[string]interface{}{"subscription_status": "active", "past_due_since": gorm.Expr("NULL")}
 			if sess.Customer != nil {
 				updates["stripe_customer_id"] = sess.Customer.ID
 			}
@@ -299,15 +330,16 @@ func StripeWebhook(db *gorm.DB, client billing.Client, cfg billing.Config) gin.H
 				break
 			}
 			newStatus := mapStripeSubscriptionStatus(sub.Status)
+			updates := subscriptionStatusUpdates(newStatus)
 			result := db.Model(&models.Doctor{}).
 				Where("stripe_subscription_id = ?", sub.ID).
-				Update("subscription_status", newStatus)
+				Updates(updates)
 			if result.Error == nil && result.RowsAffected == 0 {
 				// No es la suscripción individual de ningún doctor — puede
 				// ser la de una clínica (ver activateClinicSubscription).
 				result = db.Model(&models.Clinic{}).
 					Where("stripe_subscription_id = ?", sub.ID).
-					Update("subscription_status", newStatus)
+					Updates(updates)
 			}
 			if result.Error != nil {
 				log.Printf("⚠️ Webhook customer.subscription.updated: error al actualizar suscripción %s: %v", sub.ID, result.Error)

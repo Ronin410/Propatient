@@ -624,6 +624,50 @@ func TestClinic_Middleware_AllowsMember_WhenClinicActive_EvenIfOwnTrialExpired(t
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
+// TestClinic_Middleware_PastDueWithinGrace_AllowsAccess confirma que un
+// cobro fallido reciente de la clínica no bloquea de inmediato a sus
+// doctores — mismo periodo de gracia que un doctor individual (ver
+// billing.PastDuePaymentGraceDuration).
+func TestClinic_Middleware_PastDueWithinGrace_AllowsAccess(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	owner := testutil.CreateTestDoctor(t, db, "doc_clinic_owner_grace_ok", "password123")
+	recentFailure := time.Now().UTC().Add(-2 * 24 * time.Hour)
+	clinic := models.Clinic{Name: "Clínica con pago fallido reciente", OwnerDoctorID: owner.ID, SubscriptionStatus: "past_due", PastDueSince: &recentFailure}
+	require.NoError(t, db.Create(&clinic).Error)
+	require.NoError(t, db.Model(&owner).Updates(map[string]any{"clinic_id": clinic.ID, "is_clinic_owner": true}).Error)
+
+	token := testutil.TokenFor(t, owner.ID, owner.Username)
+	w := doRequest(t, router, http.MethodGet, "/api/patients", token, nil)
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestClinic_Middleware_PastDueGraceExpired_BlocksAllDoctors confirma que,
+// pasado el periodo de gracia sin resolverse, SÍ se bloquea — y a TODOS los
+// doctores de la clínica, no solo al dueño.
+func TestClinic_Middleware_PastDueGraceExpired_BlocksAllDoctors(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	owner := testutil.CreateTestDoctor(t, db, "doc_clinic_owner_grace_expired", "password123")
+	oldFailure := time.Now().UTC().Add(-(billing.PastDuePaymentGraceDuration + 24*time.Hour))
+	clinic := models.Clinic{Name: "Clínica con pago vencido", OwnerDoctorID: owner.ID, SubscriptionStatus: "past_due", PastDueSince: &oldFailure}
+	require.NoError(t, db.Create(&clinic).Error)
+	require.NoError(t, db.Model(&owner).Updates(map[string]any{"clinic_id": clinic.ID, "is_clinic_owner": true}).Error)
+
+	member := testutil.CreateTestDoctor(t, db, "doc_clinic_member_grace_expired", "password123")
+	require.NoError(t, db.Model(&member).Update("clinic_id", clinic.ID).Error)
+
+	ownerToken := testutil.TokenFor(t, owner.ID, owner.Username)
+	w := doRequest(t, router, http.MethodGet, "/api/patients", ownerToken, nil)
+	assert.Equal(t, http.StatusPaymentRequired, w.Code)
+
+	memberToken := testutil.TokenFor(t, member.ID, member.Username)
+	w = doRequest(t, router, http.MethodGet, "/api/patients", memberToken, nil)
+	assert.Equal(t, http.StatusPaymentRequired, w.Code)
+}
+
 // TestClinic_UpdateClinicLocation_OnlyOwnerCanUpdate confirma que un
 // doctor miembro (no dueño) no puede cambiar la ubicación única de la
 // clínica — el consultorio de clínica no es "movible" por cada doctor.
