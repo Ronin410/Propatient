@@ -1272,9 +1272,19 @@ func SaveRecipePDF(db *gorm.DB, storageClient storage.Client) gin.HandlerFunc {
 			return
 		}
 
+		// storedRef es solo la key en S3 (bucket privado, no sirve como URL
+		// directa) — hay que resolverla a una URL firmada antes de
+		// devolverla, mismo paso que ya hace presignAppointmentFiles para
+		// cuando se consulta la cita después. Sin esto, el frontend recibía
+		// la key cruda y armaba una URL que no existe (404).
+		recipePdfURL := storedRef
+		if url, err := storageClient.URL(c.Request.Context(), storedRef); err == nil {
+			recipePdfURL = url
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"message":       "Receta en PDF almacenada y asociada correctamente",
-			"recipePdfPath": storedRef,
+			"recipePdfPath": recipePdfURL,
 		})
 	}
 }

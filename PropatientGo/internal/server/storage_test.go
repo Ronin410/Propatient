@@ -141,6 +141,15 @@ func TestStorage_RecipePDF_PresignedOnAppointmentAndPatientHistory(t *testing.T)
 		nil, "recipe_pdf", "receta.pdf", minimalPDFBytes)
 	require.Equal(t, http.StatusOK, w.Code)
 
+	// La respuesta de ESTE mismo POST también debe traer la URL ya firmada,
+	// no la key cruda de S3 — el frontend abre este valor directo para
+	// imprimir la receta recién generada, sin volver a consultar la cita
+	// (ver handleGenerateAndPrintRecipe). Regresar la key cruda aquí
+	// producía una URL rota (404) apuntando al propio backend en vez de a S3.
+	saveBody := decodeJSON(t, w)
+	immediateRecipePath, _ := saveBody["recipePdfPath"].(string)
+	assert.Contains(t, immediateRecipePath, "https://mock-presigned.example.com/recipes/receta_")
+
 	w = doRequest(t, router, http.MethodGet, "/api/appointments/"+strconv.Itoa(apptID), token, nil)
 	require.Equal(t, http.StatusOK, w.Code)
 	body := decodeJSON(t, w)
