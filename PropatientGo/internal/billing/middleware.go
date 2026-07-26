@@ -28,15 +28,21 @@ func RequireActiveSubscription(db *gorm.DB) gin.HandlerFunc {
 
 		// Doctor de clínica: su acceso depende de la suscripción de la
 		// clínica (consultada en vivo, no de una copia guardada en el
-		// doctor) y nunca de una prueba gratis — el plan de clínica no
-		// tiene periodo de prueba (ver ClinicBaseIncludedDoctors).
+		// doctor) — el plan de clínica no tiene prueba gratis automática,
+		// pero el superadmin puede otorgar una a mano (ver
+		// handlers.GrantClinicFreeAccess), que deja a la clínica en
+		// "trialing" igual que un doctor individual.
 		if doctor.ClinicID != nil {
 			var clinic models.Clinic
-			if err := db.Select("subscription_status").First(&clinic, *doctor.ClinicID).Error; err != nil {
+			if err := db.Select("subscription_status, trial_ends_at").First(&clinic, *doctor.ClinicID).Error; err != nil {
 				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "No se pudo verificar la suscripción de tu clínica"})
 				return
 			}
 			if clinic.SubscriptionStatus == "active" {
+				c.Next()
+				return
+			}
+			if clinic.SubscriptionStatus == "trialing" && clinic.TrialEndsAt != nil && time.Now().UTC().Before(*clinic.TrialEndsAt) {
 				c.Next()
 				return
 			}

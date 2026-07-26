@@ -227,6 +227,7 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 			adminRoutes.GET("/doctors", handlers.ListAllDoctors(db, billingClient))
 			adminRoutes.GET("/overview", handlers.GetAdminOverview(db))
 			adminRoutes.PUT("/doctors/:id/grant-free-access", handlers.GrantFreeAccess(db, billingClient))
+			adminRoutes.PUT("/clinics/:id/grant-free-access", handlers.GrantClinicFreeAccess(db, billingClient))
 		}
 
 		// Webhook de Stripe: lo llama Stripe directamente (sin Authorization,

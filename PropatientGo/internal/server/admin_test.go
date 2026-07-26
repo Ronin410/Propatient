@@ -322,6 +322,145 @@ func TestGrantFreeAccess_RejectsClinicMemberAndPastDate(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 }
 
+// TestGrantClinicFreeAccess_UnlocksClinicDoctors confirma el equivalente de
+// TestGrantFreeAccess_UnlocksCanceledDoctor pero para una clínica completa:
+// darle acceso gratis a la clínica destraba a TODOS sus doctores a la vez
+// (ver RequireActiveSubscription), no a uno solo.
+func TestGrantClinicFreeAccess_UnlocksClinicDoctors(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	mockBilling := newMockBillingClient()
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, nil, billing.Config{}, mockBilling, geocoding.NewClient(), nil, nil)
+
+	owner := testutil.CreateTestDoctor(t, db, "doc_clinic_grant_owner", "password123")
+	member := testutil.CreateTestDoctor(t, db, "doc_clinic_grant_member", "password123")
+	clinic := models.Clinic{Name: "Clínica Grant", OwnerDoctorID: owner.ID, SubscriptionStatus: "incomplete"}
+	require.NoError(t, db.Create(&clinic).Error)
+	require.NoError(t, db.Model(&owner).Updates(map[string]any{"clinic_id": clinic.ID, "is_clinic_owner": true}).Error)
+	require.NoError(t, db.Model(&member).Update("clinic_id", clinic.ID).Error)
+
+	ownerToken := testutil.TokenFor(t, owner.ID, owner.Username)
+	memberToken := testutil.TokenFor(t, member.ID, member.Username)
+
+	// Bloqueados antes del acceso gratuito ("incomplete" no es "active").
+	w := doRequest(t, router, http.MethodGet, "/api/patients", ownerToken, nil)
+	assert.Equal(t, http.StatusPaymentRequired, w.Code)
+	w = doRequest(t, router, http.MethodGet, "/api/patients", memberToken, nil)
+	assert.Equal(t, http.StatusPaymentRequired, w.Code)
+
+	admin := testutil.CreateTestSuperAdmin(t, db, "admin_clinic_grant", "clavesegura123")
+	adminToken := testutil.TokenForSuperAdmin(t, admin.ID, admin.Username)
+
+	until := time.Now().UTC().AddDate(0, 0, 30).Format("2006-01-02")
+	clinicIDStr := strconv.FormatUint(uint64(clinic.ID), 10)
+	w = doRequest(t, router, http.MethodPut, "/api/admin/clinics/"+clinicIDStr+"/grant-free-access", adminToken, map[string]any{
+		"until": until,
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var reloaded models.Clinic
+	require.NoError(t, db.First(&reloaded, clinic.ID).Error)
+	assert.Equal(t, "trialing", reloaded.SubscriptionStatus)
+	require.NotNil(t, reloaded.TrialEndsAt)
+
+	// Ambos, dueño y personal, quedan desbloqueados.
+	w = doRequest(t, router, http.MethodGet, "/api/patients", ownerToken, nil)
+	assert.Equal(t, http.StatusOK, w.Code)
+	w = doRequest(t, router, http.MethodGet, "/api/patients", memberToken, nil)
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestGrantClinicFreeAccess_CancelsExistingStripeSubscription confirma que
+// una clínica que YA pagaba de verdad no se le sigue cobrando mientras
+// tiene acceso gratuito otorgado a mano — mismo criterio que
+// TestGrantFreeAccess_CancelsExistingStripeSubscription para un doctor
+// individual.
+func TestGrantClinicFreeAccess_CancelsExistingStripeSubscription(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	mockBilling := newMockBillingClient()
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, nil, billing.Config{}, mockBilling, geocoding.NewClient(), nil, nil)
+
+	owner := testutil.CreateTestDoctor(t, db, "doc_clinic_grant_active_owner", "password123")
+	clinic := models.Clinic{Name: "Clínica Grant Activa", OwnerDoctorID: owner.ID, SubscriptionStatus: "active", StripeSubscriptionID: "sub_clinic_grant_active"}
+	require.NoError(t, db.Create(&clinic).Error)
+
+	admin := testutil.CreateTestSuperAdmin(t, db, "admin_clinic_grant_active", "clavesegura123")
+	adminToken := testutil.TokenForSuperAdmin(t, admin.ID, admin.Username)
+
+	until := time.Now().UTC().AddDate(0, 1, 0).Format("2006-01-02")
+	clinicIDStr := strconv.FormatUint(uint64(clinic.ID), 10)
+	w := doRequest(t, router, http.MethodPut, "/api/admin/clinics/"+clinicIDStr+"/grant-free-access", adminToken, map[string]any{
+		"until": until,
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	assert.True(t, mockBilling.wasCanceled("sub_clinic_grant_active"))
+
+	var reloaded models.Clinic
+	require.NoError(t, db.First(&reloaded, clinic.ID).Error)
+	assert.Equal(t, "trialing", reloaded.SubscriptionStatus)
+	assert.Empty(t, reloaded.StripeSubscriptionID)
+}
+
+// TestListAllDoctors_ClinicMemberShowsClinicTrialAndPeriodEnd confirma que,
+// para un doctor de clínica, trialEndsAt/currentPeriodEnd que devuelve el
+// panel de admin son los de LA CLÍNICA (no el campo propio del doctor, que
+// queda obsoleto en cuanto se une a una) — para poder mostrar cuántos días
+// le quedan en vez de "depende de la clínica" en el frontend.
+func TestListAllDoctors_ClinicMemberShowsClinicTrialAndPeriodEnd(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	mockBilling := newMockBillingClient()
+	periodEnd := time.Now().UTC().AddDate(0, 0, 12)
+	mockBilling.periodEnd = periodEnd
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, nil, billing.Config{}, mockBilling, geocoding.NewClient(), nil, nil)
+
+	owner := testutil.CreateTestDoctor(t, db, "doc_admin_clinic_active_owner", "password123")
+	trialEnds := time.Now().UTC().AddDate(0, 0, 7)
+	clinic := models.Clinic{Name: "Clínica con prueba", OwnerDoctorID: owner.ID, SubscriptionStatus: "trialing", TrialEndsAt: &trialEnds}
+	require.NoError(t, db.Create(&clinic).Error)
+	require.NoError(t, db.Model(&owner).Updates(map[string]any{
+		"clinic_id":           clinic.ID,
+		"is_clinic_owner":     true,
+		"trial_ends_at":       time.Now().UTC().AddDate(0, 0, 999), // campo propio, debe ignorarse
+		"subscription_status": "active",                            // idem
+	}).Error)
+
+	admin := testutil.CreateTestSuperAdmin(t, db, "admin_clinic_trial_period", "clavesegura123")
+	adminToken := testutil.TokenForSuperAdmin(t, admin.ID, admin.Username)
+
+	w := doRequest(t, router, http.MethodGet, "/api/admin/doctors", adminToken, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var doctors []map[string]any
+	decodeJSONList(t, w, &doctors)
+	require.Len(t, doctors, 1)
+	got := doctors[0]
+
+	assert.Equal(t, "trialing", got["subscriptionStatus"])
+	require.NotNil(t, got["trialEndsAt"])
+	parsed, err := time.Parse(time.RFC3339, got["trialEndsAt"].(string))
+	require.NoError(t, err)
+	assert.WithinDuration(t, trialEnds, parsed, time.Second)
+	assert.Equal(t, float64(clinic.ID), got["clinicId"])
+
+	// Ahora la clínica pasa a "active" con Stripe real: currentPeriodEnd
+	// debe salir de GetSubscriptionPeriodEnd, no quedar nil como antes de
+	// este cambio (que solo lo consultaba para doctores individuales).
+	require.NoError(t, db.Model(&clinic).Updates(map[string]any{
+		"subscription_status":    "active",
+		"stripe_subscription_id": "sub_clinic_period_end",
+	}).Error)
+
+	w = doRequest(t, router, http.MethodGet, "/api/admin/doctors", adminToken, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	decodeJSONList(t, w, &doctors)
+	require.Len(t, doctors, 1)
+	got = doctors[0]
+	require.NotNil(t, got["currentPeriodEnd"])
+	parsedPeriodEnd, err := time.Parse(time.RFC3339, got["currentPeriodEnd"].(string))
+	require.NoError(t, err)
+	assert.WithinDuration(t, periodEnd, parsedPeriodEnd, time.Second)
+}
+
 // createAdminTestAppointment crea una cita de prueba con fecha DENTRO del
 // mes calendario actual (para que la agarren las estadísticas mensuales del
 // panel), con el status y source que se le pida.

@@ -313,6 +313,63 @@ func GrantFreeAccess(db *gorm.DB, client billing.Client) gin.HandlerFunc {
 	}
 }
 
+// GrantClinicFreeAccess es el equivalente de GrantFreeAccess pero para una
+// clínica completa: el plan de clínica no tiene periodo de prueba
+// automático (el cobro arranca de inmediato al completar el Checkout, ver
+// ClinicBaseIncludedDoctors), así que esta es la única forma de darle
+// acceso gratuito temporal a una clínica — por ejemplo mientras negocia su
+// alta, o como cortesía. Afecta a TODOS los doctores de la clínica a la
+// vez (ver RequireActiveSubscription), no a uno solo.
+func GrantClinicFreeAccess(db *gorm.DB, client billing.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.Param("id")
+
+		var req grantFreeAccessRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Falta la fecha hasta la que quieres dar acceso gratuito."})
+			return
+		}
+		until, err := time.Parse("2006-01-02", req.Until)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "La fecha debe tener el formato AAAA-MM-DD."})
+			return
+		}
+		until = time.Date(until.Year(), until.Month(), until.Day(), 23, 59, 59, 0, time.UTC)
+		if !until.After(time.Now().UTC()) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "La fecha debe ser en el futuro."})
+			return
+		}
+
+		var clinic models.Clinic
+		if err := db.First(&clinic, id).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Clínica no encontrada"})
+			return
+		}
+
+		if client != nil && clinic.StripeSubscriptionID != "" {
+			if err := client.CancelSubscription(c.Request.Context(), clinic.StripeSubscriptionID); err != nil {
+				log.Printf("⚠️ No se pudo cancelar la suscripción de Stripe de la clínica %d al darle acceso gratuito: %v", clinic.ID, err)
+			}
+		}
+
+		updates := map[string]interface{}{
+			"subscription_status":    "trialing",
+			"trial_ends_at":          until,
+			"stripe_subscription_id": "",
+		}
+		if err := db.Model(&clinic).Updates(updates).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo actualizar el acceso de la clínica"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message":            "Acceso gratuito otorgado a la clínica",
+			"subscriptionStatus": "trialing",
+			"trialEndsAt":        until,
+		})
+	}
+}
+
 // adminMonthlyStats resume, para un doctor o para toda la plataforma, las
 // citas cuya fecha cae dentro del mes calendario actual: cuántas en total,
 // cuántas de cada desenlace, y cuántas se originaron por cada canal (ver
@@ -399,6 +456,7 @@ type adminDoctorResponse struct {
 	CurrentPeriodEnd *time.Time        `json:"currentPeriodEnd"`
 	IsClinicMember   bool              `json:"isClinicMember"`
 	IsClinicOwner    bool              `json:"isClinicOwner"`
+	ClinicID         *uint             `json:"clinicId,omitempty"`
 	ClinicName       string            `json:"clinicName,omitempty"`
 	CreatedAt        time.Time         `json:"createdAt"`
 	MonthlyStats     adminMonthlyStats `json:"monthlyStats"`
@@ -433,21 +491,35 @@ func ListAllDoctors(db *gorm.DB, client billing.Client) gin.HandlerFunc {
 			subStatus := d.SubscriptionStatus
 			isClinicMember := false
 			clinicName := ""
+			// Para un doctor de clínica, trialEndsAt/currentPeriodEnd deben
+			// reflejar la suscripción de LA CLÍNICA (compartida por todos
+			// sus doctores), no el campo propio del doctor — que queda
+			// obsoleto en cuanto se une a una (ver comentario en
+			// Doctor.TrialEndsAt).
+			trialEndsAt := d.TrialEndsAt
+			stripeSubscriptionID := d.StripeSubscriptionID
+			var clinicID *uint
 			if d.ClinicID != nil {
 				isClinicMember = true
+				clinicID = d.ClinicID
 				if cl, ok := clinicByID[*d.ClinicID]; ok {
 					subStatus = cl.SubscriptionStatus
 					clinicName = cl.Name
+					trialEndsAt = cl.TrialEndsAt
+					stripeSubscriptionID = cl.StripeSubscriptionID
 				}
 			}
 
 			// Mejor esfuerzo, un doctor a la vez: a este volumen (panel
 			// interno, se consulta rara vez) es aceptable; si la lista de
 			// doctores activos crece mucho, esto habría que paralelizarlo
-			// o dejar de consultarlo en vivo aquí.
+			// o dejar de consultarlo en vivo aquí. Para clínica, varios
+			// doctores comparten la misma StripeSubscriptionID — se repite
+			// la consulta una vez por doctor en vez de cachear por clínica,
+			// mismo motivo (volumen bajo, panel interno).
 			var currentPeriodEnd *time.Time
-			if !isClinicMember && subStatus == "active" && d.StripeSubscriptionID != "" && client != nil {
-				if end, err := client.GetSubscriptionPeriodEnd(c.Request.Context(), d.StripeSubscriptionID); err == nil {
+			if subStatus == "active" && stripeSubscriptionID != "" && client != nil {
+				if end, err := client.GetSubscriptionPeriodEnd(c.Request.Context(), stripeSubscriptionID); err == nil {
 					currentPeriodEnd = &end
 				} else {
 					log.Printf("⚠️ No se pudo consultar la fecha de renovación de Stripe del doctor %d: %v", d.ID, err)
@@ -461,10 +533,11 @@ func ListAllDoctors(db *gorm.DB, client billing.Client) gin.HandlerFunc {
 				Username:           d.Username,
 				CedulaValidated:    d.CedulaValidated,
 				SubscriptionStatus: subStatus,
-				TrialEndsAt:        d.TrialEndsAt,
+				TrialEndsAt:        trialEndsAt,
 				CurrentPeriodEnd:   currentPeriodEnd,
 				IsClinicMember:     isClinicMember,
 				IsClinicOwner:      d.IsClinicOwner,
+				ClinicID:           clinicID,
 				ClinicName:         clinicName,
 				CreatedAt:          d.CreatedAt,
 				MonthlyStats:       statsByDoctor[d.ID], // cero si no tuvo citas este mes

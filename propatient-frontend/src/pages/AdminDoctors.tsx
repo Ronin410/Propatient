@@ -23,13 +23,17 @@ interface AdminDoctor {
   subscriptionStatus: string;
   // Cubre tanto la prueba real de 14 días como un acceso gratuito
   // otorgado a mano (ver GrantFreeAccess) — ambos casos llegan como
-  // "trialing" con esta misma fecha.
+  // "trialing" con esta misma fecha. Para un doctor de clínica, ya viene
+  // resuelta con la fecha DE LA CLÍNICA (ver GrantClinicFreeAccess), no
+  // la propia del doctor.
   trialEndsAt: string | null;
   // Fecha de renovación de una suscripción de Stripe ya activa (pagada
-  // de verdad), consultada en vivo — null si no aplica.
+  // de verdad), consultada en vivo — null si no aplica. Para un doctor de
+  // clínica, la de la suscripción de la clínica.
   currentPeriodEnd: string | null;
   isClinicMember: boolean;
   isClinicOwner: boolean;
+  clinicId?: number;
   clinicName?: string;
   createdAt: string;
   monthlyStats: MonthlyStats;
@@ -62,6 +66,23 @@ const subscriptionLabel = (status: string) => subscriptionLabels[status] || stat
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
 
+// Redondea hacia arriba para que "vence en unas horas" cuente como 1 día
+// en vez de 0 — más intuitivo para el superadmin que revisa esto una vez
+// al día.
+const daysRemaining = (iso: string) => Math.ceil((new Date(iso).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+
+const daysRemainingLabel = (iso: string) => {
+  const days = daysRemaining(iso);
+  if (days < 0) return `Venció hace ${Math.abs(days)} día${Math.abs(days) === 1 ? '' : 's'}`;
+  if (days === 0) return 'Vence hoy';
+  return `${days} día${days === 1 ? '' : 's'} restante${days === 1 ? '' : 's'}`;
+};
+
+// Target de la acción "dar acceso gratis": puede ser un doctor individual
+// o una clínica completa (ver GrantClinicFreeAccess en el backend) — un
+// solo selector de fecha sirve para ambos casos.
+type GrantTarget = { type: 'doctor' | 'clinic'; id: number } | null;
+
 export const AdminDoctors: React.FC = () => {
   const navigate = useNavigate();
   const [doctors, setDoctors] = useState<AdminDoctor[]>([]);
@@ -69,9 +90,10 @@ export const AdminDoctors: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Acceso gratuito manual (ver GrantFreeAccess en el backend) — solo un
-  // renglón a la vez tiene el selector de fecha abierto.
-  const [grantingId, setGrantingId] = useState<number | null>(null);
+  // Acceso gratuito manual (ver GrantFreeAccess/GrantClinicFreeAccess en
+  // el backend) — solo un renglón a la vez tiene el selector de fecha
+  // abierto.
+  const [grantTarget, setGrantTarget] = useState<GrantTarget>(null);
   const [grantUntil, setGrantUntil] = useState('');
   const [grantSubmitting, setGrantSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -102,25 +124,38 @@ export const AdminDoctors: React.FC = () => {
     navigate('/admin/login');
   };
 
-  const startGranting = (doc: AdminDoctor) => {
-    setGrantingId(doc.id);
-    // Prellenar con la fecha ya guardada (si tenía) o con hoy + 30 días,
-    // para no forzar a escribirla siempre desde cero.
-    const base = doc.trialEndsAt ? new Date(doc.trialEndsAt) : new Date();
-    if (!doc.trialEndsAt) base.setDate(base.getDate() + 30);
+  // Prellenar con la fecha ya guardada (si tenía) o con hoy + 30 días,
+  // para no forzar a escribirla siempre desde cero.
+  const prefillGrantDate = (trialEndsAt: string | null) => {
+    const base = trialEndsAt ? new Date(trialEndsAt) : new Date();
+    if (!trialEndsAt) base.setDate(base.getDate() + 30);
     setGrantUntil(base.toISOString().slice(0, 10));
   };
 
+  const startGranting = (doc: AdminDoctor) => {
+    setGrantTarget({ type: 'doctor', id: doc.id });
+    prefillGrantDate(doc.trialEndsAt);
+  };
+
+  const startGrantingClinic = (doc: AdminDoctor) => {
+    if (!doc.clinicId) return;
+    setGrantTarget({ type: 'clinic', id: doc.clinicId });
+    prefillGrantDate(doc.trialEndsAt);
+  };
+
   const cancelGranting = () => {
-    setGrantingId(null);
+    setGrantTarget(null);
     setGrantUntil('');
   };
 
-  const handleConfirmGrant = async (doctorId: number) => {
-    if (!grantUntil) return;
+  const handleConfirmGrant = async () => {
+    if (!grantUntil || !grantTarget) return;
     setGrantSubmitting(true);
     try {
-      await adminApi.put(`/admin/doctors/${doctorId}/grant-free-access`, { until: grantUntil });
+      const path = grantTarget.type === 'clinic'
+        ? `/admin/clinics/${grantTarget.id}/grant-free-access`
+        : `/admin/doctors/${grantTarget.id}/grant-free-access`;
+      await adminApi.put(path, { until: grantUntil });
       setFeedback({ type: 'success', message: `Acceso gratuito otorgado hasta el ${grantUntil}.` });
       cancelGranting();
       fetchData();
@@ -241,11 +276,15 @@ export const AdminDoctors: React.FC = () => {
                       <span className={`status-badge sub-${doc.subscriptionStatus}`}>
                         {subscriptionLabel(doc.subscriptionStatus)}
                       </span>
-                      {!doc.isClinicMember && doc.subscriptionStatus === 'trialing' && doc.trialEndsAt && (
-                        <div className="admin-sub-date">Hasta {formatDate(doc.trialEndsAt)}</div>
+                      {doc.subscriptionStatus === 'trialing' && doc.trialEndsAt && (
+                        <div className="admin-sub-date">
+                          Hasta {formatDate(doc.trialEndsAt)} · {daysRemainingLabel(doc.trialEndsAt)}
+                        </div>
                       )}
-                      {!doc.isClinicMember && doc.subscriptionStatus === 'active' && doc.currentPeriodEnd && (
-                        <div className="admin-sub-date">Renueva {formatDate(doc.currentPeriodEnd)}</div>
+                      {doc.subscriptionStatus === 'active' && doc.currentPeriodEnd && (
+                        <div className="admin-sub-date">
+                          Renueva {formatDate(doc.currentPeriodEnd)} · {daysRemainingLabel(doc.currentPeriodEnd)}
+                        </div>
                       )}
                     </td>
                     <td data-label="Citas del mes">
@@ -258,34 +297,57 @@ export const AdminDoctors: React.FC = () => {
                       {doc.monthlyStats.bookedByDoctor} doctor / {doc.monthlyStats.bookedPublic} público
                     </td>
                     <td data-label="Acceso gratuito">
-                      {doc.isClinicMember ? (
-                        <span className="admin-grant-disabled">Depende de la clínica</span>
-                      ) : grantingId === doc.id ? (
-                        <div className="admin-grant-form">
-                          <input
-                            type="date"
-                            value={grantUntil}
-                            min={new Date().toISOString().slice(0, 10)}
-                            onChange={(e) => setGrantUntil(e.target.value)}
-                          />
-                          <div className="admin-grant-buttons">
-                            <button
-                              className="admin-grant-confirm"
-                              disabled={grantSubmitting || !grantUntil}
-                              onClick={() => handleConfirmGrant(doc.id)}
-                            >
-                              {grantSubmitting ? 'Guardando...' : 'Confirmar'}
+                      {(() => {
+                        const isGrantingThis =
+                          (grantTarget?.type === 'doctor' && grantTarget.id === doc.id) ||
+                          (grantTarget?.type === 'clinic' && grantTarget.id === doc.clinicId);
+
+                        if (isGrantingThis) {
+                          return (
+                            <div className="admin-grant-form">
+                              <input
+                                type="date"
+                                value={grantUntil}
+                                min={new Date().toISOString().slice(0, 10)}
+                                onChange={(e) => setGrantUntil(e.target.value)}
+                              />
+                              <div className="admin-grant-buttons">
+                                <button
+                                  className="admin-grant-confirm"
+                                  disabled={grantSubmitting || !grantUntil}
+                                  onClick={() => handleConfirmGrant()}
+                                >
+                                  {grantSubmitting ? 'Guardando...' : 'Confirmar'}
+                                </button>
+                                <button className="admin-grant-cancel" disabled={grantSubmitting} onClick={cancelGranting}>
+                                  Cancelar
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        if (doc.isClinicMember) {
+                          // Un solo botón por clínica (en el renglón del
+                          // dueño) para no repetir la misma acción una vez
+                          // por cada doctor de la clínica — afecta a todos
+                          // por igual (ver GrantClinicFreeAccess).
+                          if (!doc.isClinicOwner) {
+                            return <span className="admin-grant-disabled">Lo administra el dueño de la clínica</span>;
+                          }
+                          return (
+                            <button className="admin-grant-btn" onClick={() => startGrantingClinic(doc)}>
+                              Dar acceso gratis a la clínica
                             </button>
-                            <button className="admin-grant-cancel" disabled={grantSubmitting} onClick={cancelGranting}>
-                              Cancelar
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button className="admin-grant-btn" onClick={() => startGranting(doc)}>
-                          Dar acceso gratis
-                        </button>
-                      )}
+                          );
+                        }
+
+                        return (
+                          <button className="admin-grant-btn" onClick={() => startGranting(doc)}>
+                            Dar acceso gratis
+                          </button>
+                        );
+                      })()}
                     </td>
                   </tr>
                 ))}

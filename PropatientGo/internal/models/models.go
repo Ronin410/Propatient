@@ -208,9 +208,15 @@ type Clinic struct {
 	OwnerDoctorID uint `gorm:"not null;index" json:"ownerDoctorId"`
 
 	// "incomplete" (creada pero el Checkout aún no se completó) |
-	// "active" | "past_due" | "canceled" — mismos cuatro estados que
-	// Doctor.SubscriptionStatus, sin "trialing" porque no aplica aquí.
+	// "active" | "past_due" | "canceled" | "trialing" (acceso gratuito
+	// otorgado a mano por el superadmin, ver handlers.GrantClinicFreeAccess
+	// — el plan de clínica no tiene prueba gratis automática, solo esta
+	// manual) — mismos cinco estados que Doctor.SubscriptionStatus.
 	SubscriptionStatus string `gorm:"default:'incomplete'" json:"subscriptionStatus"`
+
+	// TrialEndsAt solo se usa junto con SubscriptionStatus "trialing" (ver
+	// comentario arriba) — igual que Doctor.TrialEndsAt.
+	TrialEndsAt *time.Time `json:"trialEndsAt"`
 
 	// Ubicación única de la clínica — a diferencia de un doctor
 	// independiente (que tiene su propia dirección editable), un
