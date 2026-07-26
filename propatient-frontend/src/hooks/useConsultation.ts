@@ -460,7 +460,7 @@ export function useConsultation(appointmentId: string | undefined) {
       const doctorInfo = doctorRes.data;
       const patientInfo = appointment?.patient;
 
-      const { docDefinition, pdfDocGen } = await generateAndSaveRecipePDF(doctorInfo, patientInfo, appointmentId, {
+      const { docDefinition, recipePdfPath } = await generateAndSaveRecipePDF(doctorInfo, patientInfo, appointmentId, {
         diagnosis: appointment?.diagnosis,
         dynamicNotes,
         recipeSections,
@@ -468,10 +468,12 @@ export function useConsultation(appointmentId: string | undefined) {
 
       setRecipeDocDefinition(docDefinition);
       setRecipeGenerated(true);
-      // Reutiliza la MISMA instancia que ya se usó para subir el PDF, en
-      // vez de llamar pdfMake.createPdf(docDefinition) de nuevo — ver el
-      // comentario largo en generateAndSaveRecipePDF.
-      pdfDocGen.print();
+      // Abre el archivo YA GUARDADO en el servidor (mismo que ve el
+      // paciente/el historial) en vez de generar un PDF nuevo en el
+      // navegador para imprimir — ver el comentario largo en
+      // generateAndSaveRecipePDF sobre por qué generarlo dos veces
+      // corrompía el diseño.
+      window.open(toAbsoluteFileUrl(recipePdfPath), '_blank');
     } catch (err) {
       console.error('Error al generar receta:', err);
       alert('Error al compilar la receta médica.');

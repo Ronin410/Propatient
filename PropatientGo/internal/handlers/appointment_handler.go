@@ -1273,7 +1273,8 @@ func SaveRecipePDF(db *gorm.DB, storageClient storage.Client) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"message": "Receta en PDF almacenada y asociada correctamente",
+			"message":       "Receta en PDF almacenada y asociada correctamente",
+			"recipePdfPath": storedRef,
 		})
 	}
 }
