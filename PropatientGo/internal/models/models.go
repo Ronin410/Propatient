@@ -656,13 +656,22 @@ type Cie10Code struct {
 // comentario largo en el handler del webhook); no controlan quién puede
 // verlo, eso siempre es "solo superadmin".
 type WhatsAppMessage struct {
-	ID        uint       `gorm:"primaryKey" json:"id"`
-	CreatedAt time.Time  `gorm:"index" json:"createdAt"`
-	Direction string     `gorm:"not null" json:"direction"`      // "INBOUND" | "OUTBOUND"
-	Category  string     `gorm:"index;not null" json:"category"` // "PATIENT" | "DOCTOR_SUPPORT"
-	Phone     string     `gorm:"index;not null" json:"phone"`    // E.164, la otra parte de la conversación (nunca el número de ProPatient)
-	Body      string     `gorm:"not null" json:"body"`
-	TwilioSid string     `gorm:"uniqueIndex" json:"-"` // idempotencia: Twilio puede reintentar el mismo webhook
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	CreatedAt time.Time `gorm:"index" json:"createdAt"`
+	Direction string    `gorm:"not null" json:"direction"`      // "INBOUND" | "OUTBOUND"
+	Category  string    `gorm:"index;not null" json:"category"` // "PATIENT" | "DOCTOR_SUPPORT"
+	Phone     string    `gorm:"index;not null" json:"phone"`    // E.164, la otra parte de la conversación (nunca el número de ProPatient)
+	Body      string    `gorm:"not null" json:"body"`
+	// TwilioSid es *string (no string) a propósito: nil se guarda como NULL
+	// de verdad, y un índice único en Postgres nunca considera dos NULL
+	// como iguales. Las respuestas que manda el superadmin (OUTBOUND) no
+	// tienen SID de Twilio y se dejan en nil — con un string normal, el
+	// valor por defecto "" se guardaría como texto real e idéntico en
+	// cada una, y la SEGUNDA respuesta de cualquier hilo tronaría contra
+	// el índice único (bug real, visto en producción: el primer mensaje
+	// de una conversación se mandaba bien pero fallaba al guardarse en
+	// cuanto había un segundo).
+	TwilioSid *string    `gorm:"uniqueIndex" json:"-"`
 	DoctorID  *uint      `gorm:"index" json:"doctorId"`
 	PatientID *uint      `gorm:"index" json:"patientId"`
 	ReadAt    *time.Time `json:"readAt"`

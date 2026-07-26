@@ -177,7 +177,7 @@ func TwilioInboundWebhook(db *gorm.DB) gin.HandlerFunc {
 			Category:  category,
 			Phone:     phone,
 			Body:      body,
-			TwilioSid: messageSid,
+			TwilioSid: &messageSid,
 			DoctorID:  doctorID,
 			PatientID: patientID,
 		}
