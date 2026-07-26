@@ -81,6 +81,7 @@ export const AdminPendingDoctors: React.FC = () => {
         <nav className="admin-nav">
           <Link to="/admin/doctores">Doctores</Link>
           <Link to="/admin/pendientes" className="active">Cédulas pendientes</Link>
+          <Link to="/admin/whatsapp">WhatsApp</Link>
         </nav>
         <button className="admin-logout-btn" onClick={handleLogout}>
           <span className="material-icons-outlined">logout</span>

@@ -579,6 +579,17 @@ func sendAppointmentDecisionWhatsApp(ctx context.Context, waClient whatsapp.Clie
 			body += fmt.Sprintf(" Antes de tu consulta, súbenos aquí cualquier estudio o documento que quieras que el doctor revise: %s", uploadURL)
 			vars["3"] = uploadURL
 		}
+		// Con el teléfono del doctor en el propio aviso, la mayoría de las
+		// dudas se resuelven directo con él/ella en vez de terminar como
+		// una respuesta a este WhatsApp que nadie del consultorio ve (ver
+		// ReplyToWhatsAppThread — esas respuestas solo las lee el
+		// superadmin, no el doctor).
+		contactSuffix := ""
+		if doctor.Phone != "" {
+			contactSuffix = fmt.Sprintf(" al %s", doctor.Phone)
+		}
+		body += fmt.Sprintf(" Si tienes dudas, comunícate con tu doctor%s.", contactSuffix)
+		vars["4"] = contactSuffix
 		body += " — ProPatient"
 		contentSID = waTemplates.AppointmentConfirmed
 	} else {

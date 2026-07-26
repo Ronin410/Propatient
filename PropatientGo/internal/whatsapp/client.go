@@ -7,6 +7,9 @@ package whatsapp
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha1"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +18,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -225,6 +229,45 @@ func (t *twilioClient) SendTemplate(ctx context.Context, toPhone, contentSID str
 		return fmt.Errorf("twilio respondió con error %d", resp.StatusCode)
 	}
 	return nil
+}
+
+// ValidateInboundSignature confirma que un webhook entrante (ej. una
+// respuesta de WhatsApp al número de ProPatient) de verdad viene de Twilio
+// y no de cualquiera que le pegue al endpoint público — Twilio firma cada
+// petición con HMAC-SHA1 usando el Auth Token como llave, sobre la URL
+// exacta configurada en su consola concatenada con cada par
+// llave+valor de los parámetros del POST, en orden alfabético de la
+// llave (sin separadores entre ellos). Ver
+// https://www.twilio.com/docs/usage/security#validating-requests.
+//
+// fullURL debe ser la URL pública EXACTA dada de alta en la consola de
+// Twilio para este webhook (ver TWILIO_WEBHOOK_URL en .env.example) — no
+// se reconstruye a partir de la petición porque, detrás de un proxy/CDN
+// como el de Render, el host/esquema que ve el servidor casi nunca
+// coincide con el público, y una reconstrucción incorrecta rechazaría
+// TODOS los webhooks legítimos en silencio.
+func ValidateInboundSignature(authToken, fullURL string, params map[string]string, signature string) bool {
+	if authToken == "" || signature == "" {
+		return false
+	}
+	keys := make([]string, 0, len(params))
+	for k := range params {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var buf strings.Builder
+	buf.WriteString(fullURL)
+	for _, k := range keys {
+		buf.WriteString(k)
+		buf.WriteString(params[k])
+	}
+
+	mac := hmac.New(sha1.New, []byte(authToken))
+	mac.Write([]byte(buf.String()))
+	expected := base64.StdEncoding.EncodeToString(mac.Sum(nil))
+
+	return hmac.Equal([]byte(expected), []byte(signature))
 }
 
 var nonDigits = regexp.MustCompile(`[^0-9]`)

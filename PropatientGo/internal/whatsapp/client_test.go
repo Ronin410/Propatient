@@ -25,3 +25,41 @@ func TestNormalizeE164(t *testing.T) {
 		})
 	}
 }
+
+// La firma de referencia se calculó de forma independiente (Python +
+// hashlib, no con este mismo código Go) para no terminar validando la
+// implementación contra sí misma — ver el algoritmo documentado por
+// Twilio en https://www.twilio.com/docs/usage/security.
+func TestValidateInboundSignature(t *testing.T) {
+	const authToken = "testtoken123"
+	const fullURL = "https://api.propatient.pro/api/whatsapp/webhook"
+	params := map[string]string{
+		"From":       "whatsapp:+525551234567",
+		"Body":       "Hola doctor",
+		"MessageSid": "SM123abc",
+	}
+	const validSignature = "squK9QIm/LgGPdoiu2LcMOoegNk="
+
+	if !ValidateInboundSignature(authToken, fullURL, params, validSignature) {
+		t.Error("una firma calculada correctamente debe validar")
+	}
+	if ValidateInboundSignature(authToken, fullURL, params, "firma-inventada") {
+		t.Error("una firma incorrecta no debe validar")
+	}
+	if ValidateInboundSignature("otro-token", fullURL, params, validSignature) {
+		t.Error("el auth token equivocado no debe validar")
+	}
+	if ValidateInboundSignature(authToken, "https://otra-url.com/webhook", params, validSignature) {
+		t.Error("una URL distinta a la firmada no debe validar")
+	}
+	tamperedParams := map[string]string{"From": params["From"], "Body": "Otro texto", "MessageSid": params["MessageSid"]}
+	if ValidateInboundSignature(authToken, fullURL, tamperedParams, validSignature) {
+		t.Error("parámetros alterados no deben validar")
+	}
+	if ValidateInboundSignature(authToken, fullURL, params, "") {
+		t.Error("una firma vacía nunca debe validar")
+	}
+	if ValidateInboundSignature("", fullURL, params, validSignature) {
+		t.Error("sin auth token configurado nunca debe validar")
+	}
+}

@@ -37,6 +37,7 @@ const TermsOfServiceContent = lazy(() => import('./pages/TermsOfServiceContent')
 const AdminLogin = lazy(() => import('./pages/AdminLogin').then((m) => ({ default: m.AdminLogin })));
 const AdminPendingDoctors = lazy(() => import('./pages/AdminPendingDoctors').then((m) => ({ default: m.AdminPendingDoctors })));
 const AdminDoctors = lazy(() => import('./pages/AdminDoctors').then((m) => ({ default: m.AdminDoctors })));
+const AdminWhatsApp = lazy(() => import('./pages/AdminWhatsApp').then((m) => ({ default: m.AdminWhatsApp })));
 import { AdminProtectedRoute } from './components/AdminProtectedRoute';
 
 // Nuevas Pantallas que estamos migrando
@@ -151,6 +152,14 @@ function App() {
               element={
                 <AdminProtectedRoute>
                   <AdminDoctors />
+                </AdminProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/whatsapp"
+              element={
+                <AdminProtectedRoute>
+                  <AdminWhatsApp />
                 </AdminProtectedRoute>
               }
             />
