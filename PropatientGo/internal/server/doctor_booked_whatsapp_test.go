@@ -18,7 +18,12 @@ import (
 // que, cuando el DOCTOR agenda la cita (a diferencia de una solicitud
 // pública), el paciente ahora sí recibe un WhatsApp de confirmación con el
 // link de "sube tus documentos antes de la cita" — antes de este cambio,
-// CreateAppointment no mandaba ningún aviso al paciente.
+// CreateAppointment no mandaba ningún aviso al paciente. El mensaje debe
+// ser el mismo que el de "cita pública confirmada" (misma función,
+// sendAppointmentDecisionWhatsApp) y no uno propio: una plantilla de
+// Twilio nueva y sin configurar en producción caía a texto libre, que
+// WhatsApp puede rechazar en silencio para un paciente que nunca le
+// escribió antes al número del negocio.
 func TestCreateAppointment_DoctorBooked_NotifiesPatientWithUploadLink(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	testStorage, _ := storage.NewClient(context.Background(), storage.Config{})
@@ -46,4 +51,8 @@ func TestCreateAppointment_DoctorBooked_NotifiesPatientWithUploadLink(t *testing
 	var uploadToken string
 	require.NoError(t, db.Raw("SELECT upload_token FROM appointments WHERE id = ?", apptID).Scan(&uploadToken).Error)
 	require.NotEmpty(t, uploadToken, "CreateAppointment debe generar el upload_token para poder mandarlo en el WhatsApp")
+
+	body := wa.lastBodyTo(t, "5557778888")
+	require.Contains(t, body, "quedó confirmada", "debe usar el mismo mensaje que la confirmación de una cita pública")
+	require.Contains(t, body, "/public-upload/"+uploadToken)
 }
