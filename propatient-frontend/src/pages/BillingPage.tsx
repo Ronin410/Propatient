@@ -21,6 +21,10 @@ interface BillingStatus {
   // o si Stripe no respondió a tiempo (mejor esfuerzo, el resto del
   // estatus se sigue mostrando igual).
   currentPeriodEnd?: string | null;
+  // Hasta cuándo sigue el acceso pese al cobro fallido (ver
+  // billing.PastDuePaymentGraceDuration en el backend) — solo viene cuando
+  // subscriptionStatus es "past_due" y se registró desde cuándo empezó.
+  pastDueGraceEndsAt?: string | null;
 }
 
 interface ReferralInfo {
@@ -230,7 +234,15 @@ export const BillingPage: React.FC = () => {
                 <span className="material-icons-outlined">error</span>
                 <div>
                   <strong>{status.subscriptionStatus === 'past_due' ? 'Pago pendiente' : 'Suscripción cancelada'}</strong>
-                  <p>Actualiza tu método de pago para reactivar el acceso completo.</p>
+                  {status.subscriptionStatus === 'past_due' && status.pastDueGraceEndsAt ? (
+                    <p>
+                      Tu banco rechazó el último cobro. Tienes {daysLeft(status.pastDueGraceEndsAt)} día
+                      {daysLeft(status.pastDueGraceEndsAt) === 1 ? '' : 's'} para actualizar tu método de pago antes
+                      de perder el acceso.
+                    </p>
+                  ) : (
+                    <p>Actualiza tu método de pago para reactivar el acceso completo.</p>
+                  )}
                 </div>
               </div>
             )}

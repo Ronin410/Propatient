@@ -240,6 +240,88 @@ func TestBilling_CreatePortalSession_ClinicDoctor_Returns409(t *testing.T) {
 	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
 }
 
+// TestBilling_PastDueWithinGrace_AllowsAccess confirma el periodo de
+// gracia: un cobro fallido reciente (past_due_since dentro de las últimas
+// billing.PastDuePaymentGraceDuration) todavía deja pasar al doctor, en
+// vez de bloquearlo de inmediato en el primer intento fallido.
+func TestBilling_PastDueWithinGrace_AllowsAccess(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_billing_pastdue_grace", "password123")
+	recentFailure := time.Now().UTC().Add(-2 * 24 * time.Hour)
+	require.NoError(t, db.Model(&doc).Updates(map[string]any{
+		"subscription_status": "past_due",
+		"past_due_since":      recentFailure,
+	}).Error)
+	token := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doRequest(t, router, http.MethodGet, "/api/patients", token, nil)
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestBilling_PastDueGraceExpired_BlocksAccess confirma el otro lado: una
+// vez que pasó el periodo de gracia completo sin resolverse el pago, sí
+// bloquea con 402 como cualquier suscripción vencida.
+func TestBilling_PastDueGraceExpired_BlocksAccess(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_billing_pastdue_expired", "password123")
+	oldFailure := time.Now().UTC().Add(-(billing.PastDuePaymentGraceDuration + 24*time.Hour))
+	require.NoError(t, db.Model(&doc).Updates(map[string]any{
+		"subscription_status": "past_due",
+		"past_due_since":      oldFailure,
+	}).Error)
+	token := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doRequest(t, router, http.MethodGet, "/api/patients", token, nil)
+	assert.Equal(t, http.StatusPaymentRequired, w.Code)
+}
+
+// TestBilling_PastDueWithoutSince_BlocksAccess confirma el caso más
+// seguro: si por lo que sea nunca se registró desde cuándo empezó el
+// past_due (dato de antes de que este campo existiera, o un caso raro),
+// se trata como fuera de gracia — bloquea en vez de dejar pasar
+// indefinidamente.
+func TestBilling_PastDueWithoutSince_BlocksAccess(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_billing_pastdue_nosince", "password123")
+	require.NoError(t, db.Model(&doc).Update("subscription_status", "past_due").Error)
+	token := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doRequest(t, router, http.MethodGet, "/api/patients", token, nil)
+	assert.Equal(t, http.StatusPaymentRequired, w.Code)
+}
+
+// TestBilling_GetStatus_PastDue_IncludesGraceDeadline confirma que
+// /billing/status expone hasta cuándo sigue el periodo de gracia, para que
+// el frontend le muestre al doctor cuántos días le quedan antes de perder
+// acceso.
+func TestBilling_GetStatus_PastDue_IncludesGraceDeadline(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_billing_pastdue_status", "password123")
+	since := time.Now().UTC().Add(-2 * 24 * time.Hour)
+	require.NoError(t, db.Model(&doc).Updates(map[string]any{
+		"subscription_status": "past_due",
+		"past_due_since":      since,
+	}).Error)
+	token := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doRequest(t, router, http.MethodGet, "/api/billing/status", token, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	body := decodeJSON(t, w)
+	assert.Equal(t, "past_due", body["subscriptionStatus"])
+	require.NotNil(t, body["pastDueGraceEndsAt"])
+	got, err := time.Parse(time.RFC3339, body["pastDueGraceEndsAt"].(string))
+	require.NoError(t, err)
+	assert.WithinDuration(t, since.Add(billing.PastDuePaymentGraceDuration), got, time.Second)
+}
+
 func mustLocalStorage(t *testing.T) storage.Client {
 	t.Helper()
 	client, err := storage.NewClient(t.Context(), storage.Config{})

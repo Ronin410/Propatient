@@ -28,6 +28,10 @@ interface ClinicInfo {
   id: number;
   name: string;
   subscriptionStatus: 'incomplete' | 'active' | 'past_due' | 'canceled';
+  // Hasta cuándo la clínica sigue con acceso pese al cobro fallido (ver
+  // billing.PastDuePaymentGraceDuration en el backend) — solo viene cuando
+  // subscriptionStatus es "past_due" y se registró desde cuándo empezó.
+  pastDueGraceEndsAt: string | null;
   isOwner: boolean;
   doctors: ClinicDoctor[];
   baseIncludedDoctors: number;
@@ -47,6 +51,12 @@ interface ClinicInfo {
 // estado normal de cualquier doctor que nunca ha creado ni le han
 // invitado a una clínica.
 type ViewState = 'loading' | 'not-configured' | 'no-clinic' | 'has-clinic' | 'error';
+
+function daysLeft(dateStr: string | null | undefined): number {
+  if (!dateStr) return 0;
+  const ms = new Date(dateStr).getTime() - Date.now();
+  return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
+}
 
 export const ClinicManagement: React.FC = () => {
   const { isStaff } = useAuth();
@@ -402,6 +412,13 @@ export const ClinicManagement: React.FC = () => {
               {clinic.doctors.length} doctor{clinic.doctors.length === 1 ? '' : 'es'} en la clínica
               {clinic.extraDoctors > 0 && ` (${clinic.extraDoctors} adicional${clinic.extraDoctors === 1 ? '' : 'es'} sobre el plan base)`}
             </p>
+            {clinic.subscriptionStatus === 'past_due' && clinic.pastDueGraceEndsAt && (
+              <p className="clinic-alert">
+                El banco rechazó el último cobro. Tienen {daysLeft(clinic.pastDueGraceEndsAt)} día
+                {daysLeft(clinic.pastDueGraceEndsAt) === 1 ? '' : 's'} para actualizar el método de pago antes de que
+                se bloquee el acceso de todos los doctores de la clínica.
+              </p>
+            )}
           </div>
         </div>
         {clinic.isOwner ? (

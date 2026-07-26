@@ -71,6 +71,15 @@ type Doctor struct {
 	StripeCustomerID     string     `json:"-"`
 	StripeSubscriptionID string     `json:"-"`
 
+	// PastDueSince marca desde cuándo un cobro falló por primera vez (la
+	// suscripción entró en "past_due") — RequireActiveSubscription da un
+	// periodo de gracia (billing.PastDuePaymentGraceDuration) contado desde
+	// aquí antes de bloquear el acceso, en vez de cortarlo de golpe en el
+	// primer intento fallido mientras Stripe todavía reintenta el cobro en
+	// automático (ver StripeWebhook, caso customer.subscription.updated).
+	// nil mientras no esté en "past_due".
+	PastDueSince *time.Time `json:"pastDueSince"`
+
 	// Clínica (alternativa a la suscripción individual de arriba): si
 	// ClinicID no es nil, este doctor pertenece a una clínica y su acceso
 	// se valida contra la suscripción de ESA clínica, no la propia (ver
@@ -217,6 +226,11 @@ type Clinic struct {
 	// TrialEndsAt solo se usa junto con SubscriptionStatus "trialing" (ver
 	// comentario arriba) — igual que Doctor.TrialEndsAt.
 	TrialEndsAt *time.Time `json:"trialEndsAt"`
+
+	// PastDueSince: mismo propósito que Doctor.PastDueSince — desde cuándo
+	// falló el primer cobro, para dar un periodo de gracia antes de
+	// bloquear a TODOS los doctores de la clínica.
+	PastDueSince *time.Time `json:"pastDueSince"`
 
 	// Ubicación única de la clínica — a diferencia de un doctor
 	// independiente (que tiene su propia dirección editable), un
