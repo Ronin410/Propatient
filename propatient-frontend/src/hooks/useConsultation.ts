@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import type { Appointment } from '../types';
 import api from '../api/axios';
 import { getErrorMessage } from '../utils/errorMessage';
-import { generateAndSaveRecipePDF, pdfMake } from '../utils/recipePdf';
+import { generateAndSaveRecipePDF } from '../utils/recipePdf';
 import { toAbsoluteFileUrl } from '../utils/fileUrl';
 
 export interface AppointmentFile {
@@ -460,7 +460,7 @@ export function useConsultation(appointmentId: string | undefined) {
       const doctorInfo = doctorRes.data;
       const patientInfo = appointment?.patient;
 
-      const docDefinition = await generateAndSaveRecipePDF(doctorInfo, patientInfo, appointmentId, {
+      const { docDefinition, pdfDocGen } = await generateAndSaveRecipePDF(doctorInfo, patientInfo, appointmentId, {
         diagnosis: appointment?.diagnosis,
         dynamicNotes,
         recipeSections,
@@ -468,7 +468,10 @@ export function useConsultation(appointmentId: string | undefined) {
 
       setRecipeDocDefinition(docDefinition);
       setRecipeGenerated(true);
-      pdfMake.createPdf(docDefinition).print();
+      // Reutiliza la MISMA instancia que ya se usó para subir el PDF, en
+      // vez de llamar pdfMake.createPdf(docDefinition) de nuevo — ver el
+      // comentario largo en generateAndSaveRecipePDF.
+      pdfDocGen.print();
     } catch (err) {
       console.error('Error al generar receta:', err);
       alert('Error al compilar la receta médica.');

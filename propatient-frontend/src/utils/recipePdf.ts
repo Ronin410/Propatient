@@ -265,15 +265,22 @@ export async function buildRecipeDocDefinition({
   };
 }
 
-// Arma la receta, la sube al backend y devuelve el docDefinition (para poder
-// imprimirla después sin tener que regenerarla). Usada tanto por el botón
-// "Generar Receta" como por "Finalizar Consulta".
+// Arma la receta, la sube al backend y devuelve tanto el docDefinition como
+// el generador de pdfmake YA CONSTRUIDO (para poder imprimirlo después sin
+// volver a llamar pdfMake.createPdf() sobre el mismo docDefinition —
+// pdfmake muta ese objeto durante el layout, así que reutilizarlo en un
+// createPdf() nuevo produce un PDF con los márgenes corridos/duplicados;
+// visto en producción como la línea divisoria de la receta apareciendo al
+// doble de distancia de lo normal. Ver handleGenerateAndPrintRecipe en
+// useConsultation.ts, que ahora llama pdfDocGen.print() en vez de crear
+// una instancia nueva). Usada tanto por el botón "Generar Receta" como por
+// "Finalizar Consulta".
 export async function generateAndSaveRecipePDF(
   doctorInfo: DoctorInfo,
   patientInfo: Patient | undefined,
   appointmentId: string,
   opts: { diagnosis?: string; dynamicNotes: Record<string, string>; recipeSections: Record<string, boolean> }
-): Promise<any> {
+): Promise<{ docDefinition: any; pdfDocGen: ReturnType<typeof pdfMake.createPdf> }> {
   // Folio: se pide/reserva ANTES de armar el PDF para poder imprimirlo ya
   // dentro de la receta (ver GetOrAssignRecipeNumber) — si el doctor vuelve
   // a generar la misma receta (ej. corrige una nota y le da "Generar
@@ -309,7 +316,7 @@ export async function generateAndSaveRecipePDF(
     headers: { 'Content-Type': 'multipart/form-data' },
   });
 
-  return docDefinition;
+  return { docDefinition, pdfDocGen: pdfInstance };
 }
 
 export { pdfMake };
