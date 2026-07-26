@@ -119,6 +119,27 @@ export const ValidateLicense = () => {
         boxShadow: 'var(--shadow, 0 4px 12px rgba(0, 0, 0, 0.05))',
         boxSizing: 'border-box'
       }}>
+        <button
+          type="button"
+          onClick={() => navigate('/registro/perfil')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: 0,
+            marginBottom: '12px',
+            color: 'var(--text, #666)',
+            fontSize: '14px',
+            fontWeight: 600,
+          }}
+        >
+          <span className="material-icons-outlined" style={{ fontSize: '18px' }}>arrow_back</span>
+          Paso 1: Información Profesional
+        </button>
+
         <h2 style={{ textAlign: 'center', fontWeight: 700, marginBottom: '8px', marginTop: 0, color: 'var(--text-h, #333)' }}>
           Paso 2: Validación Profesional e Identidad
         </h2>
