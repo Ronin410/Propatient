@@ -684,11 +684,18 @@ func sendAppointmentRescheduledWhatsApp(ctx context.Context, waClient whatsapp.C
 		return false
 	}
 	when := auth.FormatSpanishDateTime(appointment.AppointmentDateTime)
+	// Si el doctor tiene teléfono configurado en su perfil, se agrega como
+	// sufijo de la frase de contacto (" al 555..."); si no, la frase queda
+	// sin número en vez de mostrar un hueco en blanco.
+	contactSuffix := ""
+	if doctor.Phone != "" {
+		contactSuffix = fmt.Sprintf(" al %s", doctor.Phone)
+	}
 	body := fmt.Sprintf(
-		"Tu cita con Dr(a). %s fue reprogramada. Nueva fecha y hora: %s. — ProPatient",
-		doctor.FullName, when,
+		"Hola, te informamos que tu cita médica con el Dr. %s ha sido reprogramada.\nNueva fecha y hora: %s.\nSi no estás de acuerdo con la reprogramación, comunícate con tu doctor%s.\nSi tienes dudas o necesitas cambiar la cita, responde a este mensaje.",
+		doctor.FullName, when, contactSuffix,
 	)
-	vars := map[string]string{"1": doctor.FullName, "2": when}
+	vars := map[string]string{"1": doctor.FullName, "2": when, "3": contactSuffix}
 	if err := whatsapp.SendWithFallback(ctx, waClient, patient.Phone, waTemplates.AppointmentRescheduled, vars, body); err != nil {
 		log.Printf("⚠️ No se pudo enviar el WhatsApp de reprogramación al paciente (cita %d): %v", appointment.ID, err)
 		return false
