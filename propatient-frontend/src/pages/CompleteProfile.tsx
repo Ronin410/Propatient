@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { AuthLayout } from './AuthLayout';
+import { getErrorMessage } from '../utils/errorMessage';
+import { sanitizePhoneInput } from '../utils/phoneInput';
+import { LocationPicker } from '../components/LocationPicker';
+import { useAuth } from '../context/AuthContext';
 
 export const CompleteProfile = () => {
   const [formData, setFormData] = useState({
@@ -13,9 +17,14 @@ export const CompleteProfile = () => {
     medicalSpecialty: '',
     university: ''
   });
+  const [location, setLocation] = useState<{ latitude: number | null; longitude: number | null }>({
+    latitude: null,
+    longitude: null
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { setDoctorName } = useAuth();
 
   useEffect(() => {
     const googleName = localStorage.getItem('suggested_fullname');
@@ -26,7 +35,8 @@ export const CompleteProfile = () => {
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: name === 'phone' ? sanitizePhoneInput(value) : value });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -58,10 +68,15 @@ export const CompleteProfile = () => {
     }
 
     try {
-      await api.post('/user/update-profile', formData);
-      navigate('/registro/validar-cedula'); 
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Ocurrió un error al guardar tu perfil.');
+      await api.post('/user/update-profile', {
+        ...formData,
+        latitude: location.latitude != null ? String(location.latitude) : '',
+        longitude: location.longitude != null ? String(location.longitude) : ''
+      });
+      setDoctorName(formData.fullName);
+      navigate('/registro/validar-cedula');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Ocurrió un error al guardar tu perfil.'));
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setIsLoading(false);
@@ -78,7 +93,7 @@ export const CompleteProfile = () => {
     color: 'var(--text-h)',
     outline: 'none',
     transition: 'border-color 0.2s, box-shadow 0.2s',
-    background: '#ffffff',
+    background: 'var(--bg)',
     boxSizing: 'border-box'
   };
 
@@ -95,7 +110,7 @@ export const CompleteProfile = () => {
       <div className="card" style={{ 
         width: '100%', 
         padding: '35px',
-        backgroundColor: '#ffffff',
+        backgroundColor: 'var(--bg)',
         borderRadius: '12px',
         boxShadow: 'var(--shadow, 0 4px 12px rgba(0, 0, 0, 0.05))',
         boxSizing: 'border-box'
@@ -116,8 +131,8 @@ export const CompleteProfile = () => {
               lineHeight: '1.4',
               padding: '12px',
               borderRadius: '6px',
-              backgroundColor: '#fee2e2',
-              color: '#b91c1c',
+              backgroundColor: 'var(--color-danger-bg)',
+              color: 'var(--color-danger)',
               fontSize: '14px'
             }}>
               {error}
@@ -256,6 +271,18 @@ export const CompleteProfile = () => {
 
           <div>
             <label style={{ ...labelStyle, color: 'var(--text)' }}>
+              Ubicación en el Mapa <span style={{ fontWeight: 'normal', fontSize: '12px' }}>(Opcional)</span>
+            </label>
+            <LocationPicker
+              address={formData.address}
+              latitude={location.latitude}
+              longitude={location.longitude}
+              onChange={(lat, lng) => setLocation({ latitude: lat, longitude: lng })}
+            />
+          </div>
+
+          <div>
+            <label style={{ ...labelStyle, color: 'var(--text)' }}>
               Código Postal <span style={{ fontWeight: 'normal', fontSize: '12px' }}>(Opcional)</span>
             </label>
             <input 
@@ -276,8 +303,8 @@ export const CompleteProfile = () => {
             />
           </div>
 
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             className="btn-primary" 
             disabled={isLoading} 
             style={{ 

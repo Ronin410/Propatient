@@ -1,0 +1,412 @@
+.public-profile-page {
+  background: var(--bg-main);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.public-profile-loading {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: var(--color-secondary);
+}
+
+.public-profile-notfound {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 5rem 2rem;
+  text-align: center;
+  color: var(--color-secondary);
+
+  .material-icons-outlined { font-size: 48px; margin-bottom: 1rem; }
+  h2 { color: var(--color-heading); margin: 0 0 0.6rem 0; }
+  p { margin: 0 0 1.5rem 0; }
+}
+
+.public-profile-nav {
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  padding: 1rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  .public-profile-logo {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--color-heading);
+    text-decoration: none;
+
+    .brand-logo-icon {
+      height: 28px;
+      width: auto;
+    }
+
+    .material-icons-outlined { color: var(--color-primary); }
+  }
+
+  .nav-link {
+    color: var(--text);
+    font-weight: 500;
+    text-decoration: none;
+
+    &:hover { color: var(--color-primary); }
+  }
+}
+
+.public-profile-body {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2.5rem 2rem;
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  gap: 2rem;
+  align-items: start;
+
+  @media (max-width: 860px) {
+    grid-template-columns: 1fr;
+  }
+
+  // Sin esto, un texto largo sin espacios (biografía, dirección) no deja
+  // que la columna se encoja por debajo de su ancho intrínseco de
+  // contenido — el mismo bug que ya se corrigió antes en otras grillas de
+  // esta app: la columna termina más ancha que su "1fr" y desborda toda
+  // la página en vez de recortarse/envolverse dentro de su tarjeta.
+  > * { min-width: 0; }
+}
+
+.public-profile-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 2rem;
+  text-align: center;
+
+  h1 { color: var(--color-heading); margin: 0 0 0.3rem 0; font-size: 1.5rem; }
+}
+
+.public-profile-avatar {
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  background: var(--bg-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1rem auto;
+  overflow: hidden;
+
+  img { width: 100%; height: 100%; object-fit: cover; }
+
+  .material-icons-outlined { font-size: 56px; color: var(--color-secondary); }
+}
+
+.public-profile-specialty {
+  color: var(--color-primary);
+  font-weight: 600;
+  margin: 0 0 1.2rem 0;
+}
+
+.public-profile-bio {
+  color: var(--color-secondary);
+  line-height: 1.6;
+  text-align: left;
+  margin: 0 0 1.2rem 0;
+  overflow-wrap: anywhere;
+}
+
+.public-profile-contact {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  text-align: left;
+  margin-bottom: 1.2rem;
+
+  .contact-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text);
+    font-size: 0.9rem;
+
+    .material-icons-outlined { font-size: 18px; color: var(--color-secondary); }
+  }
+}
+
+.public-profile-schedule {
+  text-align: left;
+  margin-bottom: 1.2rem;
+  background: var(--bg-subtle);
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+
+  h3 {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--color-heading);
+    margin: 0 0 0.4rem 0;
+
+    .material-icons-outlined { font-size: 18px; color: var(--color-primary); }
+  }
+
+  ul {
+    margin: 0;
+    padding-left: 1.4rem;
+    color: var(--text);
+    font-size: 0.85rem;
+    line-height: 1.6;
+  }
+}
+
+.public-profile-social {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.2rem;
+
+  .social-link {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.8rem;
+    border-radius: 20px;
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-decoration: none;
+
+    .material-icons-outlined { font-size: 16px; color: var(--color-primary); }
+
+    &:hover { border-color: var(--color-primary); color: var(--color-primary); }
+  }
+}
+
+.public-profile-map {
+  height: 220px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.public-profile-booking {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 2rem;
+
+  h2 { color: var(--color-heading); margin: 0 0 0.4rem 0; }
+
+  .booking-subtitle {
+    color: var(--color-secondary);
+    font-size: 0.9rem;
+    margin: 0 0 1.5rem 0;
+  }
+}
+
+.booking-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+
+    @media (max-width: 480px) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+
+    label { font-size: 0.85rem; font-weight: 600; color: var(--color-heading); }
+
+    input, textarea {
+      padding: 0.7rem 0.9rem;
+      border-radius: 8px;
+      border: 1px solid var(--border-strong);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.9rem;
+      font-family: inherit;
+
+      &:focus { outline: none; border-color: var(--color-primary); }
+    }
+  }
+
+  .consent-checkbox {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    font-size: 0.8rem;
+    color: var(--color-secondary);
+    line-height: 1.5;
+    cursor: pointer;
+
+    input[type="checkbox"] {
+      margin-top: 0.15rem;
+      flex-shrink: 0;
+      width: auto;
+    }
+
+    a { color: var(--color-primary); font-weight: 600; }
+  }
+
+  .minor-checkbox {
+    font-weight: 600;
+    color: var(--color-heading);
+    margin-top: -0.4rem;
+  }
+
+  .minor-hint {
+    margin: -0.4rem 0 0 0;
+    font-size: 0.8rem;
+    color: var(--color-secondary);
+    background: var(--bg-subtle);
+    border-radius: 8px;
+    padding: 0.6rem 0.8rem;
+  }
+
+  .btn-primary-lg {
+    background: var(--color-primary);
+    color: #ffffff;
+    border: none;
+    padding: 0.9rem 1.8rem;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    margin-top: 0.4rem;
+
+    &:hover { background: var(--color-primary-dark); }
+    &:disabled { opacity: 0.6; cursor: not-allowed; }
+  }
+}
+
+.public-profile-gallery,
+.public-profile-reviews {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 2rem 2.5rem 2rem;
+
+  h2 { color: var(--color-heading); margin: 0 0 1rem 0; font-size: 1.2rem; }
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.gallery-thumb {
+  aspect-ratio: 1;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+
+  img { width: 100%; height: 100%; object-fit: cover; display: block; }
+}
+
+.reviews-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+
+  h2 { margin: 0; }
+
+  .reviews-average {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-weight: 600;
+    color: var(--color-heading);
+    font-size: 0.9rem;
+
+    .material-icons-outlined { font-size: 18px; color: var(--color-warning); }
+  }
+}
+
+.reviews-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.review-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem 1.2rem;
+
+  .review-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    margin-bottom: 0.4rem;
+
+    strong { color: var(--color-heading); }
+  }
+
+  .review-stars .material-icons-outlined {
+    font-size: 15px;
+    color: var(--border-strong, var(--border));
+
+    &.filled { color: var(--color-warning); }
+  }
+
+  .review-comment {
+    color: var(--text);
+    font-size: 0.85rem;
+    font-style: italic;
+    margin: 0;
+  }
+}
+
+.booking-error {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  border-radius: 8px;
+  padding: 0.7rem 1rem;
+  font-size: 0.85rem;
+}
+
+.booking-confirmation {
+  text-align: center;
+  padding: 1.5rem 0;
+
+  .material-icons-outlined {
+    font-size: 48px;
+    color: var(--color-success);
+    margin-bottom: 1rem;
+  }
+
+  h2 { color: var(--color-heading); margin: 0 0 0.6rem 0; }
+  p { color: var(--color-secondary); margin: 0 0 1.5rem 0; line-height: 1.6; }
+
+  .btn-outline-lg {
+    display: inline-block;
+    border: 1px solid var(--border-strong);
+    color: var(--color-heading);
+    padding: 0.8rem 1.6rem;
+    border-radius: 10px;
+    font-weight: 600;
+    text-decoration: none;
+
+    &:hover { border-color: var(--color-primary); color: var(--color-primary); }
+  }
+}

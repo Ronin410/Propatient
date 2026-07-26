@@ -1,0 +1,95 @@
+package server_test
+
+import (
+	"context"
+	"sync"
+	"testing"
+	"time"
+)
+
+// mockWhatsAppClient guarda cada mensaje mandado, sin tocar la API real de
+// Twilio — permite verificar en los tests a quién se le mandó qué, sin
+// depender de credenciales.
+type mockWhatsAppClient struct {
+	mu    sync.Mutex
+	calls []mockWhatsAppCall
+}
+
+type mockWhatsAppCall struct {
+	To   string
+	Body string
+}
+
+func newMockWhatsAppClient() *mockWhatsAppClient {
+	return &mockWhatsAppClient{}
+}
+
+func (m *mockWhatsAppClient) SendMessage(ctx context.Context, toPhone, body string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.calls = append(m.calls, mockWhatsAppCall{To: toPhone, Body: body})
+	return nil
+}
+
+// SendTemplate no lo ejercita ningún test hoy (ninguno configura
+// TWILIO_TEMPLATE_*), pero tiene que existir para cumplir whatsapp.Client.
+// Registra la llamada igual que SendMessage, usando el ContentSid como
+// "Body" — suficiente para poder verificarlo si algún test lo necesita más
+// adelante.
+func (m *mockWhatsAppClient) SendTemplate(ctx context.Context, toPhone, contentSID string, variables map[string]string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.calls = append(m.calls, mockWhatsAppCall{To: toPhone, Body: contentSID})
+	return nil
+}
+
+func (m *mockWhatsAppClient) callCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.calls)
+}
+
+// lastBodyTo devuelve el cuerpo del último mensaje mandado a "phone" (falla
+// el test si no hay ninguno) — útil para verificar contenido específico,
+// como un link, sin acoplarse al índice exacto dentro de calls.
+func (m *mockWhatsAppClient) lastBodyTo(t *testing.T, phone string) string {
+	t.Helper()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for i := len(m.calls) - 1; i >= 0; i-- {
+		if m.calls[i].To == phone {
+			return m.calls[i].Body
+		}
+	}
+	t.Fatalf("no se encontró ningún mensaje mandado a %s", phone)
+	return ""
+}
+
+func (m *mockWhatsAppClient) callsTo(phone string) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	count := 0
+	for _, c := range m.calls {
+		if c.To == phone {
+			count++
+		}
+	}
+	return count
+}
+
+// waitForCallsTo espera (con sondeo corto) a que "phone" tenga al menos
+// "want" llamadas registradas. Los avisos de WhatsApp se mandan en una
+// goroutine en segundo plano (para no bloquear la respuesta HTTP al
+// paciente — ver el comentario en CreatePublicAppointment), así que un
+// test no puede asumir que ya llegaron justo al recibir la respuesta.
+func (m *mockWhatsAppClient) waitForCallsTo(t *testing.T, phone string, want int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if m.callsTo(phone) >= want {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("tras 2s, %s solo tiene %d llamadas registradas, se esperaban al menos %d", phone, m.callsTo(phone), want)
+}

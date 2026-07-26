@@ -1,1 +1,5 @@
 vendor/
+.env
+__debug_bin*
+tmp/
+uploads/

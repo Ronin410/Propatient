@@ -6,7 +6,7 @@ services:
     restart: always
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password123  # <--- CONFIGURAR AQUÍ
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en tu archivo .env (ver .env.example)}
       POSTGRES_DB: propatient
     ports:
       - "5432:5432"
@@ -23,9 +23,15 @@ services:
       - db
     environment:
       # @db es el nombre del servicio de arriba. Docker resuelve la IP solo.
-      - DATABASE_URL=postgres://postgres:password123@db:5432/propatient?sslmode=disable
-      - JWT_SECRET=mi_clave_secreta_para_tokens
+      - DATABASE_URL=postgres://postgres:${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en tu archivo .env (ver .env.example)}@db:5432/propatient?sslmode=disable
+      - JWT_SECRET=${JWT_SECRET:?Define JWT_SECRET en tu archivo .env (ver .env.example)}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-744896665247-hrs7pmi72q2pog5dn9h1fh5n4nkpv18r.apps.googleusercontent.com}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
       - PORT=8095
+      # Crea el doctor de prueba "medico"/"12345" al arrancar (ver
+      # PROJECT_SPECS.md). Solo para desarrollo local — nunca se define en
+      # Render, así que producción nunca tiene esta cuenta.
+      - ENABLE_TEST_SEED=${ENABLE_TEST_SEED:-true}
     volumes:
       - ./PropatientGo:/app:Z
 

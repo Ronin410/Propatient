@@ -9,7 +9,7 @@
     width: 100vw;
     margin: 0;
     padding: 0;
-    background-color: #e6e4e0; /* Fondo arena unificado */
+    background-color: var(--bg-cream); /* Fondo arena unificado */
     overflow: hidden;
 }
 
@@ -28,25 +28,53 @@
     box-sizing: border-box;
     z-index: 10;
     color: #ffffff;
+    // En ventanas bajas o zoom alto, el menú + el pie (nombre, cambiar de
+    // consultorio, tema, cerrar sesión) pueden juntos medir más que el
+    // alto disponible — sin esto, lo de abajo (Cerrar Sesión) quedaba
+    // recortado fuera de la vista sin ninguna forma de llegar a él.
+    overflow-y: auto;
+
+    // Barra de scroll delgada y a tono con el sidebar oscuro — sin esto,
+    // el navegador dibuja la barra gris gruesa por defecto, que desentona
+    // fuerte con el degradado azul.
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+
+    &::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    &::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+        background-color: rgba(255, 255, 255, 0.25);
+        border-radius: 10px;
+
+        &:hover {
+            background-color: rgba(255, 255, 255, 0.4);
+        }
+    }
 }
 
 /* Cabecera del Sidebar */
 .sidebar-header {
     margin-bottom: 2.5rem;
-    
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
     .logo-container {
         display: flex;
         align-items: center;
         gap: 12px;
         padding-left: 8px;
-        
+
         .medical-logo {
-            width: 28px;
-            height: 28px;
-            
-            path {
-                fill: #ffffff; /* Isotipo blanco sobre azul */
-            }
+            width: 32px;
+            height: 32px;
+            object-fit: contain;
         }
 
         .office-name {
@@ -55,6 +83,26 @@
             font-weight: 700;
             color: #ffffff;
             letter-spacing: 0.5px;
+        }
+    }
+
+    /* Solo visible en móvil/tablet, dentro del propio sidebar deslizante */
+    .close-sidebar-btn {
+        display: none;
+        background: none;
+        border: none;
+        color: rgba(255, 255, 255, 0.8);
+        cursor: pointer;
+        padding: 4px;
+        border-radius: 6px;
+
+        .material-icons-outlined {
+            font-size: 22px;
+        }
+
+        &:hover {
+            background-color: rgba(255, 255, 255, 0.08);
+            color: #ffffff;
         }
     }
 }
@@ -143,6 +191,84 @@
         }
     }
 
+    .doctor-switcher {
+        padding: 0 8px;
+
+        select {
+            width: 100%;
+            padding: 8px 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background-color: rgba(255, 255, 255, 0.08);
+            color: #ffffff;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+
+            &:disabled {
+                opacity: 0.6;
+                cursor: not-allowed;
+            }
+
+            option {
+                color: var(--color-dark, #1a1a1a);
+            }
+        }
+    }
+
+    .theme-toggle-link {
+        color: rgba(255, 255, 255, 0.85);
+        border: none;
+        background: none;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 500;
+        transition: background 0.2s;
+
+        .material-icons-outlined {
+            font-size: 20px;
+        }
+
+        &:hover {
+            background-color: rgba(255, 255, 255, 0.08);
+        }
+    }
+
+    /* El botón de instalar reutiliza InstallPwaButton.scss, pero ese
+       diseño (borde+texto en var(--color-primary)) se pierde sobre el
+       fondo teal oscuro del sidebar — lo alineamos con el resto del
+       footer (mismo estilo que theme-toggle-link). */
+    .sidebar-install-btn {
+        color: rgba(255, 255, 255, 0.85);
+        border: none;
+        background: none;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 12px;
+        padding: 10px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 500;
+        transition: background 0.2s;
+
+        .material-icons-outlined {
+            font-size: 20px;
+        }
+
+        &:hover {
+            background-color: rgba(255, 255, 255, 0.08);
+        }
+    }
+
     .logout-link {
         color: #ff6b6b;
         border: none;
@@ -169,18 +295,111 @@
 /* ================================================= */
 
 .main-content {
-    background-color: #e6e4e0; /* Fondo arena sutil de la app */
+    background-color: var(--bg-cream); /* Fondo arena sutil de la app */
     height: 100vh;
     overflow-y: auto;
     padding: 2.5rem;
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+}
+
+.main-content-inner {
+    width: 100%;
+}
+
+/* ================================================= */
+/* 4. BARRA SUPERIOR MÓVIL Y MENÚ HAMBURGUESA        */
+/* ================================================= */
+
+.mobile-topbar {
+    display: none; /* solo aparece en pantallas angostas, ver media query abajo */
+    align-items: center;
+    gap: 12px;
+    background: linear-gradient(145deg, #005073 0%, #002d42 100%);
+    color: #ffffff;
+    padding: 0.9rem 1.2rem;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+
+    .hamburger-btn {
+        background: none;
+        border: none;
+        color: #ffffff;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        padding: 4px;
+        border-radius: 6px;
+
+        .material-icons-outlined {
+            font-size: 26px;
+        }
+
+        &:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+    }
+
+    .office-name {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+    }
+}
+
+.sidebar-overlay {
+    display: none; /* solo aparece en pantallas angostas, ver media query abajo */
 }
 
 @media (max-width: 992px) {
     .dashboard-container {
         grid-template-columns: 1fr;
+        height: auto;
+        min-height: 100vh;
     }
+
+    .mobile-topbar {
+        display: flex;
+    }
+
+    .sidebar-overlay {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 90;
+    }
+
     .sidebar {
-        display: none; /* Ideal para complementar con un menú hamburguesa posteriormente */
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        width: 260px;
+        max-width: 80vw;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        z-index: 100;
+
+        &.open {
+            transform: translateX(0);
+        }
+
+        .sidebar-header .close-sidebar-btn {
+            display: inline-flex;
+        }
+    }
+
+    .main-content {
+        height: auto;
+        min-height: calc(100vh - 56px);
+        // 2.5rem (40px) de cada lado no se reducía en celular, dejando el
+        // contenido mucho más angosto que la pantalla real — ver además
+        // los ajustes de padding en ConsultationManager.scss para el
+        // mismo problema dentro de esa pantalla en particular.
+        padding: 1rem;
     }
 }

@@ -7,6 +7,8 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
     margin-bottom: 2.5rem;
 
     h1 { 
@@ -43,7 +45,7 @@
 
   /* Tarjeta contenedora global de búsqueda y tabla */
   .card-layout {
-    background: #ffffff;
+    background: var(--bg);
     border-radius: 12px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
     border: 1px solid rgba(0, 0, 0, 0.05);
@@ -52,7 +54,7 @@
 
   .search-bar-container {
     padding: 1.5rem;
-    border-bottom: 1px solid #f1f3f5;
+    border-bottom: 1px solid var(--border);
 
     .search-wrapper {
       position: relative;
@@ -62,7 +64,7 @@
       .search-icon {
         position: absolute;
         left: 1rem;
-        color: #adb5bd;
+        color: var(--color-secondary);
         font-size: 1.25rem;
         pointer-events: none;
       }
@@ -70,7 +72,7 @@
       .search-input {
         width: 100%;
         padding: 0.8rem 1rem 0.8rem 2.8rem;
-        border: 1px solid #dee2e6;
+        border: 1px solid var(--border);
         border-radius: 8px;
         font-size: 0.95rem;
         transition: all 0.2s ease;
@@ -83,7 +85,7 @@
         }
 
         &::placeholder {
-          color: #adb5bd;
+          color: var(--color-secondary);
         }
       }
     }
@@ -91,6 +93,15 @@
 
   .table-wrapper {
     overflow-x: auto;
+    transition: opacity 0.15s ease;
+
+    // Mientras busca o cambia de página, la tabla se atenúa un poco en su
+    // lugar en vez de desmontarse — así el campo de búsqueda nunca pierde
+    // el foco ni se destruye a medio escribir.
+    &.is-loading {
+      opacity: 0.5;
+      pointer-events: none;
+    }
   }
 
   .patients-table {
@@ -100,18 +111,18 @@
 
     th {
       padding: 1.2rem 1.5rem;
-      background-color: #f8f9fa;
-      color: #6c757d;
+      background-color: var(--bg-subtle);
+      color: var(--color-secondary);
       font-weight: 600;
       font-size: 0.85rem;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      border-bottom: 1px solid #f1f3f5;
+      border-bottom: 1px solid var(--border);
     }
 
     td {
       padding: 1.2rem 1.5rem;
-      border-bottom: 1px solid #f1f3f5;
+      border-bottom: 1px solid var(--border);
       color: var(--color-dark);
       font-size: 0.95rem;
       vertical-align: middle;
@@ -122,7 +133,7 @@
     }
 
     tr:hover {
-      background-color: #f8f9fa;
+      background-color: var(--bg-subtle);
     }
 
     /* Celda del perfil del paciente con Avatar */
@@ -162,19 +173,24 @@
     }
 
     .phone-text, .email-text {
-      color: #495057;
+      color: var(--text);
     }
 
     .date-badge {
       display: inline-block;
       padding: 0.25rem 0.5rem;
-      background-color: #e9ecef;
+      background-color: var(--bg-subtle);
       border-radius: 6px;
       font-size: 0.85rem;
-      color: #495057;
+      color: var(--text);
     }
 
-    /* Botón Ver Historial dentro de la tabla */
+    .actions-cell {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    /* Botones de acción (Ver Historial / Eliminar) dentro de la tabla */
     .btn-outline-sm {
       display: inline-flex;
       align-items: center;
@@ -198,6 +214,23 @@
       &:active {
         transform: scale(0.98);
       }
+
+      &:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        pointer-events: none;
+      }
+
+      &.danger {
+        color: var(--color-danger);
+        border-color: var(--color-danger);
+
+        &:hover {
+          background-color: var(--color-danger);
+          color: #ffffff;
+          box-shadow: 0 2px 8px rgba(211, 47, 47, 0.15);
+        }
+      }
     }
 
     .empty-table {
@@ -207,7 +240,7 @@
 
       .material-icons-outlined {
         font-size: 3rem;
-        color: #dee2e6;
+        color: var(--border);
         margin-bottom: 1rem;
       }
 
@@ -223,5 +256,19 @@
     padding: 4rem;
     color: var(--color-secondary);
     font-size: 1.1rem;
+  }
+
+  .pagination-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+    padding: 1.25rem;
+    border-top: 1px solid var(--border);
+
+    .pagination-info {
+      font-size: 0.9rem;
+      color: var(--color-secondary);
+    }
   }
 }

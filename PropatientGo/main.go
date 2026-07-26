@@ -7,23 +7,40 @@ import (
 
 	"propatient-api/internal/auth"
 	"propatient-api/internal/database"
-	"propatient-api/internal/handlers"
 	"propatient-api/internal/models"
+	"propatient-api/internal/observability"
+	"propatient-api/internal/referral"
+	"propatient-api/internal/server"
+	"propatient-api/internal/whatsapp"
 	"propatient-api/internal/workers"
 
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
+	sentrygo "github.com/getsentry/sentry-go"
 	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+
+	// Empaqueta la base de datos de husos horarios (IANA) directo en el
+	// binario, para que time.LoadLocation("America/Mazatlan") (ver
+	// auth.FormatSpanishDateTime) funcione sin depender de que la imagen
+	// Docker traiga el paquete "tzdata" del sistema operativo — Alpine (la
+	// imagen base de este proyecto) no lo trae por defecto, y sin esto
+	// LoadLocation fallaría en silencio y los correos/WhatsApp mostrarían
+	// la hora en UTC en vez de la hora local del consultorio.
+	_ "time/tzdata"
 )
 
 func main() {
 	// 1. Cargar variables de entorno
-	//Otro comentairio
 	if err := godotenv.Load(); err != nil {
 		log.Println("Aviso: No se encontró archivo .env, usando variables de entorno del sistema")
 	}
+
+	if os.Getenv("JWT_SECRET") == "" {
+		log.Fatal("Error crítico: la variable de entorno JWT_SECRET no está definida")
+	}
+
+	observability.InitSentry()
+	defer sentrygo.Flush(2 * time.Second)
 
 	// 2. Conexión a DB
 	dsn := os.Getenv("DATABASE_URL")
@@ -37,111 +54,104 @@ func main() {
 	}
 
 	// 3. Automigración y Seed
-	db.AutoMigrate(&models.Doctor{}, &models.Patient{}, &models.MedicalHistory{}, &models.Appointment{}, &models.MedicalDocument{}, &models.DoctorTemplate{})
-	database.SeedDatabase(db)
+	db.AutoMigrate(&models.Doctor{}, &models.Patient{}, &models.MedicalHistory{}, &models.Appointment{}, &models.MedicalDocument{}, &models.DoctorTemplate{}, &models.Staff{}, &models.DoctorStaff{}, &models.SuperAdmin{}, &models.DoctorSchedule{}, &models.DoctorGalleryImage{}, &models.Review{}, &models.PushSubscription{}, &models.Clinic{}, &models.AuditLog{}, &models.AppointmentNoteHistory{}, &models.Cie10Code{}, &models.ConsentRecord{}, &models.Referral{}, &models.ClinicEmailInvite{})
 
-	workers.StartNightClosureWorker(db)
-
-	// 4. Configuración del Router
-	r := gin.Default()
-	r.Static("/uploads", "./uploads")
-	// 5. CORS - DEBE ir antes de cualquier ruta
-	// Esta configuración permite que el navegador valide los permisos antes de enviar el Token
-	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173"}, // URL EXACTA, NO "*"
-		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
-	}))
-	r.RedirectTrailingSlash = true
-	r.RedirectFixedPath = false
-
-	// 6. Grupo de Rutas API
-	api := r.Group("/api")
-	{
-		api.GET("/health", func(c *gin.Context) {
-			c.JSON(200, gin.H{
-				"status":  "ok",
-				"message": "¡Hola! El backend en Docker está vivo 🚀",
-				"db":      "conectada",
-			})
-		})
-
-		// --- RUTAS PÚBLICAS ---
-		authRoutes := api.Group("/auth")
-		{
-			authRoutes.POST("/login", auth.LoginHandler(db))
-			authRoutes.POST("/register", auth.RegisterDoctor(db))
-			authRoutes.POST("/google-login", auth.GoogleLoginHandler(db))
+	// Migración de compatibilidad: Staff dejó de pertenecer a un solo
+	// doctor (columnas doctor_id/active) y ahora se vincula a uno o más
+	// doctores por medio de doctor_staff (ver models.DoctorStaff), para
+	// soportar que una misma cuenta de personal administre varios
+	// consultorios/doctores con un solo login. Si el despliegue anterior
+	// todavía tiene la columna vieja, se respalda el vínculo existente en
+	// doctor_staff antes de eliminarla — así el personal ya invitado no
+	// pierde acceso a su doctor actual.
+	if db.Migrator().HasColumn(&models.Staff{}, "doctor_id") {
+		if err := db.Exec(`
+			INSERT INTO doctor_staff (created_at, doctor_id, staff_id, active)
+			SELECT NOW(), doctor_id, id, COALESCE(active, true) FROM staffs WHERE doctor_id IS NOT NULL
+			ON CONFLICT DO NOTHING
+		`).Error; err != nil {
+			log.Println("Aviso: no se pudo respaldar staffs.doctor_id en doctor_staff:", err)
 		}
-
-		// --- RUTAS PROTEGIDAS ---
-		// Usamos un grupo vacío "" para que las rutas cuelguen de /api/ directamente
-		protected := api.Group("")
-		protected.Use(auth.AuthorizeJWT()) // Este middleware ya tiene el fix del IF OPTIONS
-		{
-			// Dashboard
-			dashboard := protected.Group("/dashboard")
-			{
-				dashboard.GET("/summary", handlers.GetTodaySummary(db))
-				dashboard.GET("/upcoming", handlers.GetUpcomingAppointments(db))
-			}
-
-			users := protected.Group("/user")
-			{
-				users.POST("/update-profile", auth.UpdateProfileHandler(db))
-				users.POST("/update-license", auth.UpdateLicenseHandler(db))
-				users.POST("/update-license-full", auth.UpdateLicenseFullHandler(db))
-				// userRoutes.POST("/verify-cedula", auth.VerifyCedulaHandler(db))
-			}
-
-			// Patients
-			patients := protected.Group("/patients")
-			{
-				patients.GET("", handlers.GetPatients(db))
-				patients.POST("", handlers.CreatePatient(db))
-				patients.GET("/search", handlers.SearchPatients(db))
-				patients.GET("/:id", handlers.GetPatientById(db))
-				patients.GET("/:id/history", handlers.GetPatientMedicalHistory(db))
-				patients.GET("/:id/stats", handlers.GetPatientStats(db))
-				patients.PUT("/:id", handlers.UpdatePatient(db))
-				patients.PUT("/:id/medical-history", handlers.UpdateMedicalHistory(db))
-			}
-
-			// Appointments
-			appointments := protected.Group("/appointments")
-			{
-				// Importante: Usar "" en lugar de "/" para evitar redirecciones 301/307
-				// que el navegador a veces bloquea en CORS.
-				appointments.GET("", handlers.GetAppointments(db))
-				appointments.POST("", handlers.CreateAppointment(db))
-				appointments.GET("/:id", handlers.GetAppointmentDetail(db))
-				appointments.PUT("/:id", handlers.UpdateAppointment(db))
-				appointments.POST("/:id/upload-document", handlers.UploadDocuments(db))
-				appointments.PUT("/:id/documents/:docId", handlers.UpdateAppointmentDocument(db))
-				appointments.POST("/:id/save-recipe-pdf", handlers.SaveRecipePDF(db))
-			}
-
-			// Doctor
-			doctorRoutes := protected.Group("/doctor")
-			{
-				doctorRoutes.GET("/me", handlers.GetCurrentDoctor(db))
-				doctorRoutes.PUT("/me", handlers.UpdateCurrentDoctor(db))
-
-				doctorRoutes.GET("/template", handlers.GetDoctorTemplate(db))
-				doctorRoutes.POST("/template", handlers.SaveDoctorTemplate(db))
-			}
-
-			// Utils
-			utils := protected.Group("/utils")
-			{
-				utils.GET("/specialties", handlers.GetSpecialties)
-			}
+		if err := db.Migrator().DropColumn(&models.Staff{}, "doctor_id"); err != nil {
+			log.Println("Aviso: no se pudo eliminar la columna vieja staffs.doctor_id:", err)
+		}
+	}
+	if db.Migrator().HasColumn(&models.Staff{}, "active") {
+		if err := db.Migrator().DropColumn(&models.Staff{}, "active"); err != nil {
+			log.Println("Aviso: no se pudo eliminar la columna vieja staffs.active:", err)
 		}
 	}
 
-	// 7. Lanzar Servidor
+	// Limpieza de compatibilidad: patients.email ya no debe ser único a nivel
+	// de base de datos (un mismo paciente puede estar vinculado a varios
+	// doctores, y dos pacientes sin correo colisionaban en "" y no se podían
+	// crear). AutoMigrate no elimina índices existentes solo por quitar el
+	// tag "unique" del struct, así que se elimina explícitamente si quedó de
+	// un despliegue anterior. Silencioso si ya no existe.
+	if db.Migrator().HasIndex(&models.Patient{}, "Email") {
+		if err := db.Migrator().DropIndex(&models.Patient{}, "Email"); err != nil {
+			log.Println("Aviso: no se pudo eliminar el índice único viejo de patients.email:", err)
+		}
+	}
+
+	// Migración de compatibilidad para el cobro de suscripción: los doctores
+	// que ya existían antes de esta funcionalidad no tienen TrialEndsAt (el
+	// campo es nuevo). Sin este backfill, billing.RequireActiveSubscription
+	// los bloquearía con 402 en el primer request después de este deploy —
+	// a un doctor que ya estaba usando la app normalmente. Se les da un
+	// periodo de gracia de 30 días desde este deploy para que puedan
+	// suscribirse con tiempo de sobra.
+	if err := db.Exec(
+		"UPDATE doctors SET subscription_status = 'trialing', trial_ends_at = NOW() + INTERVAL '30 days' WHERE trial_ends_at IS NULL",
+	).Error; err != nil {
+		log.Println("Aviso: no se pudo aplicar el periodo de gracia de suscripción a doctores existentes:", err)
+	}
+
+	// Migración de compatibilidad para el sistema de código de invitación:
+	// los doctores que ya existían antes de este campo tienen ReferralCode
+	// vacío. Se rellena en Go (no en SQL crudo) porque cada fila necesita un
+	// valor aleatorio propio y único.
+	var doctorsWithoutCode []models.Doctor
+	if err := db.Select("id").Where("referral_code = ''").Find(&doctorsWithoutCode).Error; err != nil {
+		log.Println("Aviso: no se pudo leer la lista de doctores sin código de invitación:", err)
+	}
+	for _, d := range doctorsWithoutCode {
+		code, err := referral.GenerateCode(db)
+		if err != nil {
+			log.Printf("Aviso: no se pudo generar código de invitación para el doctor %d: %v", d.ID, err)
+			continue
+		}
+		if err := db.Model(&models.Doctor{}).Where("id = ?", d.ID).Update("referral_code", code).Error; err != nil {
+			log.Printf("Aviso: no se pudo asignar código de invitación al doctor %d: %v", d.ID, err)
+		}
+	}
+
+	database.SeedDatabase(db)
+	database.SeedSuperAdmin(db)
+	database.SeedCie10Catalog(db)
+
+	// Cliente de WhatsApp (Twilio): solo se construye si las tres
+	// variables están configuradas. Sin eso, los workers de recordatorio
+	// simplemente no mandan WhatsApp (el correo sigue funcionando igual).
+	whatsappConfig := whatsapp.LoadConfigFromEnv()
+	var whatsappClient whatsapp.Client
+	if whatsappConfig.IsConfigured() {
+		whatsappClient = whatsapp.NewClient(whatsappConfig)
+	}
+
+	whatsappTemplates := whatsapp.LoadTemplatesFromEnv()
+
+	workers.StartNightClosureWorker(db)
+	workers.StartAppointmentReminderWorker(db, auth.SendEmail, whatsappClient, whatsappTemplates)
+	// Recordatorio al doctor: por correo, no WhatsApp — el doctor ya tiene
+	// que entrar a la app para iniciar la consulta, ver el comentario en
+	// workers.StartDoctorReminderWorker.
+	workers.StartDoctorReminderWorker(db, auth.SendEmail)
+
+	// 4. Configuración del Router (rutas, CORS, health check en internal/server)
+	r := server.NewRouter(db)
+
+	// 5. Lanzar Servidor
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8095"

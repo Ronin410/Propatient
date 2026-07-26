@@ -2,10 +2,12 @@ package handlers
 
 import (
 	"fmt"
+	"log"
 	"net/http"
-	"os"
 	"path/filepath"
+	"propatient-api/internal/geocoding"
 	"propatient-api/internal/models"
+	"propatient-api/internal/storage"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -13,7 +15,22 @@ import (
 )
 
 // GetCurrentDoctor devuelve el perfil del doctor autenticado
-func GetCurrentDoctor(db *gorm.DB) gin.HandlerFunc {
+// doctorWithCalendarStatus agrega campos calculados (nunca el token en sí)
+// para que el frontend sepa si mostrar "Conectar" o "Desconectar", y si la
+// aceptación de términos que ya tiene guardada sigue vigente.
+type doctorWithCalendarStatus struct {
+	models.Doctor
+	GoogleCalendarConnected bool `json:"googleCalendarConnected"`
+	// TermsUpToDate es false si el doctor aceptó los Términos/Aviso de
+	// Privacidad alguna vez, pero el aviso legal cambió de versión desde
+	// entonces (ver models.CurrentLegalNoticeVersion). Una sesión ya
+	// abierta usa esto (ver OnboardingGuard.tsx) para detectar que debe
+	// volver a pedir aceptación sin esperar al siguiente login — mismo
+	// cálculo que auth.GoogleLoginHandler hace al iniciar sesión.
+	TermsUpToDate bool `json:"termsUpToDate"`
+}
+
+func GetCurrentDoctor(db *gorm.DB, storageClient storage.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		doctorID := c.MustGet("doctorID").(uint)
 
@@ -23,13 +40,19 @@ func GetCurrentDoctor(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		// GORM ya tiene json:"-" en PasswordHash en tu modelo,
-		// por lo que no se enviará la contraseña.
-		c.JSON(http.StatusOK, doctor)
+		presignDoctorFiles(c.Request.Context(), storageClient, &doctor)
+
+		// GORM ya tiene json:"-" en PasswordHash y en el refresh token de
+		// Google Calendar en el modelo, por lo que nunca se envían.
+		c.JSON(http.StatusOK, doctorWithCalendarStatus{
+			Doctor:                  doctor,
+			GoogleCalendarConnected: doctor.GoogleCalendarRefreshToken != "",
+			TermsUpToDate:           doctor.TermsAcceptedAt != nil && doctor.TermsAcceptedVersion == models.CurrentLegalNoticeVersion,
+		})
 	}
 }
 
-func UpdateCurrentDoctor(db *gorm.DB) gin.HandlerFunc {
+func UpdateCurrentDoctor(db *gorm.DB, storageClient storage.Client, geoClient geocoding.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		doctorID := c.MustGet("doctorID").(uint)
 
@@ -38,44 +61,82 @@ func UpdateCurrentDoctor(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Doctor no encontrado"})
 			return
 		}
+		previousAddress := doctor.Address
 
-		// 1. Crear la carpeta para almacenar las imágenes si no existe (ej: ./uploads/profiles)
-		uploadDir := "./uploads/profiles"
-		if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al preparar el almacenamiento en el servidor"})
-			return
-		}
-
-		// 2. Procesar y guardar el AVATAR (Foto de perfil) si viene en la petición
+		// 1. Procesar y guardar el AVATAR (Foto de perfil) si viene en la petición
 		avatarFile, err := c.FormFile("avatar")
 		if err == nil && avatarFile != nil {
-			// Generar nombre único usando timestamp para evitar sobreescritura
-			ext := filepath.Ext(avatarFile.Filename)
-			avatarName := fmt.Sprintf("doc_%d_avatar_%d%s", doctorID, time.Now().Unix(), ext)
-			avatarPath := filepath.Join(uploadDir, avatarName)
+			if err := storage.ValidateUploadedFile(avatarFile, storage.UploadKindAvatarOrLogo); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
 
-			// Guardar el archivo físicamente en la carpeta del backend
-			if err := c.SaveUploadedFile(avatarFile, avatarPath); err != nil {
+			ext := filepath.Ext(avatarFile.Filename)
+			key := fmt.Sprintf("profiles/doc_%d_avatar_%d%s", doctorID, time.Now().Unix(), ext)
+
+			storedRef, err := storageClient.Save(c.Request.Context(), key, avatarFile)
+			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al guardar la foto de perfil"})
 				return
 			}
-			// Guardar la URL o ruta estática relativa en la base de datos
-			// Nota: Si configuraste archivos estáticos en Gin, la ruta pública limpia sería: "/uploads/profiles/" + avatarName
-			doctor.AvatarUrl = "/uploads/profiles/" + avatarName
+			doctor.AvatarUrl = storedRef
+		} else if c.PostForm("removeAvatar") == "true" && doctor.AvatarUrl != "" {
+			// Quitar sin reemplazar: solo aplica si esta misma petición no
+			// trajo un archivo nuevo (subir uno nuevo ya reemplaza al
+			// anterior, no hace falta borrarlo aparte).
+			if err := storageClient.Delete(c.Request.Context(), doctor.AvatarUrl); err != nil {
+				log.Printf("⚠️ No se pudo borrar el archivo de avatar anterior del doctor %d: %v", doctorID, err)
+			}
+			doctor.AvatarUrl = ""
 		}
 
-		// 3. Procesar y guardar el LOGO de la clínica si viene en la petición
+		// 2. Procesar y guardar el LOGO de la clínica si viene en la petición
 		logoFile, err := c.FormFile("logo")
 		if err == nil && logoFile != nil {
-			ext := filepath.Ext(logoFile.Filename)
-			logoName := fmt.Sprintf("doc_%d_logo_%d%s", doctorID, time.Now().Unix(), ext)
-			logoPath := filepath.Join(uploadDir, logoName)
+			if err := storage.ValidateUploadedFile(logoFile, storage.UploadKindAvatarOrLogo); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
 
-			if err := c.SaveUploadedFile(logoFile, logoPath); err != nil {
+			ext := filepath.Ext(logoFile.Filename)
+			key := fmt.Sprintf("profiles/doc_%d_logo_%d%s", doctorID, time.Now().Unix(), ext)
+
+			storedRef, err := storageClient.Save(c.Request.Context(), key, logoFile)
+			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al guardar el logo de la clínica"})
 				return
 			}
-			doctor.LogoUrl = "/uploads/profiles/" + logoName
+			doctor.LogoUrl = storedRef
+		} else if c.PostForm("removeLogo") == "true" && doctor.LogoUrl != "" {
+			if err := storageClient.Delete(c.Request.Context(), doctor.LogoUrl); err != nil {
+				log.Printf("⚠️ No se pudo borrar el archivo de logo anterior del doctor %d: %v", doctorID, err)
+			}
+			doctor.LogoUrl = ""
+		}
+
+		// 3. Procesar y guardar la FIRMA (imagen de la firma manuscrita del
+		// doctor, estampada en cada receta) si viene en la petición
+		signatureFile, err := c.FormFile("signature")
+		if err == nil && signatureFile != nil {
+			if err := storage.ValidateUploadedFile(signatureFile, storage.UploadKindAvatarOrLogo); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+
+			ext := filepath.Ext(signatureFile.Filename)
+			key := fmt.Sprintf("profiles/doc_%d_signature_%d%s", doctorID, time.Now().Unix(), ext)
+
+			storedRef, err := storageClient.Save(c.Request.Context(), key, signatureFile)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al guardar la firma"})
+				return
+			}
+			doctor.SignatureUrl = storedRef
+		} else if c.PostForm("removeSignature") == "true" && doctor.SignatureUrl != "" {
+			if err := storageClient.Delete(c.Request.Context(), doctor.SignatureUrl); err != nil {
+				log.Printf("⚠️ No se pudo borrar el archivo de firma anterior del doctor %d: %v", doctorID, err)
+			}
+			doctor.SignatureUrl = ""
 		}
 
 		// 4. Leer los campos de texto regulares utilizando PostForm (ya que vienen en multipart)
@@ -86,6 +147,17 @@ func UpdateCurrentDoctor(db *gorm.DB) gin.HandlerFunc {
 		doctor.Address = c.PostForm("address")
 		doctor.RecipeLegend = c.PostForm("recipeLegend")
 		doctor.Resume = c.PostForm("resume")
+
+		// Redes sociales / sitio propio: todos opcionales, se guardan tal
+		// cual (vacío borra el que ya tenía guardado, igual que el resto de
+		// los campos de texto de este formulario).
+		doctor.FacebookUrl = c.PostForm("facebookUrl")
+		doctor.InstagramUrl = c.PostForm("instagramUrl")
+		doctor.LinkedinUrl = c.PostForm("linkedinUrl")
+		doctor.TwitterUrl = c.PostForm("twitterUrl")
+		doctor.TiktokUrl = c.PostForm("tiktokUrl")
+		doctor.YoutubeUrl = c.PostForm("youtubeUrl")
+		doctor.WebsiteUrl = c.PostForm("websiteUrl")
 
 		// Campos opcionales si también los mandas
 		if rfc := c.PostForm("rfc"); rfc != "" {
@@ -98,11 +170,35 @@ func UpdateCurrentDoctor(db *gorm.DB) gin.HandlerFunc {
 			doctor.LicenseNumber = license
 		}
 
+		// Directorio público (landing page): opt-in explícito del doctor.
+		// El slug se genera una sola vez (nunca cambia, para no romper
+		// enlaces ya compartidos).
+		doctor.PublicListed = c.PostForm("publicListed") == "true"
+		doctor.PublicBio = c.PostForm("publicBio")
+		if doctor.PublicListed && doctor.PublicSlug == "" {
+			doctor.PublicSlug = generateDoctorSlug(doctor.FullName, doctor.ID)
+		}
+
+		// Ubicación del consultorio: se guarda siempre que haya dirección
+		// (no solo si está en el directorio público), con el mapa del
+		// perfil como fuente de verdad si el doctor arrastró el pin —
+		// ver geocoding.ResolveCoordinates.
+		lat, lng, geoErr := geocoding.ResolveCoordinates(
+			c.Request.Context(), geoClient, doctor.Address, previousAddress, doctor.Latitude, doctor.Longitude,
+			c.PostForm("latitude"), c.PostForm("longitude"),
+		)
+		if geoErr != nil {
+			log.Printf("⚠️ No se pudo geocodificar la dirección del doctor %d: %v", doctorID, geoErr)
+		}
+		doctor.Latitude, doctor.Longitude = lat, lng
+
 		// 5. Persistir los cambios en la Base de Datos
 		if err := db.Save(&doctor).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo actualizar el perfil"})
 			return
 		}
+
+		presignDoctorFiles(c.Request.Context(), storageClient, &doctor)
 
 		// 6. IMPORTANTE: Devolver el objeto actualizado o las nuevas URLs
 		// para que el FrontEnd las mapee de inmediato en el estado de React
@@ -110,6 +206,7 @@ func UpdateCurrentDoctor(db *gorm.DB) gin.HandlerFunc {
 			"message":          "Perfil actualizado con éxito",
 			"avatarUrl":        doctor.AvatarUrl,
 			"logoUrl":          doctor.LogoUrl,
+			"signatureUrl":     doctor.SignatureUrl,
 			"fullName":         doctor.FullName,
 			"medicalSpecialty": doctor.MedicalSpecialty,
 			"phone":            doctor.Phone,
@@ -117,6 +214,44 @@ func UpdateCurrentDoctor(db *gorm.DB) gin.HandlerFunc {
 			"address":          doctor.Address,
 			"recipeLegend":     doctor.RecipeLegend,
 			"resume":           doctor.Resume,
+			"publicListed":     doctor.PublicListed,
+			"publicBio":        doctor.PublicBio,
+			"publicSlug":       doctor.PublicSlug,
+			"latitude":         doctor.Latitude,
+			"longitude":        doctor.Longitude,
+			"facebookUrl":      doctor.FacebookUrl,
+			"instagramUrl":     doctor.InstagramUrl,
+			"linkedinUrl":      doctor.LinkedinUrl,
+			"twitterUrl":       doctor.TwitterUrl,
+			"tiktokUrl":        doctor.TiktokUrl,
+			"youtubeUrl":       doctor.YoutubeUrl,
+			"websiteUrl":       doctor.WebsiteUrl,
 		})
+	}
+}
+
+// PreviewGeocode ubica una dirección en el mapa sin guardarla todavía —
+// la usa el mapa interactivo del perfil y del registro para centrar el pin
+// cuando el doctor escribe su dirección y presiona "Ubicar en el mapa",
+// antes de que decida arrastrarlo o confirmar el guardado.
+func PreviewGeocode(geoClient geocoding.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		address := c.Query("address")
+		if address == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Falta la dirección a ubicar"})
+			return
+		}
+
+		coords, err := geoClient.Geocode(c.Request.Context(), address)
+		if err != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "No se pudo consultar el servicio de mapas, intenta de nuevo"})
+			return
+		}
+		if coords == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "No pudimos ubicar esa dirección en el mapa"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"latitude": coords.Latitude, "longitude": coords.Longitude})
 	}
 }

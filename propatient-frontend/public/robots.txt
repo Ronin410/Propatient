@@ -1,0 +1,7 @@
+# Todo el sitio público es indexable; el dashboard vive detrás de sesión
+# (/inicio, /pacientes, /calendar, etc.) y Google nunca podría entrar ahí de
+# todas formas, así que no hace falta bloquearlo explícitamente aquí.
+User-agent: *
+Allow: /
+
+Sitemap: https://propatient.pro/sitemap.xml

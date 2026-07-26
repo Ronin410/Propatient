@@ -1,9 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import axios from 'axios';
 import api from '../api/axios';
-import type { Patient } from '../types';
+import type { Patient, WeekSchedule } from '../types';
 import { Popup } from '../components/Popup'; // Asegura la ruta correcta de tu componente genérico
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { SlotPicker } from '../components/SlotPicker';
+import { getErrorMessage } from '../utils/errorMessage';
+import { sanitizePhoneInput } from '../utils/phoneInput';
+import { zonedTimeToUtc, nowInAppTimezone } from '../utils/appointmentSlots';
+import { APP_TIMEZONE } from '../utils/dateFormatter';
 import './AppointmentForm.scss';
+
+// true si el doctor configuró al menos un día con horario habilitado.
+function hasConfiguredSchedule(schedule: WeekSchedule | null): schedule is WeekSchedule {
+  if (!schedule) return false;
+  return Object.values(schedule).some((d) => d?.enabled);
+}
+
+interface DuplicatePatient {
+  id: number;
+  firstName: string;
+  lastName: string;
+}
 
 export const AppointmentForm: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -19,6 +38,7 @@ export const AppointmentForm: React.FC = () => {
   const [observations, setObservations] = useState('');
   const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(false);
+  const [duplicatePatient, setDuplicatePatient] = useState<DuplicatePatient | null>(null);
 
   // Estado para la búsqueda de pacientes
   const [searchTerm, setSearchTerm] = useState('');
@@ -37,7 +57,28 @@ export const AppointmentForm: React.FC = () => {
   const now = new Date();
   const tzOffset = now.getTimezoneOffset() * 60000;
   const minDateTime = new Date(now.getTime() - tzOffset).toISOString().slice(0, 16);
+  // Fallback de siempre (<input type="datetime-local"> libre): solo se usa
+  // si el doctor nunca configuró un horario (ver schedule más abajo).
   const [dateTime, setDateTime] = useState('');
+
+  // Horario del consultorio, para el selector de horarios de 30 en 30
+  // minutos (ver SlotPicker) — null mientras carga o si nunca se configuró.
+  const [schedule, setSchedule] = useState<WeekSchedule | null>(null);
+  const [scheduleLoaded, setScheduleLoaded] = useState(false);
+  const [slotDateKey, setSlotDateKey] = useState(() => nowInAppTimezone().dateKey);
+  const [slotTime, setSlotTime] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.get('/doctor/schedule')
+      .then((res) => {
+        if (res.data?.configured) setSchedule(res.data.days);
+      })
+      .catch(() => {
+        // Sin horario configurado o sin permiso: se usa el datetime-local
+        // libre de siempre, no bloquea el agendado.
+      })
+      .finally(() => setScheduleLoaded(true));
+  }, []);
 
   // Carga inicial si viene un ID de paciente por URL
   useEffect(() => {
@@ -78,8 +119,39 @@ export const AppointmentForm: React.FC = () => {
     return () => clearTimeout(delayDebounce);
   }, [searchTerm, mode]);
 
+  const bookAppointment = async (patientId: number) => {
+    const appointmentDateTime = hasConfiguredSchedule(schedule) && slotTime
+      ? zonedTimeToUtc(slotDateKey, slotTime, APP_TIMEZONE).toISOString()
+      : new Date(dateTime).toISOString();
+
+    await api.post('/appointments', {
+      patientId,
+      appointmentDateTime,
+      service: reason,                                       // ✨ Cambiado de reason a service (asumiendo que guardas el motivo aquí)
+      observations: observations
+    });
+
+    setPopupConfig({
+      isOpen: true,
+      type: 'success',
+      title: 'Cita Agendada',
+      message: 'La cita médica se ha registrado exitosamente en la agenda del consultorio.'
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (hasConfiguredSchedule(schedule) && !slotTime) {
+      setPopupConfig({
+        isOpen: true,
+        type: 'error',
+        title: 'Falta el horario',
+        message: 'Elige un horario disponible para la cita.'
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -87,8 +159,19 @@ export const AppointmentForm: React.FC = () => {
 
       // Si es modo manual, primero registramos al nuevo paciente
       if (mode === 'manual') {
-        const patientRes = await api.post('/patients', newPatient);
-        patientId = patientRes.data.id;
+        try {
+          const patientRes = await api.post('/patients', newPatient);
+          patientId = patientRes.data.id;
+        } catch (err) {
+          // El paciente ya existe en el sistema (de otro doctor): esperamos
+          // a que el doctor confirme si quiere vincularlo antes de continuar.
+          if (axios.isAxiosError(err) && err.response?.status === 409 && err.response.data?.error === 'patient_exists') {
+            setDuplicatePatient(err.response.data.patient);
+            setLoading(false);
+            return;
+          }
+          throw err;
+        }
       }
 
       if (!patientId) {
@@ -102,31 +185,37 @@ export const AppointmentForm: React.FC = () => {
         return;
       }
 
-      // Agendar la cita médica
-      await api.post('/appointments', {
-        patientId,
-        appointmentDateTime: new Date(dateTime).toISOString(), // ✨ Cambiado de dateTime a appointmentDateTime
-        service: reason,                                       // ✨ Cambiado de reason a service (asumiendo que guardas el motivo aquí)
-        observations: observations
-      });
-      
-      setPopupConfig({
-        isOpen: true,
-        type: 'success',
-        title: 'Cita Agendada',
-        message: 'La cita médica se ha registrado exitosamente en la agenda del consultorio.'
-      });
-
-    } catch (err: any) {
+      await bookAppointment(patientId);
+    } catch (err: unknown) {
       console.error(err);
       setPopupConfig({
         isOpen: true,
         type: 'error',
         title: 'Error de Registro',
-        message: err.response?.data?.error || 'No se pudo agendar la cita médica. Verifica los datos.'
+        message: getErrorMessage(err, 'No se pudo agendar la cita médica. Verifica los datos.')
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleConfirmLink = async () => {
+    if (!duplicatePatient) return;
+    setLoading(true);
+    try {
+      await api.post(`/patients/${duplicatePatient.id}/link`);
+      await bookAppointment(duplicatePatient.id);
+    } catch (err: unknown) {
+      console.error(err);
+      setPopupConfig({
+        isOpen: true,
+        type: 'error',
+        title: 'Error de Registro',
+        message: getErrorMessage(err, 'No se pudo completar el registro con el paciente vinculado.')
+      });
+    } finally {
+      setLoading(false);
+      setDuplicatePatient(null);
     }
   };
 
@@ -205,7 +294,7 @@ export const AppointmentForm: React.FC = () => {
                   {searchResults.length > 0 && (
                     <ul className="search-results">
                       {searchResults.map((p) => (
-                        <li key={p.ID} onClick={() => { setSelectedPatient(p); setSearchResults([]); setSearchTerm(''); }}>
+                        <li key={p.id} onClick={() => { setSelectedPatient(p); setSearchResults([]); setSearchTerm(''); }}>
                           <span className="material-icons-outlined">assignment_ind</span>
                           <div className="result-info">
                             <span className="name">{p.firstName} {p.lastName}</span>
@@ -243,7 +332,7 @@ export const AppointmentForm: React.FC = () => {
                 <input
                   type="tel"
                   value={newPatient.phone}
-                  onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })}
+                  onChange={(e) => setNewPatient({ ...newPatient, phone: sanitizePhoneInput(e.target.value) })}
                 />
               </div>
               <div className="form-group">
@@ -265,14 +354,36 @@ export const AppointmentForm: React.FC = () => {
           <div className="form-grid">
             <div className="form-group">
               <label htmlFor="datetime">Fecha y Hora Programada</label>
-              <input
-                id="datetime"
-                type="datetime-local"
-                value={dateTime}
-                onChange={(e) => setDateTime(e.target.value)}
-                min={minDateTime}
-                required
-              />
+              {scheduleLoaded && hasConfiguredSchedule(schedule) ? (
+                <>
+                  <SlotPicker
+                    schedule={schedule}
+                    dateKey={slotDateKey}
+                    onDateChange={(k) => { setSlotDateKey(k); setSlotTime(null); }}
+                    selectedTime={slotTime}
+                    onSelectTime={setSlotTime}
+                  />
+                  <span className="field-hint">
+                    Horarios de 30 minutos según el{' '}
+                    <Link to="/horario">horario de atención configurado</Link>. Se pueden agendar varias citas en el mismo horario.
+                  </span>
+                </>
+              ) : (
+                <>
+                  <input
+                    id="datetime"
+                    type="datetime-local"
+                    value={dateTime}
+                    onChange={(e) => setDateTime(e.target.value)}
+                    min={minDateTime}
+                    required
+                  />
+                  <span className="field-hint">
+                    Solo se puede agendar dentro del{' '}
+                    <Link to="/horario">horario de atención configurado</Link>.
+                  </span>
+                </>
+              )}
             </div>
 
             <div className="form-group">
@@ -316,6 +427,16 @@ export const AppointmentForm: React.FC = () => {
         title={popupConfig.title}
         message={popupConfig.message}
         onClose={handlePopupClose}
+      />
+
+      <ConfirmDialog
+        isOpen={!!duplicatePatient}
+        title="Paciente ya registrado"
+        message={`Ya existe un paciente registrado con este correo: ${duplicatePatient?.firstName || ''} ${duplicatePatient?.lastName || ''}. ¿Deseas vincularlo a tu lista (podrás ver sus antecedentes) y agendar la cita con él?`}
+        confirmText="Sí, vincular y agendar"
+        cancelText="Cancelar"
+        onConfirm={handleConfirmLink}
+        onCancel={() => setDuplicatePatient(null)}
       />
     </div>
   );

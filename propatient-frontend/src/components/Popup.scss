@@ -12,7 +12,7 @@
   animation: popupFadeIn 0.2s ease-out;
 
   .custom-popup-content {
-    background-color: #ffffff;
+    background-color: var(--bg);
     padding: 32px;
     border-radius: 12px;
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
@@ -24,23 +24,23 @@
     .popup-icon {
       font-size: 56px;
       margin-bottom: 16px;
-      
-      &.icon-success { color: #2e7d32; }
-      &.icon-error { color: #d32f2f; }
-      &.icon-warning { color: #f57c00; }
-      &.icon-info { color: #0288d1; }
+
+      &.icon-success { color: var(--color-success); }
+      &.icon-error { color: var(--color-danger); }
+      &.icon-warning { color: var(--color-warning); }
+      &.icon-info { color: var(--color-primary); }
     }
 
     h3 {
       font-size: 20px;
       font-weight: 700;
-      color: #002d42; // Tu azul oscuro de la app
+      color: var(--color-heading); // Tu azul oscuro de la app
       margin: 0 0 8px 0;
     }
 
     p {
       font-size: 14px;
-      color: #6e7582;
+      color: var(--color-secondary);
       line-height: 1.5;
       margin: 0 0 24px 0;
     }
@@ -57,11 +57,11 @@
       width: 100%;
 
       &:hover { opacity: 0.9; }
-      
-      &.btn-success { background-color: #2e7d32; }
-      &.btn-error { background-color: #d32f2f; }
-      &.btn-warning { background-color: #f57c00; }
-      &.btn-info { background-color: #002d42; }
+
+      &.btn-success { background-color: var(--color-success); }
+      &.btn-error { background-color: var(--color-danger); }
+      &.btn-warning { background-color: var(--color-warning); }
+      &.btn-info { background-color: var(--color-primary-dark); }
     }
   }
 }

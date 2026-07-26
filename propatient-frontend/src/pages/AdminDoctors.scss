@@ -1,0 +1,278 @@
+// Misma paleta oscura fija que AdminPendingDoctors.scss — herramienta
+// interna, no el producto de cara al doctor.
+.admin-doctors-page {
+  min-height: 100vh;
+  background: #10151c;
+  color: #e2e8f0;
+}
+
+.admin-pending-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.2rem;
+  padding: 1.2rem 2rem;
+  border-bottom: 1px solid #2a3441;
+  flex-wrap: wrap;
+
+  h1 {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 1.15rem;
+    margin: 0;
+    color: #f1f5f9;
+  }
+}
+
+.admin-nav {
+  display: flex;
+  gap: 0.4rem;
+  margin-right: auto;
+
+  a {
+    padding: 0.5rem 0.9rem;
+    border-radius: 8px;
+    color: #94a3b8;
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+
+    &:hover { color: #f1f5f9; }
+
+    &.active {
+      color: #f1f5f9;
+      background: #1a212c;
+      border-color: #2a3441;
+    }
+  }
+}
+
+.admin-logout-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: 1px solid #2a3441;
+  color: #94a3b8;
+  padding: 0.5rem 0.9rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+
+  &:hover { color: #f1f5f9; border-color: #475569; }
+}
+
+.admin-doctors-body {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.admin-pending-status {
+  color: #64748b;
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.admin-pending-error {
+  color: #f87171;
+}
+
+.admin-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+}
+
+.admin-overview-card {
+  background: #1a212c;
+  border: 1px solid #2a3441;
+  border-radius: 12px;
+  padding: 1.1rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+
+  .overview-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #f1f5f9;
+  }
+
+  .overview-label {
+    font-size: 0.78rem;
+    color: #94a3b8;
+  }
+
+  &.warn .overview-value { color: #fbbf24; }
+}
+
+.admin-doctors-table-wrapper {
+  background: #1a212c;
+  border: 1px solid #2a3441;
+  border-radius: 12px;
+  padding: 0.5rem;
+  overflow-x: auto;
+}
+
+.admin-doctors-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+
+  th {
+    padding: 0.9rem 1rem;
+    color: #94a3b8;
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    border-bottom: 1px solid #2a3441;
+  }
+
+  td {
+    padding: 0.9rem 1rem;
+    border-bottom: 1px solid #232c38;
+    font-size: 0.88rem;
+    color: #cbd5e1;
+    vertical-align: top;
+  }
+
+  tr:last-child td { border-bottom: none; }
+
+  .doctor-name { font-weight: 600; color: #f1f5f9; }
+  .doctor-email { font-size: 0.8rem; color: #94a3b8; }
+  .doctor-clinic-tag { font-size: 0.75rem; color: #38bdf8; margin-top: 2px; }
+
+  .stats-total { font-weight: 600; color: #f1f5f9; }
+  .stats-breakdown { font-size: 0.78rem; color: #94a3b8; }
+}
+
+.admin-grant-disabled {
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.admin-grant-btn {
+  background: none;
+  border: 1px solid #2a3441;
+  color: #38bdf8;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover { border-color: #38bdf8; }
+}
+
+.admin-grant-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+
+  input[type='date'] {
+    background: #10151c;
+    border: 1px solid #2a3441;
+    color: #e2e8f0;
+    border-radius: 6px;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.8rem;
+  }
+}
+
+.admin-grant-buttons {
+  display: flex;
+  gap: 0.5rem;
+
+  button {
+    border-radius: 6px;
+    padding: 0.35rem 0.7rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+
+    &:disabled { opacity: 0.6; cursor: not-allowed; }
+  }
+
+  .admin-grant-confirm {
+    background: #14532d;
+    color: #4ade80;
+    border-color: #1e6b3a;
+  }
+
+  .admin-grant-cancel {
+    background: none;
+    color: #94a3b8;
+    border-color: #2a3441;
+  }
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+
+  &.cedula-pendiente { background: #3f2d0f; color: #fbbf24; }
+  &.cedula-capturada { background: #1e3a5f; color: #38bdf8; }
+  &.cedula-validada { background: #14532d; color: #4ade80; }
+
+  &.sub-trialing { background: #1e3a5f; color: #38bdf8; }
+  &.sub-active { background: #14532d; color: #4ade80; }
+  &.sub-past_due, &.sub-canceled { background: #4c1d1d; color: #f87171; }
+  &.sub-incomplete { background: #2a3441; color: #94a3b8; }
+  &.sub-clinic { background: #3b2d5f; color: #c4b5fd; }
+}
+
+.admin-sub-date {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+// En celular, la tabla de 5 columnas se apila igual que se resolvió antes
+// en StaffManagement.scss: etiqueta arriba, valor abajo, para que nada se
+// corte fuera de la pantalla.
+@media (max-width: 700px) {
+  .admin-doctors-table {
+    thead { display: none; }
+
+    tbody, tr, td { display: block; width: 100%; }
+
+    tr {
+      border: 1px solid #2a3441;
+      border-radius: 8px;
+      margin-bottom: 12px;
+    }
+
+    td {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+      padding: 10px 12px;
+      border-bottom: 1px solid #232c38;
+      text-align: left;
+
+      &::before {
+        content: attr(data-label);
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: #64748b;
+      }
+
+      &:last-child { border-bottom: none; }
+    }
+  }
+}

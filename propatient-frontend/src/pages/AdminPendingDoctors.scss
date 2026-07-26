@@ -1,0 +1,180 @@
+// Misma paleta neutra/oscura fija que AdminLogin.scss, a propósito: esta
+// pantalla es una herramienta interna, no el producto de cara al doctor.
+.admin-pending-page {
+  min-height: 100vh;
+  background: #10151c;
+  color: #e2e8f0;
+}
+
+.admin-pending-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.2rem;
+  padding: 1.2rem 2rem;
+  border-bottom: 1px solid #2a3441;
+  flex-wrap: wrap;
+
+  h1 {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 1.15rem;
+    margin: 0;
+    color: #f1f5f9;
+  }
+}
+
+.admin-nav {
+  display: flex;
+  gap: 0.4rem;
+  margin-right: auto;
+
+  a {
+    padding: 0.5rem 0.9rem;
+    border-radius: 8px;
+    color: #94a3b8;
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+
+    &:hover { color: #f1f5f9; }
+
+    &.active {
+      color: #f1f5f9;
+      background: #1a212c;
+      border-color: #2a3441;
+    }
+  }
+}
+
+.admin-logout-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: 1px solid #2a3441;
+  color: #94a3b8;
+  padding: 0.5rem 0.9rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+
+  &:hover { color: #f1f5f9; border-color: #475569; }
+}
+
+.admin-pending-body {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.admin-pending-status {
+  color: #64748b;
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.admin-pending-error {
+  color: #f87171;
+}
+
+.admin-doctor-card {
+  background: #1a212c;
+  border: 1px solid #2a3441;
+  border-radius: 12px;
+  padding: 1.5rem;
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 1.5rem;
+
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.admin-doctor-info {
+  h2 { margin: 0 0 0.2rem 0; color: #f1f5f9; font-size: 1.05rem; }
+  p { margin: 0 0 0.8rem 0; color: #94a3b8; font-size: 0.85rem; }
+
+  dl {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem 1rem;
+    margin: 0 0 1rem 0;
+
+    div { display: flex; flex-direction: column; }
+    dt { font-size: 0.7rem; text-transform: uppercase; color: #64748b; letter-spacing: 0.03em; }
+    dd { margin: 0; font-size: 0.9rem; color: #cbd5e1; }
+  }
+
+  .admin-ine-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: #38bdf8;
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+
+    &:hover { text-decoration: underline; }
+  }
+
+  .admin-ine-missing {
+    color: #f87171;
+    font-size: 0.85rem;
+    margin: 0;
+  }
+}
+
+.admin-doctor-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+
+  textarea {
+    flex: 1;
+    min-height: 80px;
+    resize: vertical;
+    padding: 0.6rem 0.8rem;
+    border-radius: 8px;
+    border: 1px solid #2a3441;
+    background: #10151c;
+    color: #e2e8f0;
+    font-size: 0.85rem;
+    font-family: inherit;
+
+    &:focus { outline: none; border-color: #475569; }
+  }
+}
+
+.admin-doctor-buttons {
+  display: flex;
+  gap: 0.6rem;
+
+  button {
+    flex: 1;
+    padding: 0.6rem;
+    border-radius: 8px;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+}
+
+.admin-btn-approve {
+  background: #16a34a;
+  color: #f0fdf4;
+  &:hover { background: #15803d; }
+}
+
+.admin-btn-reject {
+  background: #2a3441;
+  color: #f1f5f9;
+  &:hover { background: #3a4657; }
+}

@@ -47,7 +47,7 @@ export const SettingsNotes: React.FC = () => {
     setConfigList(configList.filter(item => item.id !== id));
   };
 
-  const updateField = (id: string, key: keyof NoteSectionConfig, value: any) => {
+  const updateField = (id: string, key: keyof NoteSectionConfig, value: string | boolean) => {
     setConfigList(configList.map(item => item.id === id ? { ...item, [key]: value } : item));
   };
 

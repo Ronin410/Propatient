@@ -3,6 +3,10 @@
   max-width: 1300px;
   margin: 0 auto;
 
+  @media (max-width: 600px) {
+    padding: 1rem;
+  }
+
   .calendar-header {
     display: flex;
     justify-content: space-between;
@@ -28,8 +32,9 @@
     .calendar-controls {
       display: flex;
       align-items: center;
+      flex-wrap: wrap;
       gap: 1rem;
-      background: #ffffff;
+      background: var(--bg);
       padding: 0.4rem 0.8rem;
       border-radius: 8px;
       border: 1px solid rgba(0, 0, 0, 0.05);
@@ -42,21 +47,26 @@
         margin: 0;
         min-width: 160px;
         text-align: center;
+
+        @media (max-width: 480px) {
+          min-width: 0;
+          font-size: 0.95rem;
+        }
       }
 
       .btn-today {
-        background: #f1f3f5;
+        background: var(--bg-subtle);
         border: none;
         padding: 0.5rem 1rem;
         border-radius: 6px;
         font-size: 0.85rem;
         font-weight: 600;
-        color: #495057;
+        color: var(--text);
         cursor: pointer;
         transition: all 0.2s ease;
 
         &:hover {
-          background: #e9ecef;
+          background: var(--bg-alt);
           color: var(--color-dark);
         }
       }
@@ -64,7 +74,7 @@
       .btn-icon {
         background: transparent;
         border: none;
-        color: #6c757d;
+        color: var(--color-secondary);
         cursor: pointer;
         display: flex;
         align-items: center;
@@ -74,7 +84,7 @@
         transition: all 0.2s ease;
 
         &:hover {
-          background: #f1f3f5;
+          background: var(--bg-subtle);
           color: var(--color-dark);
         }
       }
@@ -83,7 +93,7 @@
     /* Toggle de vista Mes / Semana */
     .view-mode-toggle {
       display: flex;
-      background: #e9ecef;
+      background: var(--bg-alt);
       padding: 4px;
       border-radius: 8px;
       
@@ -95,14 +105,36 @@
         font-weight: 600;
         font-size: 0.85rem;
         background: transparent;
-        color: #6c757d;
+        color: var(--color-secondary);
         transition: all 0.2s;
 
         &.active {
-          background: #ffffff;
+          background: var(--bg);
           color: var(--color-primary);
           box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
         }
+      }
+    }
+
+    /* Filtro de estado de citas */
+    .status-filter-select {
+      background: var(--bg-subtle);
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.2s ease;
+
+      &:hover {
+        background: var(--bg-alt);
+      }
+
+      &:focus {
+        outline: none;
+        box-shadow: 0 0 0 2px rgba(0, 80, 115, 0.2);
       }
     }
 
@@ -128,7 +160,7 @@
 
   /* Contenedor global del Calendario */
   .card-layout {
-    background: #ffffff;
+    background: var(--bg);
     border-radius: 12px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
     border: 1px solid rgba(0, 0, 0, 0.05);
@@ -138,38 +170,57 @@
   .calendar-weekdays {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    background-color: #f8f9fa;
-    border-bottom: 1px solid #f1f3f5;
+    background-color: var(--bg-subtle);
+    border-bottom: 1px solid var(--border);
     text-align: center;
     font-weight: 600;
     font-size: 0.85rem;
-    color: #6c757d;
+    color: var(--color-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 
     div {
       padding: 1rem 0.5rem;
+      // Los items de un grid no se encogen debajo de su contenido por
+      // defecto (min-width: auto implícito) aunque la columna sea "1fr" —
+      // sin esto, "MIÉ" o "SÁB" empujan las 7 columnas más anchas que la
+      // pantalla en vez de quedarse dentro del ancho disponible.
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+
+      @media (max-width: 600px) {
+        padding: 0.6rem 0.2rem;
+        font-size: 0.7rem;
+      }
     }
   }
 
   .calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    background-color: #f1f3f5; // Funciona como el color de las líneas divisorias
+    background-color: var(--border); // Funciona como el color de las líneas divisorias
     gap: 1px;
   }
 
   .calendar-day {
-    background-color: #ffffff;
+    background-color: var(--bg);
     min-height: 120px;
+    min-width: 0; // mismo motivo que arriba: deja que las 7 columnas se encojan de verdad
     padding: 0.6rem;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
     transition: background-color 0.15s ease;
 
+    @media (max-width: 600px) {
+      min-height: 64px;
+      padding: 0.3rem;
+    }
+
     &.empty {
-      background-color: #f8f9fa;
+      background-color: var(--bg-subtle);
     }
 
     &.today {
@@ -193,12 +244,25 @@
       min-height: 320px;
     }
 
+    &.clickable {
+      cursor: pointer;
+
+      &:hover {
+        background-color: var(--bg-subtle);
+      }
+    }
+
     .day-number {
       font-size: 0.85rem;
       font-weight: 600;
-      color: #495057;
+      color: var(--text);
       margin-bottom: 0.6rem;
       display: block;
+
+      @media (max-width: 600px) {
+        font-size: 0.7rem;
+        margin-bottom: 0.2rem;
+      }
     }
 
     .day-events {
@@ -220,14 +284,19 @@
       font-weight: 500;
       padding: 5px 8px;
       border-radius: 6px;
-      background: #eef2ff;
-      color: #4338ca;
-      border-left: 3px solid #4338ca;
+      background: var(--accent-bg);
+      color: var(--accent);
+      border-left: 3px solid var(--accent);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       cursor: pointer;
       transition: transform 0.1s ease, box-shadow 0.15s ease;
+
+      @media (max-width: 600px) {
+        font-size: 0.62rem;
+        padding: 3px 4px;
+      }
 
       &:hover {
         transform: translateY(-1px);
@@ -235,15 +304,30 @@
       }
       
       &.pending {
-        background: #fffbeb;
-        color: #b45309;
-        border-left-color: #f59e0b;
+        background: var(--color-warning-bg);
+        color: var(--color-warning);
+        border-left-color: var(--color-warning);
       }
       
       &.completed {
-        background: #f0fdf4;
-        color: #166534;
-        border-left-color: #22c55e;
+        background: var(--color-success-bg);
+        color: var(--color-success);
+        border-left-color: var(--color-success);
+      }
+    }
+
+    /* "+N más": indica que la celda tiene más citas de las que se
+       muestran (ver MAX_VISIBLE_EVENTS) — clic abre el detalle del día. */
+    .event-more {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--color-secondary);
+      padding: 3px 8px;
+      cursor: pointer;
+
+      &:hover {
+        color: var(--color-primary);
+        text-decoration: underline;
       }
     }
   }
@@ -254,5 +338,218 @@
     color: var(--color-secondary);
     font-size: 1.1rem;
     font-weight: 500;
+  }
+}
+
+/* Panel "todas las citas del día" — se abre al elegir un día en la vista
+   de mes (ver dayViewDate en AppointmentCalendar.tsx). Mismo patrón visual
+   de overlay que ConfirmDialog, pero con una lista en vez de un mensaje. */
+.day-view-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 900;
+  padding: 1rem;
+
+  .day-view-content {
+    background-color: var(--bg);
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    max-width: 420px;
+    width: 100%;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .day-view-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.2rem 1.4rem;
+    border-bottom: 1px solid var(--border);
+
+    h3 {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--color-heading);
+      text-transform: capitalize;
+    }
+
+    .btn-icon {
+      background: transparent;
+      border: none;
+      color: var(--color-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.3rem;
+      border-radius: 6px;
+
+      &:hover {
+        background: var(--bg-subtle);
+        color: var(--color-dark);
+      }
+    }
+  }
+
+  .day-view-list {
+    padding: 1rem 1.4rem 1.4rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    .day-view-empty {
+      color: var(--color-secondary);
+      text-align: center;
+      padding: 1rem 0;
+    }
+
+    .event-tag {
+      font-size: 0.85rem;
+      font-weight: 500;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: var(--accent-bg);
+      color: var(--accent);
+      border-left: 3px solid var(--accent);
+      cursor: pointer;
+      transition: transform 0.1s ease, box-shadow 0.15s ease;
+
+      &:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+      }
+
+      &.pending {
+        background: var(--color-warning-bg);
+        color: var(--color-warning);
+        border-left-color: var(--color-warning);
+      }
+
+      &.completed {
+        background: var(--color-success-bg);
+        color: var(--color-success);
+        border-left-color: var(--color-success);
+      }
+    }
+  }
+}
+
+/* Modal de "cita próxima" (cancelar/reprogramar) — se abre al elegir una
+   cita PENDING de un día futuro (ver manageApp en AppointmentCalendar.tsx),
+   ya que ese día no se puede "iniciar consulta" todavía. Mismo lenguaje
+   visual que .day-view-overlay de arriba y que el modal de reprogramar de
+   AppointmentTracking.scss (pero con sus propias clases, ese archivo las
+   deja scoped a .tracking-page). */
+.manage-appt-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+  padding: 1rem;
+
+  .manage-appt-content {
+    background-color: var(--bg);
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    max-width: 420px;
+    width: 100%;
+    padding: 1.6rem;
+    text-align: center;
+  }
+
+  .manage-appt-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 1rem;
+
+    .alert-icon {
+      font-size: 40px;
+      color: var(--color-primary);
+      margin-bottom: 0.6rem;
+    }
+
+    h3 {
+      margin: 0;
+      color: var(--color-heading);
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+  }
+
+  p {
+    font-size: 0.9rem;
+    color: var(--color-secondary);
+    line-height: 1.6;
+    margin: 0 0 1.4rem 0;
+
+    strong { color: var(--color-heading); }
+  }
+
+  .manage-appt-datetime-input {
+    width: 100%;
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--color-heading);
+    margin-bottom: 1rem;
+    box-sizing: border-box;
+  }
+
+  .manage-appt-error {
+    color: var(--color-danger);
+    font-size: 0.85rem;
+    margin: -0.6rem 0 1rem 0 !important;
+  }
+
+  .manage-appt-actions {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+
+    .btn-text {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--color-secondary);
+      padding: 0.6rem 1rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+
+      &:hover { background-color: var(--bg-subtle); }
+
+      &.danger {
+        color: var(--color-danger);
+        border-color: var(--color-danger);
+
+        &:hover { background-color: var(--color-danger-bg); }
+      }
+    }
+
+    .btn-primary {
+      padding: 0.6rem 1.2rem;
+    }
   }
 }

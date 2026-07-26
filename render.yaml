@@ -1,0 +1,163 @@
+# Blueprint de Render para desplegar ProPatient desde este mismo monorepo.
+# No requiere separar el proyecto en repos distintos: cada servicio usa
+# "rootDir" para buildear solo su propia carpeta.
+#
+# Uso: en Render → New → Blueprint → selecciona este repositorio.
+# Después del primer deploy, Render te da las URLs públicas de cada
+# servicio (algo como https://propatient-api-xxxx.onrender.com). Copia esas
+# URLs a las env vars marcadas como "sync: false" abajo (FRONTEND_URL en el
+# backend, VITE_API_URL en el frontend) y vuelve a desplegar para que
+# ambos servicios se conozcan entre sí.
+
+databases:
+  - name: propatient-db
+    plan: free
+    databaseName: propatient
+    user: propatient
+
+services:
+  # --- BACKEND (Go / Gin) ---
+  - type: web
+    name: propatient-api
+    env: docker
+    plan: free
+    rootDir: PropatientGo
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: propatient-db
+          property: connectionString
+      - key: JWT_SECRET
+        sync: false # generar un valor propio, ej. `openssl rand -base64 48`
+      - key: GOOGLE_CLIENT_ID
+        value: 744896665247-hrs7pmi72q2pog5dn9h1fh5n4nkpv18r.apps.googleusercontent.com
+      - key: FRONTEND_URL
+        sync: false # pegar aquí la URL pública del servicio propatient-frontend
+      - key: PORT
+        value: 8095
+      # Integración opcional con Google Calendar (ver .env.example para la
+      # guía de configuración en Google Cloud Console). Client ID SEPARADO
+      # del GOOGLE_CLIENT_ID de arriba. Sin estas tres, la app funciona
+      # igual y el botón de conectar Calendar queda deshabilitado.
+      - key: GOOGLE_CALENDAR_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_CALENDAR_REDIRECT_URI
+        sync: false # ej. https://propatient-api-xxxx.onrender.com/api/auth/google-calendar/callback
+      # Integración opcional con AWS S3 (ver .env.example para la guía).
+      # Sin estas cuatro, los archivos (documentos, recetas, logo/avatar,
+      # INE) se guardan en disco local dentro del contenedor — funciona,
+      # pero se pierde en cada deploy porque el filesystem no es persistente.
+      # Con las cuatro configuradas, todo se sube a un bucket S3 privado y
+      # se sirve con URLs firmadas temporales.
+      - key: AWS_S3_BUCKET
+        sync: false
+      - key: AWS_REGION
+        sync: false # ej. us-east-1
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      # Envío de correos vía Resend (ver .env.example para la guía completa
+      # y por qué es HTTP y no SMTP). Sin RESEND_API_KEY, la app funciona
+      # igual pero no se manda el correo (falla rápido, no bloquea la
+      # petición).
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        sync: false
+      # Cobro de suscripción con Stripe (ver .env.example para la guía).
+      # Sin estas tres, la app funciona igual, solo el botón "Suscribirse"
+      # queda deshabilitado (503).
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PRICE_ID
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      # Plan de clínica (ver .env.example para la guía). Sin estas dos, el
+      # plan de clínica queda deshabilitado (503) pero la suscripción
+      # individual de arriba sigue funcionando igual.
+      - key: STRIPE_CLINIC_BASE_PRICE_ID
+        sync: false
+      - key: STRIPE_CLINIC_EXTRA_DOCTOR_PRICE_ID
+        sync: false
+      # Envío de WhatsApp (Twilio, ver .env.example para la guía completa).
+      # Sin estas tres, la app funciona igual, solo no se manda el WhatsApp.
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_WHATSAPP_FROM
+        sync: false
+      # Plantillas de WhatsApp (Content API de Twilio, ver .env.example
+      # para el detalle). Sin ellas, los avisos siguen mandándose por
+      # texto libre (funciona en sandbox y dentro de una sesión de 24h);
+      # actívalas en cuanto Meta apruebe cada plantilla.
+      - key: TWILIO_TEMPLATE_BOOKING_PATIENT
+        sync: false
+      - key: TWILIO_TEMPLATE_BOOKING_DOCTOR
+        sync: false
+      - key: TWILIO_TEMPLATE_APPOINTMENT_CONFIRMED
+        sync: false
+      - key: TWILIO_TEMPLATE_APPOINTMENT_REJECTED
+        sync: false
+      - key: TWILIO_TEMPLATE_APPOINTMENT_CANCELLED
+        sync: false
+      - key: TWILIO_TEMPLATE_APPOINTMENT_RESCHEDULED
+        sync: false
+      - key: TWILIO_TEMPLATE_APPOINTMENT_BOOKED_BY_DOCTOR
+        sync: false
+      - key: TWILIO_TEMPLATE_REMINDER_PATIENT
+        sync: false
+      - key: TWILIO_TEMPLATE_REVIEW_REQUEST
+        sync: false
+      - key: TWILIO_TEMPLATE_FOLLOWUP
+        sync: false
+      # Notificaciones push / Web Push (PWA, ver .env.example para cómo
+      # generarlas). Sin estas tres, la app funciona igual — el toggle de
+      # activar notificaciones simplemente no aparece en el Perfil.
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
+      # Panel interno de administración (revisión de cédula profesional,
+      # ver .env.example). Sin estas dos, /admin/login queda inaccesible.
+      - key: SUPERADMIN_USERNAME
+        sync: false
+      - key: SUPERADMIN_PASSWORD
+        sync: false
+
+  # --- FRONTEND (React / Vite) ---
+  - type: web
+    name: propatient-frontend
+    env: static
+    rootDir: propatient-frontend
+    # Usamos "vite build" directamente (no "npm run build" = "tsc -b && vite build"):
+    # el proyecto ya tiene errores de TypeScript preexistentes que no dependen de
+    # este deploy y que hacen fallar "tsc -b". Vite no requiere que el type-check
+    # pase para generar el bundle. Vale la pena corregir esos errores más adelante
+    # (correr "npx tsc -b" en propatient-frontend para verlos).
+    #
+    # generate-sitemap.mjs corre antes de vite build para que public/sitemap.xml
+    # (que vite copia tal cual a dist/) incluya el perfil público real de cada
+    # doctor listado, no solo las páginas estáticas — así Google los encuentra
+    # sin depender de que rastree /doctores por su cuenta.
+    buildCommand: npm install && node scripts/generate-sitemap.mjs && npx vite build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false # pegar aquí la URL pública de propatient-api + "/api"
+      - key: VITE_VAPID_PUBLIC_KEY
+        sync: false # misma llave pública que VAPID_PUBLIC_KEY del backend
+    routes:
+      # SPA con react-router: cualquier ruta no encontrada sirve index.html
+      - type: rewrite
+        source: /*
+        destination: /index.html

@@ -1,0 +1,184 @@
+.staff-management-container {
+  padding: 2rem;
+  max-width: 900px;
+  margin: 0 auto;
+
+  @media (max-width: 600px) {
+    padding: 1rem;
+  }
+
+  .page-header {
+    margin-bottom: 2rem;
+
+    h1 { margin: 0; color: var(--color-heading); font-size: 1.8rem; }
+    .subtitle { color: var(--color-secondary); margin: 0.5rem 0 0 0; max-width: 620px; }
+  }
+
+  .card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+
+    h3 { margin: 0 0 1rem 0; color: var(--color-heading); font-size: 1.1rem; }
+  }
+
+  .invite-form {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-end;
+    flex-wrap: wrap;
+
+    .form-group {
+      flex: 1 1 220px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+
+      label { font-size: 0.85rem; font-weight: 600; color: var(--color-secondary); }
+
+      input {
+        padding: 0.7rem 0.9rem;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-size: 0.95rem;
+        background: var(--bg);
+        color: var(--text);
+
+        &:focus {
+          outline: none;
+          border-color: var(--color-primary);
+        }
+      }
+    }
+
+    .btn-primary {
+      background-color: var(--color-primary);
+      color: #ffffff;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+
+      &:disabled { opacity: 0.6; cursor: not-allowed; }
+    }
+  }
+
+  // Respaldo por si algún contenido no cabe ni en el layout de tarjetas
+  // de abajo (ej. un correo muy largo) — nunca deja que la tabla empuje
+  // el ancho de toda la página, el scroll queda contenido aquí.
+  .staff-table-wrapper {
+    overflow-x: auto;
+  }
+
+  .staff-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+
+    th {
+      padding: 0.8rem;
+      background-color: var(--bg-subtle);
+      color: var(--color-secondary);
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+    }
+
+    td {
+      padding: 0.8rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 12px;
+      font-size: 0.8rem;
+      font-weight: 600;
+
+      &.status-active { background: var(--color-success-bg); color: var(--color-success); }
+      &.status-pending { background: var(--color-warning-bg); color: var(--color-warning); }
+      &.status-inactive { background: var(--bg-alt); color: var(--color-secondary); }
+    }
+
+    .actions-cell {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .btn-outline-sm {
+      padding: 0.4rem 0.8rem;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--color-primary);
+      background-color: transparent;
+      border: 1px solid var(--color-primary);
+      border-radius: 6px;
+      cursor: pointer;
+
+      &:hover { background-color: var(--color-primary); color: #ffffff; }
+
+      &.danger {
+        color: var(--color-danger);
+        border-color: var(--color-danger);
+        &:hover { background-color: var(--color-danger); color: #ffffff; }
+      }
+    }
+  }
+
+  // En celular, una tabla de 4 columnas no cabe: en vez de dejarla
+  // desbordarse fuera de la pantalla (como se veía antes: la tabla se
+  // cortaba a la derecha y "Acciones" quedaba invisible), cada fila se
+  // vuelve una tarjeta con sus datos apilados verticalmente.
+  @media (max-width: 600px) {
+    .staff-table {
+      thead { display: none; }
+
+      tbody, tr, td { display: block; width: 100%; }
+
+      tr {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        margin-bottom: 12px;
+      }
+
+      // Etiqueta arriba, valor abajo (en vez de lado a lado): un correo o
+      // nombre largo necesita poder envolver en más de una línea sin que
+      // se corte — ver el bug real que esto reemplaza más abajo.
+      td {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--bg-subtle);
+        text-align: left;
+        word-break: break-word;
+
+        &::before {
+          content: attr(data-label);
+          font-size: 0.75rem;
+          font-weight: 600;
+          text-transform: uppercase;
+          color: var(--color-secondary);
+        }
+
+        &:last-child { border-bottom: none; }
+      }
+
+      .actions-cell {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 8px;
+
+        &::before { display: none; }
+      }
+    }
+  }
+
+  .empty-msg { color: var(--color-secondary); text-align: center; padding: 2rem; }
+}

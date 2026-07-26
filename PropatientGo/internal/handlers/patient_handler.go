@@ -1,9 +1,14 @@
 package handlers
 
 import (
+	"errors"
+	"math"
 	"net/http"
+	"propatient-api/internal/audit"
 	"propatient-api/internal/models"
+	"propatient-api/internal/storage"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -65,12 +70,26 @@ func UpdatePatient(db *gorm.DB) gin.HandlerFunc {
 		if patient.MedicalHistory == nil {
 			patient.MedicalHistory = &models.MedicalHistory{}
 		}
+		// Copia POR VALOR, no el puntero: json.Unmarshal reutiliza el
+		// puntero existente de un campo struct no-nil y escribe encima del
+		// mismo objeto en memoria, así que guardar solo el puntero aquí no
+		// protegería nada — "original" terminaría apuntando al mismo dato
+		// ya sobreescrito por el bind de abajo.
+		originalHistory := *patient.MedicalHistory
 
 		// 2. Mapeamos los datos que vienen del frontend sobre el objeto ya cargado.
 		// Al hacer esto, los campos de texto cambian, pero los IDs originales de la BD se conservan.
 		if err := c.ShouldBindJSON(&patient); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
+		}
+
+		// El personal (role "STAFF") solo administra datos generales del
+		// paciente, nunca antecedentes clínicos: aunque este mismo endpoint
+		// también acepta MedicalHistory, se descarta cualquier cambio que
+		// venga en el body y se conserva el historial tal como estaba.
+		if role, _ := c.Get("role"); role == "STAFF" {
+			patient.MedicalHistory = &originalHistory
 		}
 
 		// 3. Forzar de forma explícita que el PatientID del historial coincida con el del paciente
@@ -89,19 +108,46 @@ func UpdatePatient(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		audit.Log(db, c, doctorID, &patient.ID, audit.ActionUpdated, audit.EntityPatient, patient.ID, "Datos del paciente actualizados")
+
 		c.JSON(http.StatusOK, patient)
 	}
 }
 
-// GetPatients devuelve todos los pacientes que tienen relación con el doctor logueado
+// GetPatients devuelve, paginados, los pacientes vinculados al doctor logueado
 func GetPatients(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		doctorID := c.MustGet("doctorID").(uint)
-		var patients []models.Patient
 
-		err := db.Joins("JOIN doctor_patients ON doctor_patients.patient_id = patients.id").
+		page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
+		if err != nil || page < 1 {
+			page = 1
+		}
+		pageSize, err := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
+		if err != nil || pageSize < 1 {
+			pageSize = 20
+		}
+		if pageSize > 100 {
+			pageSize = 100
+		}
+
+		// GORM consume el builder al ejecutar un finisher (Count/Find), así que
+		// armamos el Joins/Where dos veces en vez de reutilizar la misma variable.
+		var total int64
+		if err := db.Table("patients").
+			Joins("JOIN doctor_patients ON doctor_patients.patient_id = patients.id").
+			Where("doctor_patients.doctor_id = ?", doctorID).
+			Count(&total).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al contar pacientes"})
+			return
+		}
+
+		var patients []models.Patient
+		err = db.Joins("JOIN doctor_patients ON doctor_patients.patient_id = patients.id").
 			Where("doctor_patients.doctor_id = ?", doctorID).
 			Order("patients.created_at DESC").
+			Limit(pageSize).
+			Offset((page - 1) * pageSize).
 			Find(&patients).Error
 
 		if err != nil {
@@ -109,7 +155,42 @@ func GetPatients(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, patients)
+		totalPages := int(math.Ceil(float64(total) / float64(pageSize)))
+		c.JSON(http.StatusOK, gin.H{
+			"data":       patients,
+			"total":      total,
+			"page":       page,
+			"pageSize":   pageSize,
+			"totalPages": totalPages,
+		})
+	}
+}
+
+// RemovePatientFromDoctor desvincula al paciente de ESTE doctor (no borra al
+// paciente: es una relación many2many y otros doctores pueden seguir
+// teniéndolo vinculado con su propio historial de citas).
+func RemovePatientFromDoctor(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.Param("id")
+		doctorID := c.MustGet("doctorID").(uint)
+
+		result := db.Exec(
+			"DELETE FROM doctor_patients WHERE doctor_id = ? AND patient_id = ?",
+			doctorID, id,
+		)
+		if result.Error != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al eliminar al paciente de tu lista"})
+			return
+		}
+		if result.RowsAffected == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Paciente no encontrado o no tienes permiso para eliminarlo"})
+			return
+		}
+
+		patientID := castToUint(id)
+		audit.Log(db, c, doctorID, &patientID, audit.ActionDeleted, audit.EntityPatient, patientID, "Paciente desvinculado del consultorio")
+
+		c.JSON(http.StatusOK, gin.H{"message": "Paciente eliminado de tu lista"})
 	}
 }
 
@@ -122,6 +203,37 @@ func CreatePatient(db *gorm.DB) gin.HandlerFunc {
 		if err := c.ShouldBindJSON(&patient); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
+		}
+
+		// El personal no da de alta antecedentes clínicos, solo datos generales.
+		if role, _ := c.Get("role"); role == "STAFF" {
+			patient.MedicalHistory = nil
+		}
+
+		// Un mismo paciente puede atenderse con varios doctores del sistema.
+		// Si ya existe un paciente con este correo (de cualquier doctor), no
+		// se crea un registro duplicado: se le avisa al frontend para que el
+		// doctor decida si quiere vincularlo a su lista en vez de darlo de
+		// alta de cero (POST /patients/:id/link).
+		if strings.TrimSpace(patient.Email) != "" {
+			var existing models.Patient
+			err := db.Where("LOWER(email) = LOWER(?)", strings.TrimSpace(patient.Email)).First(&existing).Error
+			if err == nil {
+				c.JSON(http.StatusConflict, gin.H{
+					"error":   "patient_exists",
+					"message": "Ya existe un paciente registrado con este correo.",
+					"patient": gin.H{
+						"id":        existing.ID,
+						"firstName": existing.FirstName,
+						"lastName":  existing.LastName,
+					},
+				})
+				return
+			}
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al validar el correo del paciente"})
+				return
+			}
 		}
 
 		// Iniciamos transacción para asegurar la integridad de la relación
@@ -141,7 +253,37 @@ func CreatePatient(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		audit.Log(db, c, doctorID, &patient.ID, audit.ActionCreated, audit.EntityPatient, patient.ID, "Paciente registrado")
+
 		c.JSON(http.StatusCreated, patient)
+	}
+}
+
+// LinkExistingPatient vincula al doctor autenticado con un paciente que ya
+// existe en el sistema (dado de alta originalmente por otro doctor), sin
+// duplicar su registro ni su historial médico. El doctor que se vincula
+// nunca ve las citas que el paciente tuvo con otros doctores (esas quedan
+// filtradas por doctor_id en el resto de los endpoints), solo sus datos
+// generales y antecedentes.
+func LinkExistingPatient(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		patientID := c.Param("id")
+		doctorID := c.MustGet("doctorID").(uint)
+
+		var patient models.Patient
+		if err := db.Preload("MedicalHistory").First(&patient, patientID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Paciente no encontrado"})
+			return
+		}
+
+		var doctor models.Doctor
+		doctor.ID = doctorID
+		if err := db.Model(&doctor).Association("Patients").Append(&patient); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo vincular al paciente"})
+			return
+		}
+
+		c.JSON(http.StatusOK, patient)
 	}
 }
 
@@ -167,7 +309,7 @@ func GetPatientById(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func GetPatientMedicalHistory(db *gorm.DB) gin.HandlerFunc {
+func GetPatientMedicalHistory(db *gorm.DB, storageClient storage.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		patientID := c.Param("id")
 		doctorID := c.MustGet("doctorID").(uint)
@@ -188,6 +330,10 @@ func GetPatientMedicalHistory(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Historial no encontrado"})
 			return
 		}
+
+		presignAppointmentsFiles(c.Request.Context(), storageClient, patient.Appointments)
+
+		audit.Log(db, c, doctorID, &patient.ID, audit.ActionViewed, audit.EntityMedicalHistory, patient.ID, "Expediente clínico consultado")
 
 		c.JSON(http.StatusOK, patient)
 	}
@@ -231,6 +377,8 @@ func UpdateMedicalHistory(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al guardar el historial médico"})
 			return
 		}
+
+		audit.Log(db, c, doctorID, &patientID, audit.ActionUpdated, audit.EntityMedicalHistory, history.ID, "Antecedentes clínicos actualizados")
 
 		c.JSON(http.StatusOK, gin.H{"message": "Historial médico actualizado", "history": history})
 	}
@@ -289,6 +437,32 @@ func GetPatientStats(db *gorm.DB) gin.HandlerFunc {
 			Row().Scan(&stats.LastVisit)
 
 		c.JSON(http.StatusOK, stats)
+	}
+}
+
+// GetPatientAuditLog devuelve la bitácora de auditoría de un paciente
+// (quién accedió/modificó su expediente, cuándo y desde qué IP — ver
+// internal/audit). Solo el doctor, nunca el personal: es información
+// sobre quién tocó el expediente clínico, no un dato operativo del día a
+// día. Al filtrar por DoctorID (el consultorio dueño del dato en el
+// momento de cada evento) no hace falta re-verificar el vínculo actual
+// con doctor_patients — un doctor nunca ve bitácora ajena porque nunca se
+// escribió con su DoctorID.
+func GetPatientAuditLog(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		patientID := castToUint(c.Param("id"))
+		doctorID := c.MustGet("doctorID").(uint)
+
+		var entries []models.AuditLog
+		if err := db.Where("doctor_id = ? AND patient_id = ?", doctorID, patientID).
+			Order("created_at DESC").
+			Limit(200).
+			Find(&entries).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo consultar la bitácora"})
+			return
+		}
+
+		c.JSON(http.StatusOK, entries)
 	}
 }
 

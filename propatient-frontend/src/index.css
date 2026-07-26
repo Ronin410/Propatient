@@ -2,24 +2,49 @@
 /* 1. VARIABLES Y CONFIGURACIÓN BASE                */
 /* ================================================= */
 :root {
-  /* Paleta de colores */
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #ffffff;
+  /* Texto */
+  --text: #495057;
+  --text-h: #002d42;
+  --color-heading: #002d42;
+  --color-secondary: #6e7582;
+  --color-dark: #002d42;
+
+  /* Fondos */
+  --bg: #ffffff; /* superficie / tarjetas */
   --bg-main: #f8f9fa; /* Color para el contenido del dashboard */
-  --border: #e5e4e7;
+  --bg-alt: #eef0eb; /* paneles suaves */
+  --bg-subtle: #f1f3f5; /* fondos sutiles, filas alternas */
+  --bg-cream: #e6e4e0; /* fondo "arena" del layout principal */
+
+  /* Bordes */
+  --border: #e2e0db;
+  --border-strong: #cccaa6;
   --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
+
+  /* Marca */
+  --color-primary: #005073;
+  --color-primary-dark: #002d42;
+  --color-primary-darker: #001f30;
+  --accent: #1a73e8;
+  --accent-bg: rgba(26, 115, 232, 0.1);
+  --accent-border: rgba(26, 115, 232, 0.5);
   --shadow: rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+
+  /* Estado */
+  --color-danger: #d32f2f;
+  --color-danger-alt: #c92a2a;
+  --color-danger-bg: #fde8e8;
+  --color-danger-border: #fcdbd9;
+  --color-success: #166534;
+  --color-success-bg: #f0fdf4;
+  --color-warning: #b45309;
+  --color-warning-bg: #fffbeb;
 
   /* Tipografía */
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
 
   /* Variables de compatibilidad */
-  --color-primary: var(--accent);
   --color-light: var(--bg-main);
   --color-border: var(--border);
 
@@ -28,18 +53,94 @@
   line-height: 1.5;
   color: var(--text);
   background-color: var(--bg);
-  
+
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  --accent: #1a73e8; 
-  --accent-bg: rgba(26, 115, 232, 0.1);
-  --accent-border: rgba(26, 115, 232, 0.5);
-  
-  /* ... */
-  
-  /* 2. Añade explícitamente la variable dark para los hovers si la necesitas */
-  --color-primary-dark: #1557b0;
+
+  color-scheme: light;
+}
+
+/* ================================================= */
+/* 1.b MODO OSCURO                                   */
+/* Se activa con data-theme="dark" en <html> (ver     */
+/* src/context/ThemeContext.tsx). Redefine las mismas */
+/* variables de arriba; el resto del CSS no cambia.   */
+/* ================================================= */
+:root[data-theme='dark'] {
+  --text: #b8c1cc;
+  --text-h: #eef2f6;
+  --color-heading: #eef2f6;
+  --color-secondary: #93a1af;
+  --color-dark: #eef2f6;
+
+  --bg: #16232f;
+  --bg-main: #0d161f;
+  --bg-alt: #1c2b3a;
+  --bg-subtle: #1a2833;
+  --bg-cream: #101c26;
+
+  --border: #2b3d4d;
+  --border-strong: #3a4f5f;
+  --code-bg: #1a2530;
+
+  --color-primary: #3f9bd1;
+  --color-primary-dark: #001a29;
+  --color-primary-darker: #000d14;
+  --accent: #5b9bf7;
+  --accent-bg: rgba(91, 155, 247, 0.15);
+  --accent-border: rgba(91, 155, 247, 0.5);
+  --shadow: rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.3) 0 4px 6px -2px;
+
+  --color-danger: #f16565;
+  --color-danger-alt: #ef5350;
+  --color-danger-bg: rgba(211, 47, 47, 0.18);
+  --color-danger-border: rgba(211, 47, 47, 0.4);
+  --color-success: #4ade80;
+  --color-success-bg: rgba(22, 101, 52, 0.2);
+  --color-warning: #fbbf24;
+  --color-warning-bg: rgba(180, 83, 9, 0.2);
+
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']):not([data-theme='dark']) {
+    --text: #b8c1cc;
+    --text-h: #eef2f6;
+    --color-heading: #eef2f6;
+    --color-secondary: #93a1af;
+    --color-dark: #eef2f6;
+
+    --bg: #16232f;
+    --bg-main: #0d161f;
+    --bg-alt: #1c2b3a;
+    --bg-subtle: #1a2833;
+    --bg-cream: #101c26;
+
+    --border: #2b3d4d;
+    --border-strong: #3a4f5f;
+    --code-bg: #1a2530;
+
+    --color-primary: #3f9bd1;
+    --color-primary-dark: #001a29;
+    --color-primary-darker: #000d14;
+    --accent: #5b9bf7;
+    --accent-bg: rgba(91, 155, 247, 0.15);
+    --accent-border: rgba(91, 155, 247, 0.5);
+    --shadow: rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.3) 0 4px 6px -2px;
+
+    --color-danger: #f16565;
+    --color-danger-alt: #ef5350;
+    --color-danger-bg: rgba(211, 47, 47, 0.18);
+    --color-danger-border: rgba(211, 47, 47, 0.4);
+    --color-success: #4ade80;
+    --color-success-bg: rgba(22, 101, 52, 0.2);
+    --color-warning: #fbbf24;
+    --color-warning-bg: rgba(180, 83, 9, 0.2);
+
+    color-scheme: dark;
+  }
 }
 
 /* ================================================= */
@@ -52,6 +153,12 @@ html, body {
   height: 100%;
   /* Evitamos el scroll en el body para que el dashboard controle sus propios scrolls */
   /* overflow: hidden;  */
+  /* Red de seguridad: si algún elemento se desborda horizontalmente (una
+     barra de herramientas sin flex-wrap, una tabla ancha, etc.), esto
+     evita que arrastre a toda la página a un scroll lateral en celular —
+     no reemplaza corregir el elemento que se desborda, solo evita que un
+     desborde puntual se sienta como "toda la pantalla se mueve". */
+  overflow-x: hidden;
 }
 
 .dashboard-layout-active {
@@ -130,9 +237,9 @@ button {
 
 /* Estilo para las alertas de error */
 .alert-danger {
-  background-color: #fee2e2;
-  border: 1px solid #fca5a5;
-  color: #b91c1c;
+  background-color: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  color: var(--color-danger);
   padding: 0.75rem;
   border-radius: 6px;
   font-size: 0.9rem;

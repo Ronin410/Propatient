@@ -1,21 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import axios from 'axios';
 import api from '../api/axios';
 import { formatToLocalDate } from '../utils/dateFormatter';
+import { sanitizePhoneInput } from '../utils/phoneInput';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import './PatientForm.scss';
+
+interface DuplicatePatient {
+  id: number;
+  firstName: string;
+  lastName: string;
+}
 
 export const PatientForm: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const isEdit = !!id;
   const [loading, setLoading] = useState(false);
+  const [duplicatePatient, setDuplicatePatient] = useState<DuplicatePatient | null>(null);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     email: '',
     phone: '',
     birthDate: '',
-    gender: 'M'
+    gender: 'M',
+    isMinor: false
   });
 
   useEffect(() => {
@@ -30,7 +41,8 @@ export const PatientForm: React.FC = () => {
             email: p.email || '',
             phone: p.phone || '',
             birthDate: p.birthDate ? p.birthDate.split('T')[0] : '',
-            gender: p.gender || 'M'
+            gender: p.gender || 'M',
+            isMinor: !!p.isMinor
           });
         } catch (error) {
           console.error("Error al cargar datos del paciente:", error);
@@ -58,9 +70,27 @@ export const PatientForm: React.FC = () => {
       }
       navigate('/pacientes');
     } catch (error) {
-      alert("Error al guardar la información del paciente.");
+      if (axios.isAxiosError(error) && error.response?.status === 409 && error.response.data?.error === 'patient_exists') {
+        setDuplicatePatient(error.response.data.patient);
+      } else {
+        alert("Error al guardar la información del paciente.");
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleConfirmLink = async () => {
+    if (!duplicatePatient) return;
+    setLoading(true);
+    try {
+      await api.post(`/patients/${duplicatePatient.id}/link`);
+      navigate(`/pacientes/${duplicatePatient.id}`);
+    } catch (error) {
+      alert("No se pudo vincular al paciente existente.");
+    } finally {
+      setLoading(false);
+      setDuplicatePatient(null);
     }
   };
 
@@ -93,31 +123,40 @@ export const PatientForm: React.FC = () => {
           </div>
         </div>
 
+        <label className="minor-checkbox">
+          <input
+            type="checkbox"
+            checked={formData.isMinor}
+            onChange={e => setFormData({ ...formData, isMinor: e.target.checked })}
+          />
+          <span>Paciente menor de edad</span>
+        </label>
+
         <div className="form-group">
-          <label>Correo Electrónico (Opcional)</label>
-          <input 
-            type="email" 
-            value={formData.email} 
-            onChange={e => setFormData({...formData, email: e.target.value})} 
+          <label>Correo Electrónico {formData.isMinor ? '(del padre/madre o tutor, opcional)' : '(Opcional)'}</label>
+          <input
+            type="email"
+            value={formData.email}
+            onChange={e => setFormData({...formData, email: e.target.value})}
           />
         </div>
 
         <div className="form-row">
           <div className="form-group">
-            <label>Teléfono</label>
-            <input 
-              type="tel" 
-              value={formData.phone} 
-              onChange={e => setFormData({...formData, phone: e.target.value})} 
-              required 
+            <label>Teléfono {formData.isMinor ? '(del padre/madre o tutor)' : ''}</label>
+            <input
+              type="tel"
+              value={formData.phone}
+              onChange={e => setFormData({...formData, phone: sanitizePhoneInput(e.target.value)})}
+              required
             />
           </div>
           <div className="form-group">
             <label>Fecha de Nacimiento</label>
-            <input 
-              type="date" 
-              value={formData.birthDate} 
-              onChange={e => setFormData({...formData, birthDate: e.target.value})} 
+            <input
+              type="date"
+              value={formData.birthDate}
+              onChange={e => setFormData({...formData, birthDate: e.target.value})}
             />
           </div>
         </div>
@@ -139,6 +178,16 @@ export const PatientForm: React.FC = () => {
           {loading ? 'Guardando...' : 'Guardar Paciente'}
         </button>
       </form>
+
+      <ConfirmDialog
+        isOpen={!!duplicatePatient}
+        title="Paciente ya registrado"
+        message={`Ya existe un paciente registrado con este correo: ${duplicatePatient?.firstName || ''} ${duplicatePatient?.lastName || ''}. ¿Deseas vincularlo a tu lista (podrás ver sus antecedentes) en vez de crear uno nuevo?`}
+        confirmText="Sí, vincular"
+        cancelText="Cancelar"
+        onConfirm={handleConfirmLink}
+        onCancel={() => setDuplicatePatient(null)}
+      />
     </div>
   );
 };

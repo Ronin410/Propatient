@@ -7,6 +7,8 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
         margin-bottom: 2rem;
 
         h1 {
@@ -44,7 +46,7 @@
         input {
             width: 100%;
             padding: 0.8rem;
-            border: 1px solid #ddd;
+            border: 1px solid var(--border);
             border-radius: 8px;
             font-size: 1rem;
 
@@ -58,5 +60,19 @@
     .btn-block {
         width: 100%;
         margin-top: 1rem;
+    }
+
+    .minor-checkbox {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin-bottom: 1.5rem;
+        font-weight: 600;
+        color: var(--color-dark);
+        cursor: pointer;
+
+        input {
+            width: auto;
+        }
     }
 }

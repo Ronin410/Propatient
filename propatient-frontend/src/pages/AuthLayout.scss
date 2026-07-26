@@ -1,0 +1,155 @@
+// Estilos responsivos de AuthLayout — antes todo era inline style con
+// flex:1 en ambas mitades sin ningún @media, así que en pantallas angostas
+// (celular) las dos columnas se apachurraban una junto a la otra en vez de
+// apilarse: el panel de marca ocupaba casi toda la pantalla con el texto
+// desbordado, y la tarjeta con el formulario (login, invitación, etc.)
+// quedaba comprimida a una franja casi invisible en el borde derecho.
+.auth-layout {
+  display: flex;
+  min-height: 100vh;
+  width: 100vw;
+  background-color: var(--bg-cream);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    width: 100%;
+    min-height: auto;
+  }
+}
+
+.auth-layout-visual {
+  flex: 1;
+  background: linear-gradient(145deg, #005073 0%, #002d42 100%);
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 60px 50px;
+  position: relative;
+
+  @media (max-width: 768px) {
+    flex: none;
+    padding: 28px 24px;
+  }
+
+  h1 {
+    color: #ffffff;
+    font-size: 38px;
+    font-weight: 600;
+    line-height: 1.25;
+    margin-bottom: 24px;
+    letter-spacing: -0.5px;
+
+    @media (max-width: 768px) {
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+  }
+
+  &-message {
+    max-width: 460px;
+    margin: auto 0;
+    z-index: 2;
+
+    p {
+      color: rgba(255, 255, 255, 0.75);
+      font-size: 15px;
+      line-height: 1.6;
+      margin-bottom: 32px;
+    }
+
+    @media (max-width: 768px) {
+      margin: 0;
+
+      p, &-features {
+        display: none;
+      }
+    }
+  }
+
+  &-footer {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding-top: 20px;
+    z-index: 2;
+
+    @media (max-width: 768px) {
+      display: none;
+    }
+  }
+}
+
+.auth-layout-card-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  // Centrado vertical del formulario SIN "justify-content: center": con
+  // overflow-y:auto, justify-content:center reparte el excedente de un
+  // formulario más alto que la pantalla por IGUAL arriba y abajo del
+  // contenedor — la mitad de arriba queda fuera del área de scroll y
+  // scrollTop:0 (el tope real del scroll) ya no corresponde al inicio
+  // real del contenido, así que nunca se puede llegar a ver el título ni
+  // el primer campo por más que se suba el scroll. El margin:auto de
+  // abajo en .auth-layout-card sigue centrando cuando sí cabe, pero se
+  // colapsa a 0 en vez de recortar cuando no cabe (así lo define el
+  // spec de flexbox), dejando el scroll llegar de verdad hasta arriba.
+  padding: 40px 20px;
+  background-color: var(--bg-cream);
+  max-height: 100vh;
+  overflow-y: auto;
+  box-sizing: border-box;
+
+  // Formularios largos (registro con mapa, campos opcionales) no caben
+  // completos en pantallas bajas — antes solo se veían enteros bajando el
+  // zoom del navegador porque la barra de scroll nativa (gris, gruesa, o
+  // "overlay" que se oculta sola en Windows) no se notaba como algo con lo
+  // que se pudiera interactuar. Barra delgada y a tono en vez de eso, para
+  // que sea evidente que se puede bajar — mismo patrón que el sidebar del
+  // dashboard (ver DashboardLayout.scss).
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 80, 115, 0.3) transparent;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 80, 115, 0.3);
+    border-radius: 10px;
+
+    &:hover {
+      background-color: rgba(0, 80, 115, 0.5);
+    }
+  }
+
+  @media (max-width: 768px) {
+    flex: none;
+    max-height: none;
+    padding: 28px 20px 40px 20px;
+  }
+}
+
+.auth-layout-card {
+  width: 100%;
+  max-width: 410px;
+  position: relative;
+  padding-top: 40px;
+  // Ver el comentario en .auth-layout-card-container: este margin (no
+  // justify-content en el padre) es lo que centra la tarjeta cuando cabe
+  // y deja de estorbar cuando no cabe.
+  margin: auto 0;
+
+  @media (max-width: 768px) {
+    padding-top: 0;
+    margin: 0;
+  }
+}

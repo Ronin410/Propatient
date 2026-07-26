@@ -3,13 +3,14 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { AuthLayout } from './AuthLayout'; // 🚀 Layout de pantalla dividida garantizado
+import { getErrorMessage } from '../utils/errorMessage';
 
 export const ValidateLicense = () => {
   const [licenseNumber, setLicenseNumber] = useState('');
   const [rfc, setRfc] = useState('');
   const [curp, setCurp] = useState('');
-  const [fee, setFee] = useState('0');
   const [ineFile, setIneFile] = useState<File | null>(null);
+  const [cedulaFile, setCedulaFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -55,6 +56,11 @@ export const ValidateLicense = () => {
       return;
     }
 
+    if (!cedulaFile) {
+      setError("La foto o archivo de tu cédula profesional es obligatoria.");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -62,8 +68,8 @@ export const ValidateLicense = () => {
       formData.append('licenseNumber', cleanLicense);
       formData.append('rfc', rfc.trim().toUpperCase());
       formData.append('curp', curp.trim().toUpperCase());
-      formData.append('baseConsultationFee', fee);
       formData.append('ineDocument', ineFile);
+      formData.append('cedulaDocument', cedulaFile);
 
       await api.post('/user/update-license-full', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
@@ -74,8 +80,8 @@ export const ValidateLicense = () => {
       logout();
       navigate('/login');
 
-    } catch (err: any) {
-      setError(err.response?.data?.error || "Hubo un error al subir tus datos. Inténtalo de nuevo.");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Hubo un error al subir tus datos. Inténtalo de nuevo."));
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setIsLoading(false);
@@ -91,7 +97,7 @@ export const ValidateLicense = () => {
     color: 'var(--text-h, #333)',
     outline: 'none',
     transition: 'border-color 0.2s, box-shadow 0.2s',
-    background: '#ffffff',
+    background: 'var(--bg)',
     boxSizing: 'border-box'
   };
 
@@ -108,11 +114,32 @@ export const ValidateLicense = () => {
       <div className="card" style={{ 
         width: '100%', 
         padding: '35px',
-        backgroundColor: '#ffffff',
+        backgroundColor: 'var(--bg)',
         borderRadius: '12px',
         boxShadow: 'var(--shadow, 0 4px 12px rgba(0, 0, 0, 0.05))',
         boxSizing: 'border-box'
       }}>
+        <button
+          type="button"
+          onClick={() => navigate('/registro/perfil')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: 0,
+            marginBottom: '12px',
+            color: 'var(--text, #666)',
+            fontSize: '14px',
+            fontWeight: 600,
+          }}
+        >
+          <span className="material-icons-outlined" style={{ fontSize: '18px' }}>arrow_back</span>
+          Paso 1: Información Profesional
+        </button>
+
         <h2 style={{ textAlign: 'center', fontWeight: 700, marginBottom: '8px', marginTop: 0, color: 'var(--text-h, #333)' }}>
           Paso 2: Validación Profesional e Identidad
         </h2>
@@ -129,8 +156,8 @@ export const ValidateLicense = () => {
               lineHeight: '1.4',
               padding: '12px',
               borderRadius: '6px',
-              backgroundColor: '#fee2e2',
-              color: '#b91c1c',
+              backgroundColor: 'var(--color-danger-bg)',
+              color: 'var(--color-danger)',
               fontSize: '14px'
             }}>
               ⚠️ {error}
@@ -175,19 +202,8 @@ export const ValidateLicense = () => {
             </div>
           </div>
 
-          <div>
-            <label style={labelStyle}>Costo Base de Consulta ($ MXN)</label>
-            <input 
-              type="number" 
-              min="0" 
-              style={inputStyle} 
-              value={fee} 
-              onChange={(e) => setFee(e.target.value)} 
-            />
-          </div>
-
-          <div style={{ 
-            background: '#f8f9fa', 
+          <div style={{
+            background: 'var(--bg-subtle)', 
             padding: '20px', 
             borderRadius: '8px', 
             border: '2px dashed var(--border, #ccc)',
@@ -196,16 +212,38 @@ export const ValidateLicense = () => {
             <label style={{ ...labelStyle, marginBottom: '10px' }}>
               Adjuntar Identificación Oficial (INE / Pasaporte) *
             </label>
-            <input 
-              type="file" 
-              accept="image/*,application/pdf" 
-              onChange={(e) => setIneFile(e.target.files?.[0] || null)} 
+            <input
+              type="file"
+              accept="image/*,application/pdf"
+              onChange={(e) => setIneFile(e.target.files?.[0] || null)}
               style={{ fontSize: '14px', maxWidth: '100%' }}
-              required 
+              required
             />
           </div>
 
-          <button 
+          <div style={{
+            background: 'var(--bg-subtle)',
+            padding: '20px',
+            borderRadius: '8px',
+            border: '2px dashed var(--border, #ccc)',
+            textAlign: 'center'
+          }}>
+            <label style={{ ...labelStyle, marginBottom: '10px' }}>
+              Adjuntar Cédula Profesional (documento oficial) *
+            </label>
+            <input
+              type="file"
+              accept="image/*,application/pdf"
+              onChange={(e) => setCedulaFile(e.target.files?.[0] || null)}
+              style={{ fontSize: '14px', maxWidth: '100%' }}
+              required
+            />
+            <p style={{ fontSize: '12px', color: 'var(--text, #666)', marginTop: '8px', marginBottom: 0 }}>
+              Necesitamos ver la cédula en sí (no solo tu identificación) para poder cotejar el número que capturaste arriba.
+            </p>
+          </div>
+
+          <button
             type="submit" 
             className="btn-primary" 
             disabled={isLoading} 

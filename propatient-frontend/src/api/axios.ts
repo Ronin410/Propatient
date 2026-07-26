@@ -1,8 +1,32 @@
 import axios from 'axios';
 
+const LOCAL_API_URL = 'http://localhost:8095/api';
+
+// Base del API (incluye "/api"). Se define en build time vía VITE_API_URL
+// (ver .env.example); si no está presente, cae al backend local de desarrollo.
+// Si está definida pero no es una URL absoluta (falta "http(s)://", ej. por
+// pegar solo el nombre del servicio de Render por error), axios la trataría
+// como ruta relativa y terminaría pegándole al propio frontend en vez del
+// backend. Mejor fallar de forma ruidosa en consola que fallar en silencio.
+const rawApiUrl = import.meta.env.VITE_API_URL as string | undefined;
+export const API_BASE_URL = (() => {
+  if (!rawApiUrl) return LOCAL_API_URL;
+  if (/^https?:\/\//.test(rawApiUrl)) return rawApiUrl;
+  console.error(
+    `VITE_API_URL="${rawApiUrl}" no es una URL absoluta (debe empezar con ` +
+    `http:// o https://). Usando "${LOCAL_API_URL}" como fallback; revisa ` +
+    `la variable de entorno en el build del frontend.`
+  );
+  return LOCAL_API_URL;
+})();
+
+// Origen del backend sin el sufijo "/api", para armar URLs de archivos
+// estáticos (avatares, logos, documentos) que el backend expone en /uploads.
+export const BACKEND_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
+
 const api = axios.create({
   // IMPORTANTE: No pongas una barra "/" al final de la URL base
-  baseURL: 'http://localhost:8095/api', 
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -46,6 +70,14 @@ api.interceptors.response.use(
         localStorage.removeItem('user_data');
         window.location.href = '/login';
       }
+    }
+
+    // 402: la prueba gratis terminó y no hay una suscripción activa (ver
+    // billing.RequireActiveSubscription en el backend). Mandamos a la
+    // pantalla de facturación en vez de dejar que cada página maneje este
+    // caso por su cuenta.
+    if (error.response?.status === 402 && !window.location.pathname.includes('/billing')) {
+      window.location.href = '/billing?locked=1';
     }
 
     // Manejo de errores de red o servidor apagado

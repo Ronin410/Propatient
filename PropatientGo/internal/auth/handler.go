@@ -3,11 +3,15 @@ package auth
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
-	"net/smtp"
 	"os"
 	"path/filepath"
+	"propatient-api/internal/billing"
+	"propatient-api/internal/geocoding"
 	"propatient-api/internal/models"
+	"propatient-api/internal/referral"
+	"propatient-api/internal/storage"
 	"strings"
 	"time"
 
@@ -20,11 +24,6 @@ type LoginRequest struct {
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
 }
-
-const (
-	SMTPServer = "smtp.gmail.com"
-	SMTPPort   = "587"
-)
 
 func GoogleLoginHandler(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -57,6 +56,17 @@ func GoogleLoginHandler(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Validar que el token fue emitido para ESTA aplicación (aud). Sin esto,
+		// un ID Token de Google válido para cualquier otra app pasaría la verificación.
+		expectedAudience := os.Getenv("GOOGLE_CLIENT_ID")
+		if expectedAudience == "" {
+			expectedAudience = "744896665247-hrs7pmi72q2pog5dn9h1fh5n4nkpv18r.apps.googleusercontent.com"
+		}
+		if claims.Audience != expectedAudience {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "El token de Google no corresponde a esta aplicación"})
+			return
+		}
+
 		var doctor models.Doctor
 		// 2. Buscar si el médico ya existe por su Email institucional/personal
 		err = db.Where("email = ?", claims.Email).First(&doctor).Error
@@ -67,12 +77,23 @@ func GoogleLoginHandler(db *gorm.DB) gin.HandlerFunc {
 				// Usamos la primera parte del correo como username único por defecto
 				generatedUsername := strings.Split(claims.Email, "@")[0]
 
+				trialEndsAt := time.Now().UTC().Add(billing.TrialDuration)
+				// Mejor esfuerzo: sin código no se bloquea el registro — si
+				// falla, main.go lo rellena en el siguiente arranque (ver
+				// la migración de compatibilidad ahí).
+				referralCode, codeErr := referral.GenerateCode(db)
+				if codeErr != nil {
+					log.Printf("⚠️ No se pudo generar el código de invitación para %s: %v", claims.Email, codeErr)
+				}
 				doctor = models.Doctor{
-					Username:         generatedUsername,
-					Email:            claims.Email,
-					FullName:         claims.Name, // Nombre por defecto de Google
-					ProfileCompleted: false,
-					CedulaValidated:  "VACIO",
+					Username:           generatedUsername,
+					Email:              claims.Email,
+					FullName:           claims.Name, // Nombre por defecto de Google
+					ProfileCompleted:   false,
+					CedulaValidated:    "VACIO",
+					SubscriptionStatus: "trialing",
+					TrialEndsAt:        &trialEndsAt,
+					ReferralCode:       referralCode,
 				}
 
 				if err := db.Create(&doctor).Error; err != nil {
@@ -99,13 +120,49 @@ func GoogleLoginHandler(db *gorm.DB) gin.HandlerFunc {
 			"userStatus": gin.H{
 				"perfilCompletado": doctor.ProfileCompleted,
 				"cedulaValidada":   doctor.CedulaValidated,
+				// No basta con haber aceptado alguna vez: si el aviso
+				// legal cambió de versión desde entonces (ver
+				// models.CurrentLegalNoticeVersion), se cuenta como no
+				// aceptado hasta que vuelva a aceptar la versión vigente
+				// — ver AcceptTerms.tsx y el mismo cálculo en
+				// handlers.GetCurrentDoctor (campo "termsUpToDate").
+				"terminosAceptados": doctor.TermsAcceptedAt != nil && doctor.TermsAcceptedVersion == models.CurrentLegalNoticeVersion,
 			},
 		})
 	}
 }
 
+// AcceptTermsHandler registra que el doctor autenticado aceptó los Términos
+// y Condiciones + el Aviso de Privacidad. Fuera de RequireActiveSubscription
+// a propósito (ver router.go, mismo criterio que ExportMyData/DeleteMyAccount):
+// un doctor con la prueba vencida debe poder seguir aceptando/consultando
+// esto sin depender de tener una suscripción activa. Idempotente: si ya
+// había aceptado antes, simplemente actualiza la evidencia (versión/IP/
+// fecha) a la aceptación más reciente, nunca la borra.
+func AcceptTermsHandler(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		doctorID, _ := c.Get("doctorID")
+
+		now := time.Now().UTC()
+		err := db.Model(&models.Doctor{}).Where("id = ?", doctorID).Updates(map[string]interface{}{
+			"terms_accepted_at":      now,
+			"terms_accepted_version": models.CurrentLegalNoticeVersion,
+			"terms_accepted_ip":      c.ClientIP(),
+		}).Error
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo registrar tu aceptación"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"termsAcceptedAt":      now,
+			"termsAcceptedVersion": models.CurrentLegalNoticeVersion,
+		})
+	}
+}
+
 // Handler para la segunda pantalla: Carga de datos extras del Perfil
-func UpdateProfileHandler(db *gorm.DB) gin.HandlerFunc {
+func UpdateProfileHandler(db *gorm.DB, geoClient geocoding.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// NOTA: Aquí debes extraer el ID del doctor desde el JWT que envía el Middleware de autenticación
 		doctorID, _ := c.Get("doctorID")
@@ -120,6 +177,10 @@ func UpdateProfileHandler(db *gorm.DB) gin.HandlerFunc {
 			//RFC              string `json:"rfc"`
 			//CURP             string `json:"curp"`
 			University string `json:"university"`
+			// Posición del pin si el doctor la ajustó en el mapa interactivo
+			// del registro; ver geocoding.ResolveCoordinates.
+			Latitude  string `json:"latitude"`
+			Longitude string `json:"longitude"`
 		}
 
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -131,6 +192,20 @@ func UpdateProfileHandler(db *gorm.DB) gin.HandlerFunc {
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Formato de fecha de nacimiento inválido"})
 			return
+		}
+
+		var existingDoctor models.Doctor
+		if err := db.First(&existingDoctor, doctorID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Doctor no encontrado"})
+			return
+		}
+
+		lat, lng, geoErr := geocoding.ResolveCoordinates(
+			c.Request.Context(), geoClient, req.Address, existingDoctor.Address, existingDoctor.Latitude, existingDoctor.Longitude,
+			req.Latitude, req.Longitude,
+		)
+		if geoErr != nil {
+			log.Printf("⚠️ No se pudo geocodificar la dirección del doctor %v: %v", doctorID, geoErr)
 		}
 
 		// Actualizamos los datos del doctor y marcamos perfil como completado
@@ -145,6 +220,8 @@ func UpdateProfileHandler(db *gorm.DB) gin.HandlerFunc {
 			//RFC:              req.RFC,
 			//CURP:             req.CURP,
 			University: req.University,
+			Latitude:   lat,
+			Longitude:  lng,
 		}).Error
 
 		if err != nil {
@@ -156,7 +233,7 @@ func UpdateProfileHandler(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func UpdateLicenseFullHandler(db *gorm.DB) gin.HandlerFunc {
+func UpdateLicenseFullHandler(db *gorm.DB, storageClient storage.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 1. OBTENER AL DOCTOR LOGUEADO DESDE EL CONTEXTO JWT DE FORMA SEGURA
 		doctorContext, exists := c.Get("doctorID")
@@ -196,17 +273,42 @@ func UpdateLicenseFullHandler(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		if err := storage.ValidateUploadedFile(file, storage.UploadKindIneDocument); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		// 3.1 RECUPERAR EL DOCUMENTO DE LA CÉDULA PROFESIONAL EN SÍ (distinto
+		// de la identificación oficial de arriba) — le da al revisor humano
+		// en AdminPendingDoctors algo concreto contra qué cotejar el número
+		// capturado en licenseNumber, en vez de solo confiar en el texto.
+		cedulaFile, err := c.FormFile("cedulaDocument")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "La foto o documento de tu cédula profesional es requerido."})
+			return
+		}
+
+		if err := storage.ValidateUploadedFile(cedulaFile, storage.UploadKindCedulaDocument); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
 		// 4. CREAR NOMBRE ÚNICO E INMUTABLE PARA EL ARCHIVO LIGADO AL DOCTOR
 		ext := filepath.Ext(file.Filename)
-		uniqueFileName := fmt.Sprintf("ine_doctor_%d_%d%s", doctorID, time.Now().Unix(), ext)
+		key := fmt.Sprintf("identidad/ine_doctor_%d_%d%s", doctorID, time.Now().Unix(), ext)
 
-		// Carpeta destino (Asegúrate de que este directorio exista en tu servidor o créalo dinámicamente)
-		uploadFolder := "./uploads/documentos_identidad/"
-		dst := filepath.Join(uploadFolder, uniqueFileName)
-
-		// Guardar el archivo físicamente en el disco
-		if err := c.SaveUploadedFile(file, dst); err != nil {
+		// Guardar el archivo (disco local o S3, según configuración)
+		storedRef, err := storageClient.Save(c.Request.Context(), key, file)
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo almacenar el archivo de identidad en el servidor."})
+			return
+		}
+
+		cedulaExt := filepath.Ext(cedulaFile.Filename)
+		cedulaKey := fmt.Sprintf("identidad/cedula_doctor_%d_%d%s", doctorID, time.Now().Unix(), cedulaExt)
+		cedulaStoredRef, err := storageClient.Save(c.Request.Context(), cedulaKey, cedulaFile)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo almacenar el documento de la cédula en el servidor."})
 			return
 		}
 
@@ -221,7 +323,8 @@ func UpdateLicenseFullHandler(db *gorm.DB) gin.HandlerFunc {
 		doctor.LicenseNumber = licenseNumber
 		doctor.RFC = rfc
 		doctor.CURP = curp
-		doctor.IneDocumentPath = dst         // Guardamos la ruta relativa del archivo guardado
+		doctor.IneDocumentPath = storedRef // Guardamos la referencia (path local o key de S3), nunca la ruta física de disco
+		doctor.CedulaDocumentPath = cedulaStoredRef
 		doctor.CedulaValidated = "CAPTURADA" // Cambia el estado para que el Login detecte el mensaje de espera
 
 		// Persistir cambios con GORM
@@ -333,8 +436,9 @@ func RegisterDoctor(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req struct {
 			Username  string `json:"username" binding:"required"`
-			Password  string `json:"password" binding:"required"`
+			Password  string `json:"password" binding:"required,min=6"`
 			FullName  string `json:"full_name" binding:"required"`
+			Email     string `json:"email" binding:"required,email"`
 			Specialty string `json:"specialty"`
 		}
 
@@ -344,13 +448,26 @@ func RegisterDoctor(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		// Encriptar contraseña
-		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo procesar la contraseña"})
+			return
+		}
 
+		trialEndsAt := time.Now().UTC().Add(billing.TrialDuration)
+		referralCode, codeErr := referral.GenerateCode(db)
+		if codeErr != nil {
+			log.Printf("⚠️ No se pudo generar el código de invitación para %s: %v", req.Email, codeErr)
+		}
 		doctor := models.Doctor{
-			Username:         req.Username,
-			PasswordHash:     string(hashedPassword),
-			FullName:         req.FullName,
-			MedicalSpecialty: req.Specialty,
+			Username:           req.Username,
+			PasswordHash:       string(hashedPassword),
+			FullName:           req.FullName,
+			Email:              req.Email,
+			MedicalSpecialty:   req.Specialty,
+			SubscriptionStatus: "trialing",
+			TrialEndsAt:        &trialEndsAt,
+			ReferralCode:       referralCode,
 		}
 
 		if err := db.Create(&doctor).Error; err != nil {
@@ -363,14 +480,7 @@ func RegisterDoctor(db *gorm.DB) gin.HandlerFunc {
 }
 
 func SendValidationEmail(toEmail string, doctorName string) error {
-
-	senderEmail := os.Getenv("SMTP_EMAIL")
-	senderPass := os.Getenv("SMTP_PASSWORD")
-
-	auth := smtp.PlainAuth("", senderEmail, senderPass, SMTPServer)
-
-	subject := "Subject: ProPatient - Tu cuenta está en proceso de validación\n"
-	mime := "MIME-version: 1.0;\nContent-Type: text/html; charset=\"UTF-8\";\n\n"
+	subject := "ProPatient - Tu cuenta está en proceso de validación"
 
 	body := fmt.Sprintf(`
 		<html>
@@ -393,8 +503,68 @@ func SendValidationEmail(toEmail string, doctorName string) error {
 		</html>
 	`, doctorName)
 
-	msg := []byte(subject + mime + body)
-	addr := SMTPServer + ":" + SMTPPort
+	return sendViaResend(toEmail, subject, body)
+}
 
-	return smtp.SendMail(addr, auth, senderEmail, []string{toEmail}, msg)
+// SendCedulaApprovedEmail avisa al doctor que un administrador validó su
+// cédula profesional y ya tiene acceso completo a la plataforma.
+func SendCedulaApprovedEmail(toEmail string, doctorName string) error {
+	subject := "ProPatient - Tu cuenta fue validada"
+
+	body := fmt.Sprintf(`
+		<html>
+		<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+			<div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+				<h2 style="color: #6a11cb; text-align: center;">¡Hola, Dr(a). %s!</h2>
+
+				<div style="background-color: #f0fdf4; padding: 15px; border-left: 4px solid #16a34a; margin: 20px 0;">
+					<p style="margin: 0; font-weight: bold;">Estado actual de tu cuenta: <span style="color: #16a34a;">VALIDADA</span></p>
+				</div>
+
+				<p>Verificamos tu cédula profesional y tu identidad. Ya tienes acceso completo a todas las herramientas de <strong>ProPatient Medical System</strong>.</p>
+
+				<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+				<p style="font-size: 12px; color: #888; text-align: center;">Este es un correo automático, por favor no respondas a este mensaje.</p>
+			</div>
+		</body>
+		</html>
+	`, doctorName)
+
+	return sendViaResend(toEmail, subject, body)
+}
+
+// SendCedulaRejectedEmail avisa al doctor que su cédula/documentación no
+// pudo validarse, con un motivo opcional, y lo invita a corregir y volver
+// a enviarla (queda de vuelta en "PENDIENTE" para que ValidateLicense.tsx
+// le permita reintentar).
+func SendCedulaRejectedEmail(toEmail string, doctorName string, reason string) error {
+	subject := "ProPatient - No pudimos validar tu documentación"
+
+	reasonHTML := ""
+	if reason != "" {
+		reasonHTML = fmt.Sprintf(`<p><strong>Motivo:</strong> %s</p>`, reason)
+	}
+
+	body := fmt.Sprintf(`
+		<html>
+		<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+			<div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+				<h2 style="color: #6a11cb; text-align: center;">Hola, Dr(a). %s</h2>
+
+				<div style="background-color: #fef2f2; padding: 15px; border-left: 4px solid #dc2626; margin: 20px 0;">
+					<p style="margin: 0; font-weight: bold;">Estado actual de tu cuenta: <span style="color: #dc2626;">DOCUMENTACIÓN RECHAZADA</span></p>
+				</div>
+
+				%s
+
+				<p>Por favor vuelve a iniciar sesión y sube de nuevo tu cédula profesional e identificación oficial.</p>
+
+				<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+				<p style="font-size: 12px; color: #888; text-align: center;">Este es un correo automático, por favor no respondas a este mensaje.</p>
+			</div>
+		</body>
+		</html>
+	`, doctorName, reasonHTML)
+
+	return sendViaResend(toEmail, subject, body)
 }
