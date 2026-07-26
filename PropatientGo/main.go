@@ -107,6 +107,17 @@ func main() {
 		log.Println("Aviso: no se pudo aplicar el periodo de gracia de suscripción a doctores existentes:", err)
 	}
 
+	// Migración de compatibilidad: TwilioSid pasó de string a *string (ver
+	// models.WhatsAppMessage) porque el valor por defecto "" se guardaba
+	// como texto real e idéntico en cada respuesta del superadmin sin SID
+	// de Twilio, chocando contra el índice único en cuanto había una
+	// segunda respuesta en el mismo hilo (bug real visto en producción).
+	// Las filas que ya se guardaron con "" antes de este cambio se pasan a
+	// NULL para que ya no colisionen entre sí.
+	if err := db.Exec("UPDATE whatsapp_messages SET twilio_sid = NULL WHERE twilio_sid = ''").Error; err != nil {
+		log.Println("Aviso: no se pudo limpiar los twilio_sid vacíos de whatsapp_messages:", err)
+	}
+
 	// Migración de compatibilidad para el sistema de código de invitación:
 	// los doctores que ya existían antes de este campo tienen ReferralCode
 	// vacío. Se rellena en Go (no en SQL crudo) porque cada fila necesita un

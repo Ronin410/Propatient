@@ -257,4 +257,19 @@ func TestAdminWhatsAppThreads_ListMessagesAndReply(t *testing.T) {
 	assert.Equal(t, "PATIENT", outbound.Category)
 	require.NotNil(t, outbound.PatientID)
 	assert.Equal(t, patient.ID, *outbound.PatientID)
+
+	// Regresión: una segunda respuesta en el mismo hilo debe guardarse
+	// igual de bien que la primera. Ninguna de las dos trae SID de Twilio
+	// (son texto libre del superadmin, no un webhook) — con TwilioSid como
+	// string normal, ambas se guardaban con "" y la segunda tronaba contra
+	// el índice único de la columna (ver models.WhatsAppMessage).
+	w = doRequest(t, router, http.MethodPost, "/api/admin/whatsapp/threads/"+url.QueryEscape("+525557001122")+"/messages", adminToken, map[string]any{
+		"message": "¿Te parece mañana a las 10am?",
+	})
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	wa.waitForCallsTo(t, "+525557001122", 2)
+
+	var outboundCount int64
+	db.Model(&models.WhatsAppMessage{}).Where("phone = ? AND direction = ?", "+525557001122", "OUTBOUND").Count(&outboundCount)
+	assert.Equal(t, int64(2), outboundCount)
 }
