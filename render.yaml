@@ -133,6 +133,13 @@ services:
         sync: false
       - key: SUPERADMIN_PASSWORD
         sync: false
+      # Geocodificación de direcciones (ubicar el consultorio en el mapa,
+      # ver .env.example). Sin esta, cae de vuelta a Nominatim (gratis, sin
+      # API key) — pero Nominatim bloquea/limita seguido las peticiones que
+      # vienen de servidores en la nube como Render, así que se recomienda
+      # configurar LocationIQ (plan gratis de 5,000 consultas/día).
+      - key: LOCATIONIQ_API_KEY
+        sync: false
 
   # --- FRONTEND (React / Vite) ---
   - type: web

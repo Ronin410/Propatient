@@ -1,9 +1,11 @@
 // Package geocoding convierte una dirección de texto libre en coordenadas
-// (lat/lng) usando Nominatim, el servicio de geocodificación gratuito de
-// OpenStreetMap. No requiere API key — solo hay que respetar su política de
-// uso (User-Agent descriptivo, máximo ~1 petición/segundo), razonable aquí
-// porque solo se llama cuando un doctor guarda su perfil, no en cada visita
-// del directorio público.
+// (lat/lng). Usa LocationIQ si hay LOCATIONIQ_API_KEY configurada (pensado
+// para llamarse desde un servidor, con cuota generosa); si no, cae de
+// vuelta a Nominatim, el servicio gratuito de OpenStreetMap que no pide API
+// key pero que en la práctica bloquea o limita a servidores en la nube
+// (Render comparte IPs con muchas otras apps que ya agotaron la cuota de
+// Nominatim para esas direcciones) — ver el 503 recurrente reportado en
+// producción que motivó agregar LocationIQ como proveedor principal.
 package geocoding
 
 import (
@@ -12,6 +14,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"time"
 )
@@ -33,7 +36,14 @@ type nominatimClient struct {
 	httpClient *http.Client
 }
 
+// NewClient arma el cliente de geocodificación a partir de las variables de
+// entorno: con LOCATIONIQ_API_KEY configurada usa LocationIQ (recomendado,
+// pensado para llamarse desde un servidor); sin ella cae de vuelta a
+// Nominatim para no romper instalaciones que no la hayan configurado.
 func NewClient() Client {
+	if apiKey := os.Getenv("LOCATIONIQ_API_KEY"); apiKey != "" {
+		return &locationIQClient{apiKey: apiKey, httpClient: &http.Client{Timeout: 8 * time.Second}}
+	}
 	return &nominatimClient{httpClient: &http.Client{Timeout: 8 * time.Second}}
 }
 
@@ -64,6 +74,62 @@ func (n *nominatimClient) Geocode(ctx context.Context, address string) (*Coordin
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, errors.New("nominatim respondió con un error")
+	}
+
+	var results []nominatimResult
+	if err := json.NewDecoder(resp.Body).Decode(&results); err != nil {
+		return nil, err
+	}
+	if len(results) == 0 {
+		return nil, nil
+	}
+
+	lat, err := strconv.ParseFloat(results[0].Lat, 64)
+	if err != nil {
+		return nil, err
+	}
+	lon, err := strconv.ParseFloat(results[0].Lon, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Coordinates{Latitude: lat, Longitude: lon}, nil
+}
+
+// locationIQClient usa la misma forma de respuesta que Nominatim (LocationIQ
+// es un wrapper comercial sobre datos de OpenStreetMap), solo cambia el
+// endpoint y que la key va en la URL en vez del User-Agent.
+type locationIQClient struct {
+	apiKey     string
+	httpClient *http.Client
+}
+
+func (l *locationIQClient) Geocode(ctx context.Context, address string) (*Coordinates, error) {
+	if address == "" {
+		return nil, errors.New("dirección vacía")
+	}
+
+	endpoint := "https://us1.locationiq.com/v1/search?format=json&limit=1&key=" + url.QueryEscape(l.apiKey) + "&q=" + url.QueryEscape(address)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := l.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	// LocationIQ responde 404 (con cuerpo JSON de error) cuando no
+	// encuentra la dirección, a diferencia de Nominatim que responde 200
+	// con un arreglo vacío — se trata igual como "no encontrado", no como
+	// error del sistema.
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New("locationiq respondió con un error")
 	}
 
 	var results []nominatimResult
