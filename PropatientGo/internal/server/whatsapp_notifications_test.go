@@ -87,6 +87,17 @@ func TestConfirmAppointment_NotifiesPatientByWhatsApp(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 
 	wa.waitForCallsTo(t, "5559990000", 2)
+
+	// El WhatsApp de confirmación debe incluir el link de "sube tus
+	// documentos antes de la consulta" — antes de este cambio, una cita
+	// que llegaba por el directorio público (a diferencia de una agendada
+	// directo por el doctor) nunca lo incluía.
+	var uploadToken string
+	require.NoError(t, db.Raw("SELECT upload_token FROM appointments WHERE id = ?", apptID).Scan(&uploadToken).Error)
+	require.NotEmpty(t, uploadToken, "ConfirmAppointment debe generar el upload_token para poder mandarlo en el WhatsApp")
+
+	lastBody := wa.lastBodyTo(t, "5559990000")
+	assert.Contains(t, lastBody, "/public-upload/"+uploadToken)
 }
 
 // TestCancelAppointment_NotifiesPatientWithDistinctWordingByCase cubre las

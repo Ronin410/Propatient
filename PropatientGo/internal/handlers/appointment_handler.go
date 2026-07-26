@@ -494,7 +494,7 @@ func CancelAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient wh
 							log.Printf("⚠️ Pánico recuperado al mandar el aviso de rechazo de la cita %d: %v", appointment.ID, r)
 						}
 					}()
-					patientNotified := sendAppointmentDecisionWhatsApp(context.Background(), waClient, waTemplates, doctor, patient, appointment, false)
+					patientNotified := sendAppointmentDecisionWhatsApp(context.Background(), waClient, waTemplates, doctor, patient, appointment, false, "")
 					sendAppointmentDecisionEmail(doctor, patient, appointment, false, patientNotified)
 				}(doctor, patient, appointment)
 			} else {
@@ -547,18 +547,29 @@ func ConfirmAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient w
 			appointment.Status = "PENDING"
 			syncAppointmentToGoogleCalendar(c.Request.Context(), db, calClient, &appointment, patient)
 
+			// Igual que en CreateAppointment: en cuanto la cita queda
+			// confirmada de verdad (ya no es solo una solicitud), se genera
+			// el link de documentos para poder incluirlo en el WhatsApp de
+			// confirmación — antes de este cambio, una cita que llegaba por
+			// el directorio público NUNCA incluía este link, solo las que
+			// el doctor agendaba directo desde su panel.
+			uploadToken, tokenErr := ensureAppointmentUploadToken(db, &appointment)
+
 			// En segundo plano: ver el comentario largo en
 			// CreatePublicAppointment sobre por qué esto no debe bloquear la
 			// respuesta ni usar el contexto de la petición.
-			go func(doctor models.Doctor, patient models.Patient, appointment models.Appointment) {
+			go func(doctor models.Doctor, patient models.Patient, appointment models.Appointment, uploadToken string, tokenErr error) {
 				defer func() {
 					if r := recover(); r != nil {
 						log.Printf("⚠️ Pánico recuperado al mandar el aviso de confirmación de la cita %d: %v", appointment.ID, r)
 					}
 				}()
-				patientNotified := sendAppointmentDecisionWhatsApp(context.Background(), waClient, waTemplates, doctor, patient, appointment, true)
+				if tokenErr != nil {
+					log.Printf("⚠️ No se pudo generar el link de documentos para la cita %d: %v", appointment.ID, tokenErr)
+				}
+				patientNotified := sendAppointmentDecisionWhatsApp(context.Background(), waClient, waTemplates, doctor, patient, appointment, true, uploadToken)
 				sendAppointmentDecisionEmail(doctor, patient, appointment, true, patientNotified)
-			}(doctor, patient, appointment)
+			}(doctor, patient, appointment, uploadToken, tokenErr)
 		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "Cita confirmada", "status": "PENDING"})
@@ -571,7 +582,9 @@ func ConfirmAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient w
 // sí si Twilio no está configurado o falla. Devuelve true si el paciente
 // quedó notificado por este canal, para que el llamador decida si todavía
 // hace falta mandarle el correo equivalente (ver sendAppointmentDecisionEmail).
-func sendAppointmentDecisionWhatsApp(ctx context.Context, waClient whatsapp.Client, waTemplates whatsapp.Templates, doctor models.Doctor, patient models.Patient, appointment models.Appointment, confirmed bool) bool {
+// uploadToken solo aplica (y solo se usa) cuando confirmed es true — no
+// tiene caso mandarle a subir documentos para una cita que se rechazó.
+func sendAppointmentDecisionWhatsApp(ctx context.Context, waClient whatsapp.Client, waTemplates whatsapp.Templates, doctor models.Doctor, patient models.Patient, appointment models.Appointment, confirmed bool, uploadToken string) bool {
 	if waClient == nil || patient.Phone == "" {
 		return false
 	}
@@ -581,7 +594,13 @@ func sendAppointmentDecisionWhatsApp(ctx context.Context, waClient whatsapp.Clie
 
 	var body, contentSID string
 	if confirmed {
-		body = fmt.Sprintf("¡Tu cita con Dr(a). %s quedó confirmada para el %s! — ProPatient", doctor.FullName, when)
+		body = fmt.Sprintf("¡Tu cita con Dr(a). %s quedó confirmada para el %s!", doctor.FullName, when)
+		if uploadToken != "" {
+			uploadURL := fmt.Sprintf("%s/public-upload/%s", frontendRedirectBase(), uploadToken)
+			body += fmt.Sprintf(" Antes de tu consulta, súbenos aquí cualquier estudio o documento que quieras que el doctor revise: %s", uploadURL)
+			vars["3"] = uploadURL
+		}
+		body += " — ProPatient"
 		contentSID = waTemplates.AppointmentConfirmed
 	} else {
 		body = fmt.Sprintf(

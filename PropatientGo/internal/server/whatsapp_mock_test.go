@@ -49,6 +49,22 @@ func (m *mockWhatsAppClient) callCount() int {
 	return len(m.calls)
 }
 
+// lastBodyTo devuelve el cuerpo del último mensaje mandado a "phone" (falla
+// el test si no hay ninguno) — útil para verificar contenido específico,
+// como un link, sin acoplarse al índice exacto dentro de calls.
+func (m *mockWhatsAppClient) lastBodyTo(t *testing.T, phone string) string {
+	t.Helper()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for i := len(m.calls) - 1; i >= 0; i-- {
+		if m.calls[i].To == phone {
+			return m.calls[i].Body
+		}
+	}
+	t.Fatalf("no se encontró ningún mensaje mandado a %s", phone)
+	return ""
+}
+
 func (m *mockWhatsAppClient) callsTo(phone string) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
