@@ -458,6 +458,13 @@ export const ClinicManagement: React.FC = () => {
             une. Si todavía no tiene cuenta, le mandamos una invitación a registrarse — en cuanto su
             cuenta quede aprobada, se une a la clínica automáticamente, sin ningún paso extra.
           </p>
+          {clinic.doctors.length >= clinic.baseIncludedDoctors && (
+            <p className="clinic-alert">
+              Ya tienes {clinic.doctors.length} de {clinic.baseIncludedDoctors} doctores incluidos en tu
+              plan base. Este doctor se cobrará ${clinic.extraPriceDisplay.toLocaleString('es-MX')} MXN
+              extra/mes en cuanto se una.
+            </p>
+          )}
           <form className="invite-form" onSubmit={handleInvite}>
             <div className="form-group">
               <label>Correo del doctor</label>
