@@ -115,9 +115,33 @@ export function useConsultation(appointmentId: string | undefined) {
   const isHistoryInterceptedRef = useRef(false);
 
   // --- Config de apartados de notas (definida por el doctor en Ajustes) ---
+  // La fuente de verdad es el backend (/doctor/template) — localStorage es
+  // solo un caché para mostrar algo de inmediato sin esperar la red, pero
+  // si solo se leyera de ahí, un doctor que configuró sus apartados desde
+  // otra sesión/dispositivo (o con el caché ya vencido) seguiría viendo los
+  // 3 apartados por defecto aquí aunque en Ajustes ya se vea el cambio.
   useEffect(() => {
-    const savedConfig = localStorage.getItem('doctor_notes_template');
-    setSectionsConfig(savedConfig ? JSON.parse(savedConfig) : DEFAULT_SECTIONS);
+    let cancelled = false;
+    const cachedRaw = localStorage.getItem('doctor_notes_template');
+    if (cachedRaw) {
+      try {
+        setSectionsConfig(JSON.parse(cachedRaw));
+      } catch {
+        // Caché corrupto: se ignora, se espera la respuesta del servidor.
+      }
+    }
+    api.get('/doctor/template')
+      .then((res) => {
+        if (cancelled) return;
+        const fields: NoteSectionConfig[] | undefined = res.data?.fields;
+        const resolved = fields && fields.length > 0 ? fields : DEFAULT_SECTIONS;
+        setSectionsConfig(resolved);
+        localStorage.setItem('doctor_notes_template', JSON.stringify(resolved));
+      })
+      .catch(() => {
+        if (!cachedRaw) setSectionsConfig(DEFAULT_SECTIONS);
+      });
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
