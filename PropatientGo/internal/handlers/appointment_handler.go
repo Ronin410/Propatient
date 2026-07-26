@@ -219,41 +219,20 @@ func CreateAppointment(db *gorm.DB, calClient googlecalendar.Client, waClient wh
 				if tokenErr != nil {
 					log.Printf("⚠️ No se pudo generar el link de documentos para la cita %d: %v", appointment.ID, tokenErr)
 				}
-				sendDoctorBookedAppointmentWhatsApp(context.Background(), waClient, waTemplates, doctor, patient, appointment, uploadToken)
+				// Reutiliza el mismo mensaje/plantilla que ya usa
+				// ConfirmAppointment ("tu cita quedó confirmada") en vez de
+				// un texto y una plantilla de Twilio propios: una cita
+				// agendada directo por el doctor queda confirmada de una
+				// vez, así que es exactamente el mismo aviso — y evita
+				// depender de una plantilla nueva (AppointmentBookedByDoctor)
+				// que nunca se dio de alta en Twilio/Render y que, al caer
+				// a texto libre, WhatsApp puede rechazar en silencio si el
+				// paciente nunca le ha escrito antes al número del negocio.
+				sendAppointmentDecisionWhatsApp(context.Background(), waClient, waTemplates, doctor, patient, appointment, true, uploadToken)
 			}(doctor, patient, appointment, uploadToken, tokenErr)
 		}
 
 		c.JSON(http.StatusCreated, appointment)
-	}
-}
-
-// sendDoctorBookedAppointmentWhatsApp avisa al paciente que el doctor le
-// agendó una cita — a diferencia de una solicitud pública (que pasa por
-// "pendiente de confirmar"), una cita agendada por el propio doctor queda
-// lista de una vez, así que este es el ÚNICO aviso que recibe el paciente
-// (antes no recibía ninguno). Incluye el link para subir documentos antes
-// de la consulta cuando se pudo generar. Mejor esfuerzo, igual que el
-// resto de los avisos de WhatsApp de esta app.
-func sendDoctorBookedAppointmentWhatsApp(ctx context.Context, waClient whatsapp.Client, waTemplates whatsapp.Templates, doctor models.Doctor, patient models.Patient, appointment models.Appointment, uploadToken string) {
-	if waClient == nil || patient.Phone == "" {
-		return
-	}
-
-	when := auth.FormatSpanishDateTime(appointment.AppointmentDateTime)
-	uploadURL := ""
-	if uploadToken != "" {
-		uploadURL = fmt.Sprintf("%s/public-upload/%s", frontendRedirectBase(), uploadToken)
-	}
-
-	body := fmt.Sprintf("¡Hola %s! Tu cita con Dr(a). %s quedó agendada para el %s.", patient.FirstName, doctor.FullName, when)
-	if uploadURL != "" {
-		body += fmt.Sprintf(" Antes de tu consulta, súbenos aquí cualquier estudio o documento que quieras que el doctor revise: %s", uploadURL)
-	}
-	body += " — ProPatient"
-
-	vars := map[string]string{"1": patient.FirstName, "2": doctor.FullName, "3": when, "4": uploadURL}
-	if err := whatsapp.SendWithFallback(ctx, waClient, patient.Phone, waTemplates.AppointmentBookedByDoctor, vars, body); err != nil {
-		log.Printf("⚠️ No se pudo enviar el WhatsApp de cita agendada al paciente (cita %d): %v", appointment.ID, err)
 	}
 }
 
