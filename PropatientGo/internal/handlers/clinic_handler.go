@@ -81,6 +81,45 @@ func syncClinicDoctorCount(ctx context.Context, db *gorm.DB, client billing.Clie
 	return nil
 }
 
+// clinicOccupiedSlots cuenta cuántos de los billing.ClinicBaseIncludedDoctors
+// lugares del plan básico ya están ocupados: doctores que ya pertenecen a
+// la clínica (incluye al dueño, que también tiene clinic_id puesto) más
+// invitaciones todavía sin aceptar — tanto a correos sin cuenta
+// (ClinicEmailInvite) como a cuentas existentes que no han confirmado
+// (Doctor.PendingClinicID). Se cuentan las pendientes para que el dueño no
+// pueda mandar más invitaciones de las que caben aunque nadie las haya
+// aceptado todavía.
+func clinicOccupiedSlots(db *gorm.DB, clinicID uint) (int64, error) {
+	var members int64
+	if err := db.Model(&models.Doctor{}).Where("clinic_id = ?", clinicID).Count(&members).Error; err != nil {
+		return 0, err
+	}
+	var pendingEmail int64
+	if err := db.Model(&models.ClinicEmailInvite{}).
+		Where("clinic_id = ? AND consumed_at IS NULL AND expires_at > ?", clinicID, time.Now().UTC()).
+		Count(&pendingEmail).Error; err != nil {
+		return 0, err
+	}
+	var pendingAccount int64
+	if err := db.Model(&models.Doctor{}).
+		Where("pending_clinic_id = ? AND clinic_invite_token != '' AND clinic_invite_token_expires_at > ?", clinicID, time.Now().UTC()).
+		Count(&pendingAccount).Error; err != nil {
+		return 0, err
+	}
+	return members + pendingEmail + pendingAccount, nil
+}
+
+// clinicFullMessage: mensaje de error cuando ya no hay lugar en el plan
+// básico — a diferencia de antes, ya no se ofrece cobrar extra por
+// doctores adicionales, el plan básico es un tope duro de
+// billing.ClinicBaseIncludedDoctors personas (dueño incluido).
+func clinicFullMessage() string {
+	return fmt.Sprintf(
+		"Tu clínica ya tiene %d personas en el plan básico (contándote a ti y las invitaciones pendientes). Para invitar a alguien más, primero quita a otro doctor o espera a que venza una invitación pendiente.",
+		billing.ClinicBaseIncludedDoctors,
+	)
+}
+
 type createClinicRequest struct {
 	Name string `json:"name" binding:"required"`
 }
@@ -374,7 +413,7 @@ type inviteDoctorToClinicRequest struct {
 const clinicEmailInviteValidity = 30 * 24 * time.Hour
 
 // inviteClinicByEmail cubre el caso en que el correo invitado todavía no
-// tiene cuenta en ProPatient: en vez de rechazar la invitación, guarda un
+// tiene cuenta en ProPatient Clinic: en vez de rechazar la invitación, guarda un
 // ClinicEmailInvite y le manda un correo invitándolo a registrarse. En
 // cuanto esa cuenta exista y su cédula sea aprobada (ver
 // ApproveDoctorCedula), se une sola a la clínica — sin que el dueño
@@ -385,6 +424,21 @@ func inviteClinicByEmail(c *gin.Context, db *gorm.DB, owner models.Doctor, email
 	// duplicarla.
 	var existing models.ClinicEmailInvite
 	found := db.Where("clinic_id = ? AND email = ? AND consumed_at IS NULL", *owner.ClinicID, email).First(&existing).Error == nil
+
+	// Solo se checa el cupo si esto reserva un lugar NUEVO — refrescar una
+	// invitación que ya estaba pendiente para este mismo correo no debe
+	// bloquearse por el tope, ya que ese lugar ya estaba contado.
+	if !found {
+		occupied, err := clinicOccupiedSlots(db, *owner.ClinicID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo verificar el cupo de la clínica"})
+			return
+		}
+		if occupied >= billing.ClinicBaseIncludedDoctors {
+			c.JSON(http.StatusConflict, gin.H{"error": clinicFullMessage()})
+			return
+		}
+	}
 
 	expires := time.Now().UTC().Add(clinicEmailInviteValidity)
 	if found {
@@ -412,15 +466,15 @@ func inviteClinicByEmail(c *gin.Context, db *gorm.DB, owner models.Doctor, email
 	db.Select("name").First(&clinic, *owner.ClinicID)
 
 	registerURL := frontendRedirectBase() + "/login"
-	subject := "Te invitaron a unirte a una clínica en ProPatient"
+	subject := "Te invitaron a unirte a una clínica en ProPatient Clinic"
 	body := fmt.Sprintf(`
 		<html>
 		<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
 			<div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-				<h2 style="color: #002d42; text-align: center;">¡Te invitaron a ProPatient!</h2>
-				<p>%s te invitó a unirte a la clínica <strong>%s</strong> en ProPatient, un sistema de gestión para consultorios médicos. Como todavía no tienes cuenta, primero necesitas registrarte.</p>
+				<h2 style="color: #002d42; text-align: center;">¡Te invitaron a ProPatient Clinic!</h2>
+				<p>%s te invitó a unirte a la clínica <strong>%s</strong> en ProPatient Clinic, un sistema de gestión para consultorios médicos. Como todavía no tienes cuenta, primero necesitas registrarte.</p>
 				<p style="text-align: center; margin: 28px 0;">
-					<a href="%s" style="background-color: #005073; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600;">Registrarme en ProPatient</a>
+					<a href="%s" style="background-color: #005073; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600;">Registrarme en ProPatient Clinic</a>
 				</p>
 				<p>Usa <strong>este mismo correo (%s)</strong> al registrarte. En cuanto tu cuenta esté validada, quedarás agregado a la clínica automáticamente — no necesitas hacer nada más.</p>
 				<p style="font-size: 12px; color: #888;">Si no esperabas esta invitación, puedes ignorarla — no se hace ningún cambio a menos que te registres con este correo.</p>
@@ -434,11 +488,11 @@ func inviteClinicByEmail(c *gin.Context, db *gorm.DB, owner models.Doctor, email
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "Ese correo todavía no tiene cuenta en ProPatient — le enviamos una invitación para que se registre. En cuanto su cuenta quede aprobada, se une a la clínica automáticamente."})
+	c.JSON(http.StatusCreated, gin.H{"message": "Ese correo todavía no tiene cuenta en ProPatient Clinic — le enviamos una invitación para que se registre. En cuanto su cuenta quede aprobada, se une a la clínica automáticamente."})
 }
 
 // InviteDoctorToClinic manda una invitación a un doctor — si ya tiene
-// cuenta en ProPatient, confirma con un clic (AcceptClinicInvite); si el
+// cuenta en ProPatient Clinic, confirma con un clic (AcceptClinicInvite); si el
 // correo todavía no tiene cuenta, ver inviteClinicByEmail. Ruta
 // protegida, solo el dueño de la clínica puede invitar.
 func InviteDoctorToClinic(db *gorm.DB) gin.HandlerFunc {
@@ -476,6 +530,23 @@ func InviteDoctorToClinic(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Solo se checa el cupo si esto reserva un lugar NUEVO — refrescar
+		// una invitación que este mismo doctor ya tenía pendiente para esta
+		// misma clínica no debe bloquearse por el tope, ya que ese lugar ya
+		// estaba contado.
+		isRefresh := invitee.PendingClinicID != nil && *invitee.PendingClinicID == *owner.ClinicID
+		if !isRefresh {
+			occupied, err := clinicOccupiedSlots(db, *owner.ClinicID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo verificar el cupo de la clínica"})
+				return
+			}
+			if occupied >= billing.ClinicBaseIncludedDoctors {
+				c.JSON(http.StatusConflict, gin.H{"error": clinicFullMessage()})
+				return
+			}
+		}
+
 		token, err := generateInviteToken()
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo generar la invitación"})
@@ -497,13 +568,13 @@ func InviteDoctorToClinic(db *gorm.DB) gin.HandlerFunc {
 		db.Select("name").First(&clinic, *owner.ClinicID)
 
 		inviteURL := fmt.Sprintf("%s/clinica/invitacion/%s", frontendRedirectBase(), token)
-		subject := "Te invitaron a unirte a una clínica en ProPatient"
+		subject := "Te invitaron a unirte a una clínica en ProPatient Clinic"
 		body := fmt.Sprintf(`
 			<html>
 			<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
 				<div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
 					<h2 style="color: #002d42; text-align: center;">¡Hola, %s!</h2>
-					<p>%s te invitó a unirte a la clínica <strong>%s</strong> en ProPatient. Al aceptar, tu suscripción individual (si tenías una) se cancela y quedas cubierto por el plan de la clínica.</p>
+					<p>%s te invitó a unirte a la clínica <strong>%s</strong> en ProPatient Clinic. Al aceptar, tu suscripción individual (si tenías una) se cancela y quedas cubierto por el plan de la clínica.</p>
 					<p style="text-align: center; margin: 28px 0;">
 						<a href="%s" style="background-color: #005073; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600;">Ver invitación</a>
 					</p>

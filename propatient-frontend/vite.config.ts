@@ -18,8 +18,8 @@ export default defineConfig({
       injectRegister: 'auto',
       registerType: 'autoUpdate',
       manifest: {
-        name: 'ProPatient',
-        short_name: 'ProPatient',
+        name: 'ProPatient Clinic',
+        short_name: 'PP Clinic',
         description: 'Gestiona tu consultorio digital en un solo lugar.',
         theme_color: '#005073',
         background_color: '#005073',

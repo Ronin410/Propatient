@@ -123,7 +123,7 @@ export const AcceptClinicInvite: React.FC = () => {
         <h1>Te invitaron a una clínica</h1>
         <p>
           <strong>{invite.ownerName}</strong> te invitó a unirte a <strong>{invite.clinicName}</strong> en
-          ProPatient. Al aceptar, tu suscripción individual (si tenías una) se cancela y quedas cubierto por
+          ProPatient Clinic. Al aceptar, tu suscripción individual (si tenías una) se cancela y quedas cubierto por
           el plan de la clínica.
         </p>
         {acceptError && <p className="clinic-error">{acceptError}</p>}

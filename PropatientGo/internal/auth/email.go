@@ -33,7 +33,7 @@ func SendEmail(toEmail, subject, htmlBody string) error {
 // petición.
 //
 // RESEND_FROM_EMAIL debe ser un remitente de un dominio verificado en
-// Resend (ej. "ProPatient <notificaciones@tudominio.com>"); si no está
+// Resend (ej. "ProPatient Clinic <notificaciones@tudominio.com>"); si no está
 // configurada, cae al dominio de pruebas de Resend
 // ("onboarding@resend.dev"), que SOLO entrega correos a la cuenta dueña de
 // la API key — sirve para probar el flujo, no para pacientes reales.
@@ -44,7 +44,7 @@ func sendViaResend(toEmail, subject, htmlBody string) error {
 	}
 	from := os.Getenv("RESEND_FROM_EMAIL")
 	if from == "" {
-		from = "ProPatient <onboarding@resend.dev>"
+		from = "ProPatient Clinic <onboarding@resend.dev>"
 	}
 
 	payload, err := json.Marshal(map[string]any{

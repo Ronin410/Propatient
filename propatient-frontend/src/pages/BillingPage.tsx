@@ -150,7 +150,7 @@ export const BillingPage: React.FC = () => {
           <h1>Acceso suspendido</h1>
           <p>
             El periodo de prueba o la suscripción del consultorio ya no está activa.
-            Pídele al doctor que renueve su suscripción para poder seguir usando ProPatient.
+            Pídele al doctor que renueve su suscripción para poder seguir usando ProPatient Clinic.
           </p>
         </div>
       </div>
@@ -182,7 +182,7 @@ export const BillingPage: React.FC = () => {
       <div className="card billing-card">
         {wasLocked && (
           <div className="billing-alert">
-            Tu periodo de prueba terminó. Suscríbete para seguir usando ProPatient.
+            Tu periodo de prueba terminó. Suscríbete para seguir usando ProPatient Clinic.
           </div>
         )}
         {checkoutResult === 'cancelled' && (
@@ -213,7 +213,7 @@ export const BillingPage: React.FC = () => {
                       ({formatToLocalDate(status.currentPeriodEnd)}).
                     </p>
                   ) : (
-                    <p>Tu consultorio tiene acceso completo a ProPatient.</p>
+                    <p>Tu consultorio tiene acceso completo a ProPatient Clinic.</p>
                   )}
                 </div>
               </div>

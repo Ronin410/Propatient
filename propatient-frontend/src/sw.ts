@@ -37,7 +37,7 @@ type ShowNotificationOptions = NotificationOptions & { vibrate?: number[] };
 // backend, función sendPublicBookingPush). Si el payload no trae algo
 // reconocible, se muestra un texto genérico en vez de fallar en silencio.
 self.addEventListener('push', (event: PushEvent) => {
-  let payload: PushPayload = { title: 'ProPatient', body: 'Tienes una notificación nueva.', url: '/inicio' };
+  let payload: PushPayload = { title: 'ProPatient Clinic', body: 'Tienes una notificación nueva.', url: '/inicio' };
   try {
     if (event.data) {
       payload = { ...payload, ...event.data.json() };

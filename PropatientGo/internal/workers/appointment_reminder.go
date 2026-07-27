@@ -78,7 +78,7 @@ func SendDueAppointmentReminders(db *gorm.DB, sendEmail EmailSender, waClient wh
 		// paciente no tiene teléfono, o el envío falla.
 		if waClient != nil && appt.Patient.Phone != "" {
 			body := fmt.Sprintf(
-				"Hola %s, te recordamos tu cita con Dr(a). %s el %s. — ProPatient",
+				"Hola %s, te recordamos tu cita con Dr(a). %s el %s. — ProPatient Clinic",
 				appt.Patient.FirstName, doctor.FullName, when,
 			)
 			vars := map[string]string{"1": appt.Patient.FirstName, "2": doctor.FullName, "3": when}
@@ -94,7 +94,7 @@ func SendDueAppointmentReminders(db *gorm.DB, sendEmail EmailSender, waClient wh
 			body := fmt.Sprintf(
 				`<p>Hola %s,</p>
 				<p>Te recordamos tu cita con <strong>Dr(a). %s</strong> el <strong>%s</strong>.</p>
-				<p>— ProPatient</p>`,
+				<p>— ProPatient Clinic</p>`,
 				appt.Patient.FirstName, doctor.FullName, when,
 			)
 			if err := sendEmail(appt.Patient.Email, subject, body); err != nil {

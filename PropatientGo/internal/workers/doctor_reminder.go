@@ -65,7 +65,7 @@ func SendDueDoctorReminders(db *gorm.DB, sendEmail EmailSender) {
 		subject := "Recordatorio: tu cita con " + patientName + " está por comenzar"
 		body := fmt.Sprintf(
 			`<p>Recordatorio: tu cita con <strong>%s</strong> es a las <strong>%s</strong>.</p>
-			<p>— ProPatient</p>`,
+			<p>— ProPatient Clinic</p>`,
 			patientName, when,
 		)
 

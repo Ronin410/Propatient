@@ -58,7 +58,7 @@ func sendReviewRequestWhatsApp(ctx context.Context, waClient whatsapp.Client, wa
 	}
 	link := fmt.Sprintf("%s/resena/%s", frontendRedirectBase(), token)
 	body := fmt.Sprintf(
-		"Hola %s, gracias por tu consulta con Dr(a). %s. ¿Nos regalas unos segundos para calificarla? %s — ProPatient",
+		"Hola %s, gracias por tu consulta con Dr(a). %s. ¿Nos regalas unos segundos para calificarla? %s — ProPatient Clinic",
 		patient.FirstName, doctor.FullName, link,
 	)
 	vars := map[string]string{"1": patient.FirstName, "2": doctor.FullName, "3": link}

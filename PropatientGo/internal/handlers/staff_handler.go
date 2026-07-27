@@ -133,13 +133,13 @@ func InviteStaff(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		inviteURL := fmt.Sprintf("%s/personal/invitacion/%s", frontendRedirectBase(), token)
-		subject := "Te invitaron a ProPatient"
+		subject := "Te invitaron a ProPatient Clinic"
 		body := fmt.Sprintf(`
 			<html>
 			<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
 				<div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
 					<h2 style="color: #002d42; text-align: center;">¡Hola, %s!</h2>
-					<p>%s te invitó a acceder como personal del consultorio en <strong>ProPatient</strong>. Podrás gestionar la agenda y los pacientes, sin acceso al historial clínico ni a la configuración del doctor.</p>
+					<p>%s te invitó a acceder como personal del consultorio en <strong>ProPatient Clinic</strong>. Podrás gestionar la agenda y los pacientes, sin acceso al historial clínico ni a la configuración del doctor.</p>
 					<p style="text-align: center; margin: 28px 0;">
 						<a href="%s" style="background-color: #005073; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600;">Crear mi contraseña</a>
 					</p>
@@ -194,13 +194,13 @@ func linkExistingStaffToDoctor(c *gin.Context, db *gorm.DB, doctorID uint, docto
 	// Best-effort: esta persona ya tiene cuenta y contraseña, no hace
 	// falta que haga nada — solo se le avisa que ahora también puede
 	// entrar a este otro consultorio.
-	subject := "Ahora tienes acceso a otro consultorio en ProPatient"
+	subject := "Ahora tienes acceso a otro consultorio en ProPatient Clinic"
 	body := fmt.Sprintf(`
 		<html>
 		<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
 			<div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
 				<h2 style="color: #002d42; text-align: center;">¡Hola, %s!</h2>
-				<p>%s también te dio acceso como personal de su consultorio en <strong>ProPatient</strong>, con la misma cuenta que ya tienes. La próxima vez que inicies sesión vas a poder elegir con cuál consultorio entrar.</p>
+				<p>%s también te dio acceso como personal de su consultorio en <strong>ProPatient Clinic</strong>, con la misma cuenta que ya tienes. La próxima vez que inicies sesión vas a poder elegir con cuál consultorio entrar.</p>
 			</div>
 		</body>
 		</html>
@@ -554,13 +554,13 @@ func RequestStaffPasswordReset(db *gorm.DB) gin.HandlerFunc {
 		})
 
 		resetURL := fmt.Sprintf("%s/personal/restablecer/%s", frontendRedirectBase(), token)
-		subject := "ProPatient - Restablece tu contraseña"
+		subject := "ProPatient Clinic - Restablece tu contraseña"
 		body := fmt.Sprintf(`
 			<html>
 			<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
 				<div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
 					<h2 style="color: #002d42; text-align: center;">Restablece tu contraseña</h2>
-					<p>Recibimos una solicitud para restablecer la contraseña de tu cuenta de personal en <strong>ProPatient</strong>.</p>
+					<p>Recibimos una solicitud para restablecer la contraseña de tu cuenta de personal en <strong>ProPatient Clinic</strong>.</p>
 					<p style="text-align: center; margin: 28px 0;">
 						<a href="%s" style="background-color: #005073; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600;">Restablecer contraseña</a>
 					</p>

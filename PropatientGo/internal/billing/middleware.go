@@ -93,7 +93,7 @@ func RequireActiveSubscription(db *gorm.DB) gin.HandlerFunc {
 
 		c.AbortWithStatusJSON(http.StatusPaymentRequired, gin.H{
 			"error":   "subscription_required",
-			"message": "Tu periodo de prueba terminó. Activa tu suscripción para seguir usando ProPatient.",
+			"message": "Tu periodo de prueba terminó. Activa tu suscripción para seguir usando ProPatient Clinic.",
 		})
 	}
 }

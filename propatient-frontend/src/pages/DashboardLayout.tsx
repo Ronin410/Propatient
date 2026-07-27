@@ -173,7 +173,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
         <div>
           <div className="sidebar-header">
             <div className="logo-container">
-              <img src={logo} alt="ProPatient" className="medical-logo" />
+              <img src={logo} alt="ProPatient Clinic" className="medical-logo" />
               <p className="office-name">PROPatient</p>
             </div>
             <button
@@ -228,7 +228,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
           {supportWhatsAppNumber && (
             <a
               className="theme-toggle-link"
-              href={`https://wa.me/${supportWhatsAppNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Hola, necesito ayuda con ProPatient.')}`}
+              href={`https://wa.me/${supportWhatsAppNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Hola, necesito ayuda con ProPatient Clinic.')}`}
               target="_blank"
               rel="noreferrer"
             >

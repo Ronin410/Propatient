@@ -26,8 +26,8 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
           to="/"
           style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none', color: 'inherit', width: 'fit-content' }}
         >
-          <img src={logo} alt="ProPatient" style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
-          <span style={{ fontSize: '18px', fontWeight: 500, letterSpacing: '0.3px' }}>ProPatient</span>
+          <img src={logo} alt="ProPatient Clinic" style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
+          <span style={{ fontSize: '18px', fontWeight: 500, letterSpacing: '0.3px' }}>ProPatient Clinic</span>
         </Link>
 
         {/* Mensaje Central */}
@@ -47,7 +47,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
 
         {/* 📑 FOOTER INSTITUCIONAL: oculto en celular (ver AuthLayout.scss), para no competir con el formulario por espacio. */}
         <div className="auth-layout-visual-footer">
-          <span>© {year} ProPatient Medical System.</span>
+          <span>© {year} ProPatient Clinic.</span>
           <div style={{ display: 'flex', gap: '20px' }}>
             <Link to="/privacidad" style={{ color: 'inherit', textDecoration: 'none' }}>Privacidad</Link>
             <Link to="/terminos" style={{ color: 'inherit', textDecoration: 'none' }}>Términos</Link>

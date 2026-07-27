@@ -15,7 +15,7 @@ export const Footer: React.FC = () => {
 
   return (
     <footer className="app-footer">
-      <p className="app-footer-copyright">© {year} ProPatient Medical System.</p>
+      <p className="app-footer-copyright">© {year} ProPatient Clinic.</p>
       <nav className="app-footer-links">
         <Link to="/privacidad">Aviso de Privacidad</Link>
         <Link to="/terminos">Términos y Condiciones</Link>

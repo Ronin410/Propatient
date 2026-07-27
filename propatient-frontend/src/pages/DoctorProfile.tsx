@@ -699,7 +699,7 @@ export const DoctorProfile = () => {
         {/* DIRECTORIO PÚBLICO */}
         <div className="profile-form-section">
           <div className="section-title">
-            <h3>Directorio Público de ProPatient</h3>
+            <h3>Directorio Público de ProPatient Clinic</h3>
             <p>Si lo activas, tu perfil aparece en el directorio público de doctores y pacientes nuevos podrán encontrarte y solicitar una cita en línea, sin necesidad de crear una cuenta.</p>
           </div>
           <div className="public-listing-toggle">

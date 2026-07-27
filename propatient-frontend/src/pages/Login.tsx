@@ -110,7 +110,7 @@ export const Login = () => {
         justifyContent: 'center',
         boxShadow: '0 8px 20px rgba(0, 115, 112, 0.15)'
       }}>
-        <img src={logo} alt="ProPatient" style={{ width: '64px', height: '64px', objectFit: 'contain' }} />
+        <img src={logo} alt="ProPatient Clinic" style={{ width: '64px', height: '64px', objectFit: 'contain' }} />
       </div>
 
       {/* 📄 TARJETA CONTENEDORA BLANCA */}
@@ -130,7 +130,7 @@ export const Login = () => {
             Acceso al Sistema
           </h1>
           <p style={{ fontSize: '14px', color: 'var(--color-secondary)', marginTop: '6px', fontWeight: 500 }}>
-            ProPatient Medical System
+            ProPatient Clinic
           </p>
         </div>
 

@@ -142,7 +142,7 @@ export const PublicDoctorProfile: React.FC = () => {
     const specialty = doctor.medicalSpecialty || 'Médico General';
     const location = doctor.address ? ` en ${doctor.address}` : '';
     return setPageMeta({
-      title: `Dr(a). ${doctor.fullName} — ${specialty} | ProPatient`,
+      title: `Dr(a). ${doctor.fullName} — ${specialty} | ProPatient Clinic`,
       description: `Agenda una cita con Dr(a). ${doctor.fullName}, ${specialty}${location}. Solicita tu cita en línea sin crear una cuenta.`,
     });
   }, [doctor]);
@@ -225,8 +225,8 @@ export const PublicDoctorProfile: React.FC = () => {
     <div className="public-profile-page">
       <header className="public-profile-nav">
         <Link to="/" className="public-profile-logo">
-          <img src={logo} alt="ProPatient" className="brand-logo-icon" />
-          ProPatient
+          <img src={logo} alt="ProPatient Clinic" className="brand-logo-icon" />
+          ProPatient Clinic
         </Link>
         <Link to="/doctores" className="nav-link">Ver directorio</Link>
       </header>

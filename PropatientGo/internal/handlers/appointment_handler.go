@@ -590,11 +590,11 @@ func sendAppointmentDecisionWhatsApp(ctx context.Context, waClient whatsapp.Clie
 		}
 		body += fmt.Sprintf(" Si tienes dudas, comunícate con tu doctor%s.", contactSuffix)
 		vars["4"] = contactSuffix
-		body += " — ProPatient"
+		body += " — ProPatient Clinic"
 		contentSID = waTemplates.AppointmentConfirmed
 	} else {
 		body = fmt.Sprintf(
-			"El consultorio de Dr(a). %s no pudo aceptar tu solicitud de cita para el %s. Puedes intentar con otro horario desde el directorio de ProPatient.",
+			"El consultorio de Dr(a). %s no pudo aceptar tu solicitud de cita para el %s. Puedes intentar con otro horario desde el directorio de ProPatient Clinic.",
 			doctor.FullName, when,
 		)
 		contentSID = waTemplates.AppointmentRejected
@@ -623,7 +623,7 @@ func sendAppointmentDecisionEmail(doctor models.Doctor, patient models.Patient, 
 		body = fmt.Sprintf(
 			`<p>Hola %s,</p>
 			<p>Tu cita con <strong>Dr(a). %s</strong> quedó <strong>confirmada</strong> para el <strong>%s</strong>.</p>
-			<p>— ProPatient</p>`,
+			<p>— ProPatient Clinic</p>`,
 			patient.FirstName, doctor.FullName, when,
 		)
 	} else {
@@ -631,8 +631,8 @@ func sendAppointmentDecisionEmail(doctor models.Doctor, patient models.Patient, 
 		body = fmt.Sprintf(
 			`<p>Hola %s,</p>
 			<p>El consultorio de <strong>Dr(a). %s</strong> no pudo aceptar tu solicitud de cita para el <strong>%s</strong>.</p>
-			<p>Puedes intentar con otro horario desde el directorio de ProPatient.</p>
-			<p>— ProPatient</p>`,
+			<p>Puedes intentar con otro horario desde el directorio de ProPatient Clinic.</p>
+			<p>— ProPatient Clinic</p>`,
 			patient.FirstName, doctor.FullName, when,
 		)
 	}
@@ -654,7 +654,7 @@ func sendAppointmentCancelledWhatsApp(ctx context.Context, waClient whatsapp.Cli
 	}
 	when := auth.FormatSpanishDateTime(appointment.AppointmentDateTime)
 	body := fmt.Sprintf(
-		"Tu cita con Dr(a). %s del %s fue cancelada por el consultorio. Si necesitas agendar de nuevo, hazlo desde el directorio de ProPatient. — ProPatient",
+		"Tu cita con Dr(a). %s del %s fue cancelada por el consultorio. Si necesitas agendar de nuevo, hazlo desde el directorio de ProPatient Clinic. — ProPatient Clinic",
 		doctor.FullName, when,
 	)
 	vars := map[string]string{"1": doctor.FullName, "2": when}
@@ -677,8 +677,8 @@ func sendAppointmentCancelledEmail(doctor models.Doctor, patient models.Patient,
 	body := fmt.Sprintf(
 		`<p>Hola %s,</p>
 		<p>Tu cita con <strong>Dr(a). %s</strong> del <strong>%s</strong> fue <strong>cancelada</strong> por el consultorio.</p>
-		<p>Si necesitas agendar de nuevo, puedes hacerlo desde el directorio de ProPatient.</p>
-		<p>— ProPatient</p>`,
+		<p>Si necesitas agendar de nuevo, puedes hacerlo desde el directorio de ProPatient Clinic.</p>
+		<p>— ProPatient Clinic</p>`,
 		patient.FirstName, doctor.FullName, when,
 	)
 	if err := auth.SendEmail(patient.Email, subject, body); err != nil {
@@ -726,7 +726,7 @@ func sendAppointmentRescheduledEmail(doctor models.Doctor, patient models.Patien
 	body := fmt.Sprintf(
 		`<p>Hola %s,</p>
 		<p>Tu cita con <strong>Dr(a). %s</strong> fue <strong>reprogramada</strong>. Nueva fecha y hora: <strong>%s</strong>.</p>
-		<p>— ProPatient</p>`,
+		<p>— ProPatient Clinic</p>`,
 		patient.FirstName, doctor.FullName, when,
 	)
 	if err := auth.SendEmail(patient.Email, subject, body); err != nil {
@@ -971,7 +971,7 @@ func sendFollowUpWhatsApp(ctx context.Context, waClient whatsapp.Client, waTempl
 	}
 	when := auth.FormatSpanishDateTime(followUpDate)
 	body := fmt.Sprintf(
-		"Hola %s, Dr(a). %s sugiere agendar tu cita de seguimiento para el %s. Escríbele al consultorio para confirmar el horario. — ProPatient",
+		"Hola %s, Dr(a). %s sugiere agendar tu cita de seguimiento para el %s. Escríbele al consultorio para confirmar el horario. — ProPatient Clinic",
 		patient.FirstName, doctor.FullName, when,
 	)
 	vars := map[string]string{"1": patient.FirstName, "2": doctor.FullName, "3": when}
