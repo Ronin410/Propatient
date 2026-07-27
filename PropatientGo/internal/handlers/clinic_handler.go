@@ -81,45 +81,6 @@ func syncClinicDoctorCount(ctx context.Context, db *gorm.DB, client billing.Clie
 	return nil
 }
 
-// clinicOccupiedSlots cuenta cuántos de los billing.ClinicBaseIncludedDoctors
-// lugares del plan básico ya están ocupados: doctores que ya pertenecen a
-// la clínica (incluye al dueño, que también tiene clinic_id puesto) más
-// invitaciones todavía sin aceptar — tanto a correos sin cuenta
-// (ClinicEmailInvite) como a cuentas existentes que no han confirmado
-// (Doctor.PendingClinicID). Se cuentan las pendientes para que el dueño no
-// pueda mandar más invitaciones de las que caben aunque nadie las haya
-// aceptado todavía.
-func clinicOccupiedSlots(db *gorm.DB, clinicID uint) (int64, error) {
-	var members int64
-	if err := db.Model(&models.Doctor{}).Where("clinic_id = ?", clinicID).Count(&members).Error; err != nil {
-		return 0, err
-	}
-	var pendingEmail int64
-	if err := db.Model(&models.ClinicEmailInvite{}).
-		Where("clinic_id = ? AND consumed_at IS NULL AND expires_at > ?", clinicID, time.Now().UTC()).
-		Count(&pendingEmail).Error; err != nil {
-		return 0, err
-	}
-	var pendingAccount int64
-	if err := db.Model(&models.Doctor{}).
-		Where("pending_clinic_id = ? AND clinic_invite_token != '' AND clinic_invite_token_expires_at > ?", clinicID, time.Now().UTC()).
-		Count(&pendingAccount).Error; err != nil {
-		return 0, err
-	}
-	return members + pendingEmail + pendingAccount, nil
-}
-
-// clinicFullMessage: mensaje de error cuando ya no hay lugar en el plan
-// básico — a diferencia de antes, ya no se ofrece cobrar extra por
-// doctores adicionales, el plan básico es un tope duro de
-// billing.ClinicBaseIncludedDoctors personas (dueño incluido).
-func clinicFullMessage() string {
-	return fmt.Sprintf(
-		"Tu clínica ya tiene %d personas en el plan básico (contándote a ti y las invitaciones pendientes). Para invitar a alguien más, primero quita a otro doctor o espera a que venza una invitación pendiente.",
-		billing.ClinicBaseIncludedDoctors,
-	)
-}
-
 type createClinicRequest struct {
 	Name string `json:"name" binding:"required"`
 }
@@ -425,21 +386,6 @@ func inviteClinicByEmail(c *gin.Context, db *gorm.DB, owner models.Doctor, email
 	var existing models.ClinicEmailInvite
 	found := db.Where("clinic_id = ? AND email = ? AND consumed_at IS NULL", *owner.ClinicID, email).First(&existing).Error == nil
 
-	// Solo se checa el cupo si esto reserva un lugar NUEVO — refrescar una
-	// invitación que ya estaba pendiente para este mismo correo no debe
-	// bloquearse por el tope, ya que ese lugar ya estaba contado.
-	if !found {
-		occupied, err := clinicOccupiedSlots(db, *owner.ClinicID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo verificar el cupo de la clínica"})
-			return
-		}
-		if occupied >= billing.ClinicBaseIncludedDoctors {
-			c.JSON(http.StatusConflict, gin.H{"error": clinicFullMessage()})
-			return
-		}
-	}
-
 	expires := time.Now().UTC().Add(clinicEmailInviteValidity)
 	if found {
 		if err := db.Model(&existing).Updates(map[string]interface{}{
@@ -528,23 +474,6 @@ func InviteDoctorToClinic(db *gorm.DB) gin.HandlerFunc {
 		if invitee.ClinicID != nil {
 			c.JSON(http.StatusConflict, gin.H{"error": "Ese doctor ya pertenece a una clínica"})
 			return
-		}
-
-		// Solo se checa el cupo si esto reserva un lugar NUEVO — refrescar
-		// una invitación que este mismo doctor ya tenía pendiente para esta
-		// misma clínica no debe bloquearse por el tope, ya que ese lugar ya
-		// estaba contado.
-		isRefresh := invitee.PendingClinicID != nil && *invitee.PendingClinicID == *owner.ClinicID
-		if !isRefresh {
-			occupied, err := clinicOccupiedSlots(db, *owner.ClinicID)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo verificar el cupo de la clínica"})
-				return
-			}
-			if occupied >= billing.ClinicBaseIncludedDoctors {
-				c.JSON(http.StatusConflict, gin.H{"error": clinicFullMessage()})
-				return
-			}
 		}
 
 		token, err := generateInviteToken()

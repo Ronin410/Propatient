@@ -380,7 +380,8 @@ export const ClinicManagement: React.FC = () => {
           <h1>{clinic.name}</h1>
           <p className="subtitle">
             Plan de clínica: ${clinic.basePriceDisplay.toLocaleString('es-MX')} MXN/mes cubre hasta{' '}
-            {clinic.baseIncludedDoctors} personas en el consultorio, contándote a ti.
+            {clinic.baseIncludedDoctors} personas en el consultorio (contándote a ti), más $
+            {clinic.extraPriceDisplay.toLocaleString('es-MX')} MXN/mes por cada persona adicional.
           </p>
         </div>
       </header>
@@ -474,28 +475,22 @@ export const ClinicManagement: React.FC = () => {
             une. Si todavía no tiene cuenta, le mandamos una invitación a registrarse — en cuanto su
             cuenta quede aprobada, se une a la clínica automáticamente, sin ningún paso extra.
           </p>
-          {(() => {
-            const occupiedSlots =
-              clinic.doctors.length + clinic.pendingEmailInvites.length + clinic.pendingAccountInvites.length;
-            const isFull = occupiedSlots >= clinic.baseIncludedDoctors;
-            return isFull ? (
-              <p className="clinic-alert">
-                Tu clínica ya tiene {clinic.baseIncludedDoctors} de {clinic.baseIncludedDoctors} lugares del plan
-                básico ocupados (contándote a ti y las invitaciones pendientes). Para invitar a alguien más, primero
-                quita a otro doctor o espera a que venza una invitación pendiente.
-              </p>
-            ) : (
-              <form className="invite-form" onSubmit={handleInvite}>
-                <div className="form-group">
-                  <label>Correo del doctor</label>
-                  <input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required />
-                </div>
-                <button type="submit" className="btn-primary" disabled={inviting}>
-                  {inviting ? 'Enviando...' : 'Enviar invitación'}
-                </button>
-              </form>
-            );
-          })()}
+          {clinic.doctors.length >= clinic.baseIncludedDoctors && (
+            <p className="clinic-alert">
+              Ya tienes {clinic.doctors.length} de {clinic.baseIncludedDoctors} personas incluidas en tu
+              plan base (contándote a ti). Este doctor se cobrará ${clinic.extraPriceDisplay.toLocaleString('es-MX')}{' '}
+              MXN extra/mes en cuanto se una.
+            </p>
+          )}
+          <form className="invite-form" onSubmit={handleInvite}>
+            <div className="form-group">
+              <label>Correo del doctor</label>
+              <input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required />
+            </div>
+            <button type="submit" className="btn-primary" disabled={inviting}>
+              {inviting ? 'Enviando...' : 'Enviar invitación'}
+            </button>
+          </form>
 
           {clinic.pendingEmailInvites.length > 0 && (
             <div className="clinic-pending-invites">
