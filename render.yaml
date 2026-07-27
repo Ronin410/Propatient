@@ -32,6 +32,11 @@ services:
           property: connectionString
       - key: JWT_SECRET
         sync: false # generar un valor propio, ej. `openssl rand -base64 48`
+      # Sin esto, Gin corre en modo debug también en producción: imprime
+      # cada ruta registrada y una advertencia en cada arranque, y es un
+      # poco más lento. No es secreto, valor fijo.
+      - key: GIN_MODE
+        value: release
       - key: GOOGLE_CLIENT_ID
         value: 744896665247-hrs7pmi72q2pog5dn9h1fh5n4nkpv18r.apps.googleusercontent.com
       - key: FRONTEND_URL
@@ -94,6 +99,12 @@ services:
         sync: false
       - key: TWILIO_WHATSAPP_FROM
         sync: false
+      # URL pública EXACTA que le diste de alta a Twilio para recibir
+      # mensajes entrantes (bandeja de WhatsApp del superadmin, ver
+      # .env.example). Sin esto, el webhook rechaza todos los mensajes
+      # entrantes por firma inválida.
+      - key: TWILIO_WEBHOOK_URL
+        sync: false # ej. https://propatient-api-xxxx.onrender.com/api/whatsapp/webhook
       # Plantillas de WhatsApp (Content API de Twilio, ver .env.example
       # para el detalle). Sin ellas, los avisos siguen mandándose por
       # texto libre (funciona en sandbox y dentro de una sesión de 24h);
@@ -140,6 +151,17 @@ services:
       # configurar LocationIQ (plan gratis de 5,000 consultas/día).
       - key: LOCATIONIQ_API_KEY
         sync: false
+      # reCAPTCHA v3 en el agendado público de citas (ver .env.example).
+      # Sin esto, esa pantalla queda protegida solo por el rate limiting
+      # por IP, sin la capa extra anti-bot.
+      - key: RECAPTCHA_SECRET_KEY
+        sync: false
+      # Sentry: reporte de errores y panics del backend (ver .env.example).
+      # Sin SENTRY_DSN, la app funciona igual pero no se reporta nada.
+      - key: SENTRY_DSN
+        sync: false
+      - key: SENTRY_ENVIRONMENT
+        value: production
 
   # --- FRONTEND (React / Vite) ---
   - type: web
@@ -163,6 +185,14 @@ services:
         sync: false # pegar aquí la URL pública de propatient-api + "/api"
       - key: VITE_VAPID_PUBLIC_KEY
         sync: false # misma llave pública que VAPID_PUBLIC_KEY del backend
+      - key: VITE_SUPPORT_WHATSAPP_NUMBER
+        sync: false # mismo número que TWILIO_WHATSAPP_FROM del backend, sin el prefijo "whatsapp:"
+      - key: VITE_RECAPTCHA_SITE_KEY
+        sync: false # "Site key" del mismo sitio reCAPTCHA v3 cuya "Secret key" va en RECAPTCHA_SECRET_KEY del backend
+      - key: VITE_SENTRY_DSN
+        sync: false
+      - key: VITE_SENTRY_ENVIRONMENT
+        value: production
     routes:
       # SPA con react-router: cualquier ruta no encontrada sirve index.html
       - type: rewrite
