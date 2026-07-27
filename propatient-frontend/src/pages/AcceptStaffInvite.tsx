@@ -116,7 +116,7 @@ export const AcceptStaffInvite: React.FC = () => {
             ¡Hola, {invite.fullName}!
           </h1>
           <p style={{ fontSize: '14px', color: 'var(--color-secondary)', marginTop: '6px' }}>
-            {invite.doctorName} te invitó a acceder como personal del consultorio en ProPatient. Crea tu contraseña para continuar.
+            {invite.doctorName} te invitó a acceder como personal del consultorio en ProPatient Clinic. Crea tu contraseña para continuar.
           </p>
         </div>
 

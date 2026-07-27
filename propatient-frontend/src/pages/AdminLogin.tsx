@@ -35,7 +35,7 @@ export const AdminLogin: React.FC = () => {
       <form className="admin-login-card" onSubmit={handleSubmit}>
         <span className="material-icons-outlined admin-login-icon">admin_panel_settings</span>
         <h1>Panel de administración</h1>
-        <p className="admin-login-subtitle">Acceso interno de ProPatient</p>
+        <p className="admin-login-subtitle">Acceso interno de ProPatient Clinic</p>
 
         {error && <div className="admin-login-error">{error}</div>}
 

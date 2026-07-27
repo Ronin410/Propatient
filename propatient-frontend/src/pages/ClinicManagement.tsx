@@ -380,8 +380,7 @@ export const ClinicManagement: React.FC = () => {
           <h1>{clinic.name}</h1>
           <p className="subtitle">
             Plan de clínica: ${clinic.basePriceDisplay.toLocaleString('es-MX')} MXN/mes cubre hasta{' '}
-            {clinic.baseIncludedDoctors} doctores, más ${clinic.extraPriceDisplay.toLocaleString('es-MX')} MXN/mes
-            por cada doctor adicional.
+            {clinic.baseIncludedDoctors} personas en el consultorio, contándote a ti.
           </p>
         </div>
       </header>
@@ -471,26 +470,32 @@ export const ClinicManagement: React.FC = () => {
         <section className="card invite-card">
           <h3>Invitar a un doctor</h3>
           <p className="clinic-muted">
-            Si ya tiene cuenta en ProPatient con ese correo, le llegará un aviso para confirmar que se
+            Si ya tiene cuenta en ProPatient Clinic con ese correo, le llegará un aviso para confirmar que se
             une. Si todavía no tiene cuenta, le mandamos una invitación a registrarse — en cuanto su
             cuenta quede aprobada, se une a la clínica automáticamente, sin ningún paso extra.
           </p>
-          {clinic.doctors.length >= clinic.baseIncludedDoctors && (
-            <p className="clinic-alert">
-              Ya tienes {clinic.doctors.length} de {clinic.baseIncludedDoctors} doctores incluidos en tu
-              plan base. Este doctor se cobrará ${clinic.extraPriceDisplay.toLocaleString('es-MX')} MXN
-              extra/mes en cuanto se una.
-            </p>
-          )}
-          <form className="invite-form" onSubmit={handleInvite}>
-            <div className="form-group">
-              <label>Correo del doctor</label>
-              <input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required />
-            </div>
-            <button type="submit" className="btn-primary" disabled={inviting}>
-              {inviting ? 'Enviando...' : 'Enviar invitación'}
-            </button>
-          </form>
+          {(() => {
+            const occupiedSlots =
+              clinic.doctors.length + clinic.pendingEmailInvites.length + clinic.pendingAccountInvites.length;
+            const isFull = occupiedSlots >= clinic.baseIncludedDoctors;
+            return isFull ? (
+              <p className="clinic-alert">
+                Tu clínica ya tiene {clinic.baseIncludedDoctors} de {clinic.baseIncludedDoctors} lugares del plan
+                básico ocupados (contándote a ti y las invitaciones pendientes). Para invitar a alguien más, primero
+                quita a otro doctor o espera a que venza una invitación pendiente.
+              </p>
+            ) : (
+              <form className="invite-form" onSubmit={handleInvite}>
+                <div className="form-group">
+                  <label>Correo del doctor</label>
+                  <input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required />
+                </div>
+                <button type="submit" className="btn-primary" disabled={inviting}>
+                  {inviting ? 'Enviando...' : 'Enviar invitación'}
+                </button>
+              </form>
+            );
+          })()}
 
           {clinic.pendingEmailInvites.length > 0 && (
             <div className="clinic-pending-invites">
@@ -578,7 +583,7 @@ export const ClinicManagement: React.FC = () => {
         isOpen={!!doctorToRemove}
         variant="danger"
         title="Quitar doctor de la clínica"
-        message={`¿Seguro que quieres quitar a ${doctorToRemove?.fullName || ''} de la clínica? Perderá el acceso a ProPatient hasta que se suscriba por su cuenta o lo inviten de nuevo.`}
+        message={`¿Seguro que quieres quitar a ${doctorToRemove?.fullName || ''} de la clínica? Perderá el acceso a ProPatient Clinic hasta que se suscriba por su cuenta o lo inviten de nuevo.`}
         confirmText="Quitar"
         onConfirm={handleRemoveConfirmed}
         onCancel={() => setDoctorToRemove(null)}
@@ -588,7 +593,7 @@ export const ClinicManagement: React.FC = () => {
         isOpen={confirmLeaveOpen}
         variant="danger"
         title="Salir de la clínica"
-        message="¿Seguro que quieres salir de la clínica? Perderás el acceso a ProPatient hasta que te suscribas por tu cuenta o te inviten de nuevo."
+        message="¿Seguro que quieres salir de la clínica? Perderás el acceso a ProPatient Clinic hasta que te suscribas por tu cuenta o te inviten de nuevo."
         confirmText={leaving ? 'Saliendo...' : 'Sí, salir'}
         onConfirm={handleLeaveClinic}
         onCancel={() => setConfirmLeaveOpen(false)}

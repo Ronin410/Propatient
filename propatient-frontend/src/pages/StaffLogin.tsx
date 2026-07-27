@@ -51,7 +51,7 @@ export const StaffLogin: React.FC = () => {
             Acceso de Personal
           </h1>
           <p style={{ fontSize: '14px', color: 'var(--color-secondary)', marginTop: '6px', fontWeight: 500 }}>
-            ProPatient Medical System
+            ProPatient Clinic
           </p>
         </div>
 

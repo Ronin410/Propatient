@@ -14,8 +14,8 @@ export const TermsOfService: React.FC = () => {
     <div className="legal-page">
       <header className="legal-nav">
         <Link to="/" className="legal-logo">
-          <img src={logo} alt="ProPatient" className="brand-logo-icon" />
-          ProPatient
+          <img src={logo} alt="ProPatient Clinic" className="brand-logo-icon" />
+          ProPatient Clinic
         </Link>
       </header>
 

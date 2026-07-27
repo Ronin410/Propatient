@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"testing"
@@ -253,6 +254,101 @@ func TestClinic_InviteDoctorToClinic_Success_SetsPendingFields(t *testing.T) {
 	assert.NotEmpty(t, reloaded.ClinicInviteToken)
 	require.NotNil(t, reloaded.ClinicInviteTokenExpiresAt)
 	assert.True(t, reloaded.ClinicInviteTokenExpiresAt.After(time.Now().UTC()))
+}
+
+// TestClinic_InviteDoctorToClinic_AtCapacity_Returns409 confirma el tope
+// duro del plan básico: billing.ClinicBaseIncludedDoctors (5) cuenta al
+// dueño como una de esas 5 personas, así que solo caben 4 invitados más.
+// Con el dueño + 3 miembros ya aceptados + 1 invitación pendiente (5
+// lugares ocupados), una invitación nueva a un sexto doctor debe
+// rechazarse con 409 en vez de dejarlo cobrar extra automáticamente.
+func TestClinic_InviteDoctorToClinic_AtCapacity_Returns409(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	owner := testutil.CreateTestDoctor(t, db, "doc_clinic_owner_cap1", "password123")
+	clinic := models.Clinic{Name: "Clínica al Tope", OwnerDoctorID: owner.ID, SubscriptionStatus: "active"}
+	require.NoError(t, db.Create(&clinic).Error)
+	require.NoError(t, db.Model(&owner).Updates(map[string]any{"clinic_id": clinic.ID, "is_clinic_owner": true}).Error)
+
+	// 3 miembros ya aceptados (+ el dueño = 4 lugares ocupados).
+	for i := 0; i < 3; i++ {
+		member := testutil.CreateTestDoctor(t, db, fmt.Sprintf("doc_clinic_cap1_member_%d", i), "password123")
+		require.NoError(t, db.Model(&member).Update("clinic_id", clinic.ID).Error)
+	}
+
+	token := testutil.TokenFor(t, owner.ID, owner.Username)
+
+	// 5° lugar: la primera invitación (a un correo sin cuenta) debe pasar.
+	w := doRequest(t, router, http.MethodPost, "/api/clinic/invite", token, map[string]any{"email": "quinto@nunca-existio.local"})
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+
+	// 6° lugar: ya no hay cupo, debe rechazarse.
+	w = doRequest(t, router, http.MethodPost, "/api/clinic/invite", token, map[string]any{"email": "sexto@nunca-existio.local"})
+	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+	body := decodeJSON(t, w)
+	assert.Contains(t, body["error"], "plan básico")
+
+	// Un doctor con cuenta existente tampoco puede colarse en el 6° lugar.
+	invitee := testutil.CreateTestDoctor(t, db, "doc_clinic_cap1_invitee", "password123")
+	w = doRequest(t, router, http.MethodPost, "/api/clinic/invite", token, map[string]any{"email": invitee.Email})
+	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+}
+
+// TestClinic_InviteDoctorToClinic_RefreshPendingInvite_AllowedAtCapacity
+// confirma que refrescar una invitación que YA estaba pendiente (mismo
+// correo, misma clínica) no se bloquea por el tope — ese lugar ya estaba
+// contado, no es uno nuevo.
+func TestClinic_InviteDoctorToClinic_RefreshPendingInvite_AllowedAtCapacity(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	owner := testutil.CreateTestDoctor(t, db, "doc_clinic_owner_cap2", "password123")
+	clinic := models.Clinic{Name: "Clínica al Tope 2", OwnerDoctorID: owner.ID, SubscriptionStatus: "active"}
+	require.NoError(t, db.Create(&clinic).Error)
+	require.NoError(t, db.Model(&owner).Updates(map[string]any{"clinic_id": clinic.ID, "is_clinic_owner": true}).Error)
+
+	for i := 0; i < 3; i++ {
+		member := testutil.CreateTestDoctor(t, db, fmt.Sprintf("doc_clinic_cap2_member_%d", i), "password123")
+		require.NoError(t, db.Model(&member).Update("clinic_id", clinic.ID).Error)
+	}
+	invitee := testutil.CreateTestDoctor(t, db, "doc_clinic_cap2_invitee", "password123")
+
+	token := testutil.TokenFor(t, owner.ID, owner.Username)
+
+	// Ocupa el 5° y último lugar.
+	w := doRequest(t, router, http.MethodPost, "/api/clinic/invite", token, map[string]any{"email": invitee.Email})
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+
+	// Reenviar la invitación al mismo doctor (refresca el token/vencimiento)
+	// debe seguir funcionando aunque la clínica ya esté al tope.
+	w = doRequest(t, router, http.MethodPost, "/api/clinic/invite", token, map[string]any{"email": invitee.Email})
+	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+}
+
+// TestClinic_InviteClinicByEmail_AtCapacity_RefreshStillAllowed es el
+// equivalente para invitaciones a correos sin cuenta (ClinicEmailInvite):
+// refrescar una invitación ya pendiente no debe bloquearse por el tope.
+func TestClinic_InviteClinicByEmail_AtCapacity_RefreshStillAllowed(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	owner := testutil.CreateTestDoctor(t, db, "doc_clinic_owner_cap3", "password123")
+	clinic := models.Clinic{Name: "Clínica al Tope 3", OwnerDoctorID: owner.ID, SubscriptionStatus: "active"}
+	require.NoError(t, db.Create(&clinic).Error)
+	require.NoError(t, db.Model(&owner).Updates(map[string]any{"clinic_id": clinic.ID, "is_clinic_owner": true}).Error)
+
+	for i := 0; i < 4; i++ {
+		member := testutil.CreateTestDoctor(t, db, fmt.Sprintf("doc_clinic_cap3_member_%d", i), "password123")
+		require.NoError(t, db.Model(&member).Update("clinic_id", clinic.ID).Error)
+	}
+
+	token := testutil.TokenFor(t, owner.ID, owner.Username)
+
+	// Owner + 4 miembros ya son 5 — al tope. Un correo nuevo debe
+	// rechazarse.
+	w := doRequest(t, router, http.MethodPost, "/api/clinic/invite", token, map[string]any{"email": "nuevo@nunca-existio.local"})
+	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
 }
 
 // TestClinic_GetClinicInvite_ShowsClinicAndOwnerName_WithoutAccepting

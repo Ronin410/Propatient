@@ -43,7 +43,7 @@ export const DoctorDirectory: React.FC = () => {
   }, []);
 
   useEffect(() => setPageMeta({
-    title: 'Directorio de doctores | ProPatient',
+    title: 'Directorio de doctores | ProPatient Clinic',
     description: 'Busca doctores por especialidad o ubicación y agenda tu cita en línea sin crear una cuenta.',
   }), []);
 
@@ -68,8 +68,8 @@ export const DoctorDirectory: React.FC = () => {
     <div className="directory-page">
       <header className="directory-nav">
         <Link to="/" className="directory-logo">
-          <img src={logo} alt="ProPatient" className="brand-logo-icon" />
-          ProPatient
+          <img src={logo} alt="ProPatient Clinic" className="brand-logo-icon" />
+          ProPatient Clinic
         </Link>
         <Link to="/login" className="nav-link">Soy doctor</Link>
       </header>

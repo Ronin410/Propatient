@@ -168,6 +168,6 @@ func main() {
 		port = "8095"
 	}
 
-	log.Printf("🚀 ProPatient API (Go) corriendo en puerto %s", port)
+	log.Printf("🚀 ProPatient Clinic API (Go) corriendo en puerto %s", port)
 	r.Run(":" + port)
 }

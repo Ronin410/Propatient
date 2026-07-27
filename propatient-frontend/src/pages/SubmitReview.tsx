@@ -81,7 +81,7 @@ export const SubmitReview: React.FC = () => {
           </h1>
           <p style={{ color: 'var(--color-secondary)', textAlign: 'center' }}>{loadError}</p>
           <p style={{ textAlign: 'center', marginTop: '20px' }}>
-            <Link to="/" style={{ color: 'var(--color-primary)', fontWeight: 600 }}>Ir a ProPatient</Link>
+            <Link to="/" style={{ color: 'var(--color-primary)', fontWeight: 600 }}>Ir a ProPatient Clinic</Link>
           </p>
         </div>
       </AuthLayout>

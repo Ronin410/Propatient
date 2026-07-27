@@ -410,7 +410,7 @@ func sendPublicBookingEmails(doctor models.Doctor, patient models.Patient, appoi
 			`<p>Hola %s,</p>
 			<p>Recibimos tu solicitud de cita con <strong>Dr(a). %s</strong> para el <strong>%s</strong>.</p>
 			<p>El consultorio revisará tu solicitud y te confirmará pronto por correo o teléfono. Tu cita <strong>todavía no está agendada</strong> hasta que la confirmen.</p>
-			<p>— ProPatient</p>`,
+			<p>— ProPatient Clinic</p>`,
 			patient.FirstName, doctor.FullName, when,
 		)
 		if err := auth.SendEmail(patient.Email, subject, body); err != nil {
@@ -430,7 +430,7 @@ func sendPublicBookingEmails(doctor models.Doctor, patient models.Patient, appoi
 			Fecha solicitada: %s<br>
 			Teléfono: %s<br>
 			Correo: %s%s</p>
-			<p>Revísala y confírmala desde tu panel de ProPatient, en "Solicitudes de Cita Nuevas".</p>`,
+			<p>Revísala y confírmala desde tu panel de ProPatient Clinic, en "Solicitudes de Cita Nuevas".</p>`,
 			patient.FirstName, patient.LastName, when, patient.Phone, patient.Email, reasonLine,
 		)
 		if err := auth.SendEmail(doctor.Email, subject, body); err != nil {
@@ -455,7 +455,7 @@ func sendPublicBookingWhatsApp(ctx context.Context, waClient whatsapp.Client, wa
 
 	if patient.Phone != "" {
 		body := fmt.Sprintf(
-			"Hola %s, recibimos tu solicitud de cita con Dr(a). %s para el %s. El consultorio la revisará y te confirmará pronto — tu cita todavía no está agendada hasta entonces. — ProPatient",
+			"Hola %s, recibimos tu solicitud de cita con Dr(a). %s para el %s. El consultorio la revisará y te confirmará pronto — tu cita todavía no está agendada hasta entonces. — ProPatient Clinic",
 			patient.FirstName, doctor.FullName, when,
 		)
 		vars := map[string]string{"1": patient.FirstName, "2": doctor.FullName, "3": when}
@@ -476,7 +476,7 @@ func sendPublicBookingWhatsApp(ctx context.Context, waClient whatsapp.Client, wa
 			reasonPart = fmt.Sprintf(" Motivo: %s.", appointment.Reason)
 		}
 		body := fmt.Sprintf(
-			"Nueva solicitud de cita: %s %s, %s.%s Revísala en tu panel de ProPatient, en \"Solicitudes de Cita Nuevas\".",
+			"Nueva solicitud de cita: %s %s, %s.%s Revísala en tu panel de ProPatient Clinic, en \"Solicitudes de Cita Nuevas\".",
 			patient.FirstName, patient.LastName, when, reasonPart,
 		)
 		vars := map[string]string{

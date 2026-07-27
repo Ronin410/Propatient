@@ -9,7 +9,7 @@ import './LegalPage.scss';
 // Combina el borrador original con el contenido útil de los seis
 // documentos de referencia subidos en julio 2026 (Seguridad, Cookies,
 // Consentimiento, Privacidad, Términos x2) — corrigiendo lo que no
-// aplicaba a como funciona ProPatient de verdad (ej. el borrador de
+// aplicaba a como funciona ProPatient Clinic de verdad (ej. el borrador de
 // Cookies decía que se usan cookies para autenticación; la sesión en
 // realidad se guarda como JWT en localStorage, no en una cookie propia).
 //
@@ -31,7 +31,7 @@ export const PrivacyPolicyContent: React.FC = () => {
       <section>
         <h2>1. Responsable del tratamiento de datos</h2>
         <p>
-          El responsable del tratamiento de los datos personales recabados a través de ProPatient es
+          El responsable del tratamiento de los datos personales recabados a través de ProPatient Clinic es
           Alejandro Bueno Mendoza, operando actualmente como persona física con actividad empresarial
           conforme a las leyes de México. El domicilio del responsable, para efectos de este aviso,
           está disponible previa solicitud a través del siguiente correo de contacto. Para cualquier
@@ -42,13 +42,13 @@ export const PrivacyPolicyContent: React.FC = () => {
 
       <section>
         <h2>2. Datos personales que se recaban</h2>
-        <p>ProPatient recaba datos distintos según quién los proporciona:</p>
+        <p>ProPatient Clinic recaba datos distintos según quién los proporciona:</p>
         <ul>
           <li>
             <strong>Doctores:</strong> nombre completo, correo, teléfono, domicilio del consultorio,
             fecha de nacimiento, cédula profesional, universidad de egreso, y copia de identificación
             oficial para validar la cédula. Si activa el cobro de suscripción, también un identificador
-            de referencia de Stripe (ProPatient nunca almacena el número de tarjeta).
+            de referencia de Stripe (ProPatient Clinic nunca almacena el número de tarjeta).
           </li>
           <li>
             <strong>Personal de consultorio (staff):</strong> nombre completo y correo electrónico; su
@@ -94,7 +94,7 @@ export const PrivacyPolicyContent: React.FC = () => {
       <section>
         <h2>5. Consentimiento</h2>
         <p>
-          Para datos sensibles de salud, ProPatient pide consentimiento expreso y guarda evidencia de
+          Para datos sensibles de salud, ProPatient Clinic pide consentimiento expreso y guarda evidencia de
           esa aceptación — no basta con que el formulario lo exija visualmente. Al doctor se le pide
           aceptar los Términos y este Aviso de Privacidad la primera vez que entra a la plataforma; al
           paciente (o a su tutor, si es menor de edad) se le pide aceptar el tratamiento de sus datos
@@ -106,7 +106,7 @@ export const PrivacyPolicyContent: React.FC = () => {
 
       <section>
         <h2>6. Medidas de seguridad</h2>
-        <p>Dada la sensibilidad de los datos de salud almacenados, ProPatient implementa:</p>
+        <p>Dada la sensibilidad de los datos de salud almacenados, ProPatient Clinic implementa:</p>
         <ul>
           <li>
             <strong>Cifrado en tránsito:</strong> toda la comunicación entre el navegador y los
@@ -137,11 +137,11 @@ export const PrivacyPolicyContent: React.FC = () => {
       <section>
         <h2>7. Uso de cookies</h2>
         <p>
-          ProPatient <strong>no utiliza cookies propias para iniciar tu sesión</strong>: al entrar,
+          ProPatient Clinic <strong>no utiliza cookies propias para iniciar tu sesión</strong>: al entrar,
           la plataforma guarda un token de acceso cifrado directamente en tu navegador (almacenamiento
           local), no en una cookie. Las únicas cookies que pueden aparecer al usar el sitio son las que
           coloca el propio botón de inicio de sesión de Google (necesarias para que funcione ese
-          inicio de sesión) — ProPatient no las controla ni las usa con fines publicitarios, y puedes
+          inicio de sesión) — ProPatient Clinic no las controla ni las usa con fines publicitarios, y puedes
           administrarlas desde la configuración de cookies de tu navegador o de tu cuenta de Google.
         </p>
       </section>
@@ -149,7 +149,7 @@ export const PrivacyPolicyContent: React.FC = () => {
       <section>
         <h2>8. Transferencia de datos a proveedores tecnológicos</h2>
         <p>
-          ProPatient no vende ni comercializa tus datos. Para poder operar, algunos datos se comparten
+          ProPatient Clinic no vende ni comercializa tus datos. Para poder operar, algunos datos se comparten
           con proveedores tecnológicos que actúan como encargados del tratamiento, únicamente para la
           finalidad indicada:
         </p>
@@ -171,7 +171,7 @@ export const PrivacyPolicyContent: React.FC = () => {
           </li>
           <li>
             <strong>Google:</strong> el doctor inicia sesión con su cuenta de Google (Google Identity
-            Services) en vez de crear una contraseña propia — Google confirma a ProPatient su correo,
+            Services) en vez de crear una contraseña propia — Google confirma a ProPatient Clinic su correo,
             nombre y que la cuenta es real, sin compartir más datos que esos. Si además el doctor
             conecta su Google Calendar (función opcional), aplica el detalle específico de la
             sección 9.
@@ -183,15 +183,15 @@ export const PrivacyPolicyContent: React.FC = () => {
         <h2>9. Uso de la API de Google Calendar</h2>
         <p>
           Si el doctor elige conectar su cuenta de Google Calendar desde su Perfil (función opcional,
-          desactivada por defecto), ProPatient solicita permiso de Google mediante el alcance
+          desactivada por defecto), ProPatient Clinic solicita permiso de Google mediante el alcance
           (scope) <code>https://www.googleapis.com/auth/calendar.events</code> — acceso limitado a la
           creación, edición y eliminación de eventos de calendario, sin acceso a ningún otro dato de
           la cuenta de Google del doctor (correo, contactos, archivos, etc.).
         </p>
         <p>
           Este permiso se usa exclusivamente para crear un evento "espejo" en el Google Calendar del
-          doctor por cada cita registrada en ProPatient, y mantenerlo sincronizado (actualizarlo si la
-          cita se reprograma, eliminarlo si se cancela). ProPatient no lee, exporta ni almacena el
+          doctor por cada cita registrada en ProPatient Clinic, y mantenerlo sincronizado (actualizarlo si la
+          cita se reprograma, eliminarlo si se cancela). ProPatient Clinic no lee, exporta ni almacena el
           contenido de otros eventos que ya existieran en el calendario del doctor antes de conectar
           la cuenta — únicamente gestiona los eventos que él mismo crea a partir de esta integración.
         </p>
@@ -199,7 +199,7 @@ export const PrivacyPolicyContent: React.FC = () => {
           El doctor puede revocar este acceso en cualquier momento desde su Perfil ("Desconectar
           Google Calendar") o directamente desde la configuración de su cuenta de Google
           (<a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">myaccount.google.com/permissions</a>).
-          Al desconectarlo, ProPatient deja de crear o modificar eventos, y no conserva ningún dato
+          Al desconectarlo, ProPatient Clinic deja de crear o modificar eventos, y no conserva ningún dato
           proveniente de Google Calendar más allá de lo estrictamente necesario mientras la conexión
           estuvo activa.
         </p>
@@ -217,7 +217,7 @@ export const PrivacyPolicyContent: React.FC = () => {
         <p>
           El expediente clínico se conserva por un periodo mínimo de 5 años a partir del último acto
           médico registrado, conforme a la normatividad sanitaria mexicana sobre expedientes clínicos.
-          Si un doctor cancela su cuenta, ProPatient desactiva el acceso de inmediato pero no borra el
+          Si un doctor cancela su cuenta, ProPatient Clinic desactiva el acceso de inmediato pero no borra el
           expediente clínico de sus pacientes durante ese plazo — solo se elimina de forma definitiva a
           solicitud expresa y por escrito, una vez que ya no exista una obligación legal de
           conservarlo.

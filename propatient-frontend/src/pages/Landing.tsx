@@ -48,8 +48,8 @@ export const Landing: React.FC = () => {
       <header className="landing-nav">
         <div className="landing-nav-inner">
           <div className="landing-logo">
-            <img src={logo} alt="ProPatient" className="brand-logo-icon" />
-            ProPatient
+            <img src={logo} alt="ProPatient Clinic" className="brand-logo-icon" />
+            ProPatient Clinic
           </div>
           <nav>
             <Link to="/doctores" className="nav-link">Buscar doctor</Link>
@@ -70,7 +70,7 @@ export const Landing: React.FC = () => {
         <div className="hero-copy">
           <h1>Encuentra a tu doctor y agenda tu cita en minutos</h1>
           <p>
-            ProPatient conecta pacientes con consultorios médicos: busca por especialidad
+            ProPatient Clinic conecta pacientes con consultorios médicos: busca por especialidad
             o ubicación, revisa el perfil del doctor y solicita tu cita en línea, sin
             necesidad de crear una cuenta.
           </p>
@@ -86,7 +86,7 @@ export const Landing: React.FC = () => {
       </section>
 
       <section className="landing-featured-doctors">
-        <h2>Doctores en ProPatient</h2>
+        <h2>Doctores en ProPatient Clinic</h2>
         <div className="hero-doctor-cards">
           {visibleDoctors.length > 0 ? (
             visibleDoctors.map((doc) => (

@@ -480,7 +480,7 @@ func RegisterDoctor(db *gorm.DB) gin.HandlerFunc {
 }
 
 func SendValidationEmail(toEmail string, doctorName string) error {
-	subject := "ProPatient - Tu cuenta está en proceso de validación"
+	subject := "ProPatient Clinic - Tu cuenta está en proceso de validación"
 
 	body := fmt.Sprintf(`
 		<html>
@@ -494,7 +494,7 @@ func SendValidationEmail(toEmail string, doctorName string) error {
 				</div>
 
 				<p>Nuestro equipo técnico está verificando la autenticidad de tu cédula profesional ante el Registro Nacional de Profesionistas. Este proceso toma habitualmente entre 12 y 24 horas hábiles.</p>
-				<p>Una vez aprobada tu identidad médica, recibirás un correo de confirmación y podrás acceder de forma completa a todas las herramientas de <strong>ProPatient Medical System</strong>.</p>
+				<p>Una vez aprobada tu identidad médica, recibirás un correo de confirmación y podrás acceder de forma completa a todas las herramientas de <strong>ProPatient Clinic</strong>.</p>
 				
 				<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
 				<p style="font-size: 12px; color: #888; text-align: center;">Este es un correo automático, por favor no respondas a este mensaje.</p>
@@ -509,7 +509,7 @@ func SendValidationEmail(toEmail string, doctorName string) error {
 // SendCedulaApprovedEmail avisa al doctor que un administrador validó su
 // cédula profesional y ya tiene acceso completo a la plataforma.
 func SendCedulaApprovedEmail(toEmail string, doctorName string) error {
-	subject := "ProPatient - Tu cuenta fue validada"
+	subject := "ProPatient Clinic - Tu cuenta fue validada"
 
 	body := fmt.Sprintf(`
 		<html>
@@ -521,7 +521,7 @@ func SendCedulaApprovedEmail(toEmail string, doctorName string) error {
 					<p style="margin: 0; font-weight: bold;">Estado actual de tu cuenta: <span style="color: #16a34a;">VALIDADA</span></p>
 				</div>
 
-				<p>Verificamos tu cédula profesional y tu identidad. Ya tienes acceso completo a todas las herramientas de <strong>ProPatient Medical System</strong>.</p>
+				<p>Verificamos tu cédula profesional y tu identidad. Ya tienes acceso completo a todas las herramientas de <strong>ProPatient Clinic</strong>.</p>
 
 				<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
 				<p style="font-size: 12px; color: #888; text-align: center;">Este es un correo automático, por favor no respondas a este mensaje.</p>
@@ -538,7 +538,7 @@ func SendCedulaApprovedEmail(toEmail string, doctorName string) error {
 // a enviarla (queda de vuelta en "PENDIENTE" para que ValidateLicense.tsx
 // le permita reintentar).
 func SendCedulaRejectedEmail(toEmail string, doctorName string, reason string) error {
-	subject := "ProPatient - No pudimos validar tu documentación"
+	subject := "ProPatient Clinic - No pudimos validar tu documentación"
 
 	reasonHTML := ""
 	if reason != "" {

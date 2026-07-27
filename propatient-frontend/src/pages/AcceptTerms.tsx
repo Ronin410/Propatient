@@ -58,7 +58,7 @@ export const AcceptTerms = () => {
           Antes de continuar
         </h2>
         <p style={{ color: 'var(--text)', fontSize: '14px', textAlign: 'center', marginBottom: '28px', marginTop: 0 }}>
-          Para usar ProPatient necesitamos que aceptes los siguientes documentos.
+          Para usar ProPatient Clinic necesitamos que aceptes los siguientes documentos.
         </p>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -94,7 +94,7 @@ export const AcceptTerms = () => {
               <Link to="/privacidad" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-primary)', fontWeight: 600 }}>
                 Aviso de Privacidad
               </Link>{' '}
-              de ProPatient.
+              de ProPatient Clinic.
             </span>
           </label>
 

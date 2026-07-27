@@ -47,7 +47,7 @@ export const PwaInstallGuide: React.FC = () => {
       <span className="material-icons-outlined pwa-install-guide-icon">install_mobile</span>
 
       <div className="pwa-install-guide-text">
-        <strong>Instala ProPatient en tu {ios || iosOtherBrowser ? 'iPhone/iPad' : 'celular o tablet'}</strong>
+        <strong>Instala ProPatient Clinic en tu {ios || iosOtherBrowser ? 'iPhone/iPad' : 'celular o tablet'}</strong>
         {iosOtherBrowser ? (
           <p>
             Ábrela desde <strong>Safari</strong> para poder instalarla — en iPhone/iPad, otros navegadores (Chrome,

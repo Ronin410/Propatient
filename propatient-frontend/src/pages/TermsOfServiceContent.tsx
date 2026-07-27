@@ -8,7 +8,7 @@ import './LegalPage.scss';
 //
 // Combina el borrador original con el contenido útil de los seis
 // documentos de referencia subidos en julio 2026 — en especial la
-// estructura de PRO_Terminos_ProPatient.docx (la versión más completa de
+// estructura de PRO_Terminos_ProPatient Clinic.docx (la versión más completa de
 // las dos que se subieron), rellenada con datos reales de cómo funciona
 // la plataforma hoy (precio de prueba, plan de clínica, cancelación vía
 // Stripe, etc.) en vez de dejarlo como texto genérico.
@@ -31,8 +31,8 @@ export const TermsOfServiceContent: React.FC = () => {
       <section>
         <h2>1. Identidad del responsable y aceptación</h2>
         <p>
-          ProPatient es una plataforma de software como servicio (SaaS) operada por Alejandro Bueno
-          Mendoza en México. Al crear una cuenta como doctor, ProPatient te pide aceptar
+          ProPatient Clinic es una plataforma de software como servicio (SaaS) operada por Alejandro Bueno
+          Mendoza en México. Al crear una cuenta como doctor, ProPatient Clinic te pide aceptar
           explícitamente estos Términos y el <Link to="/privacidad">Aviso de Privacidad</Link> antes
           de poder usar la plataforma; al agendar una cita como paciente desde el directorio público,
           se te pide aceptar el tratamiento de tus datos de salud conforme al Aviso de Privacidad.
@@ -44,14 +44,14 @@ export const TermsOfServiceContent: React.FC = () => {
         <ul>
           <li><strong>Usuario:</strong> el doctor o el personal de consultorio autorizado por él.</li>
           <li><strong>Paciente:</strong> la persona cuyos datos clínicos se gestionan en la plataforma.</li>
-          <li><strong>Plataforma:</strong> el sitio web y la aplicación de ProPatient.</li>
+          <li><strong>Plataforma:</strong> el sitio web y la aplicación de ProPatient Clinic.</li>
         </ul>
       </section>
 
       <section>
         <h2>3. Descripción del servicio</h2>
         <p>
-          ProPatient es una plataforma de gestión de consultorios médicos: agenda de citas,
+          ProPatient Clinic es una plataforma de gestión de consultorios médicos: agenda de citas,
           expediente clínico digital, recetas electrónicas, catálogo de diagnósticos CIE-10, y un
           directorio público donde los pacientes pueden encontrar doctores y solicitar citas sin
           crear una cuenta.
@@ -59,9 +59,9 @@ export const TermsOfServiceContent: React.FC = () => {
       </section>
 
       <section>
-        <h2>4. ProPatient no presta servicios médicos</h2>
+        <h2>4. ProPatient Clinic no presta servicios médicos</h2>
         <p>
-          ProPatient es una herramienta administrativa y de soporte documental. <strong>No brinda
+          ProPatient Clinic es una herramienta administrativa y de soporte documental. <strong>No brinda
           diagnóstico, tratamiento ni consejo médico</strong>, no evalúa la idoneidad de una receta ni
           interviene en ninguna decisión clínica. La relación médico-paciente y la responsabilidad
           profesional del acto médico son exclusivas del doctor, conforme a la NOM-004-SSA3-2012 y
@@ -85,7 +85,7 @@ export const TermsOfServiceContent: React.FC = () => {
         <p>
           Antes de poder usar la plataforma con normalidad, todo doctor debe capturar su cédula
           profesional y una identificación oficial, que un administrador revisa manualmente. Si la
-          información proporcionada resulta falsa o no puede verificarse, ProPatient puede rechazar o
+          información proporcionada resulta falsa o no puede verificarse, ProPatient Clinic puede rechazar o
           suspender la cuenta sin responsabilidad alguna de su parte.
         </p>
       </section>
@@ -96,7 +96,7 @@ export const TermsOfServiceContent: React.FC = () => {
         <ul>
           <li>
             <strong>Plan individual:</strong> $1,200.00 MXN mensuales, cobrados automáticamente de
-            forma recurrente a través de Stripe (pasarela de pago externa; ProPatient nunca ve ni
+            forma recurrente a través de Stripe (pasarela de pago externa; ProPatient Clinic nunca ve ni
             almacena el número de tarjeta). Puedes cancelar en cualquier momento desde el Portal de
             Cliente de Stripe — la cancelación detiene los cobros futuros, pero no genera reembolso
             de periodos ya cobrados.
@@ -117,7 +117,7 @@ export const TermsOfServiceContent: React.FC = () => {
             (PROFECO) a través de{' '}
             <a href="https://www.profeco.gob.mx" target="_blank" rel="noopener noreferrer">
               www.profeco.gob.mx
-            </a>, independientemente de cualquier otro medio de contacto directo con ProPatient.
+            </a>, independientemente de cualquier otro medio de contacto directo con ProPatient Clinic.
           </li>
         </ul>
       </section>
@@ -136,8 +136,8 @@ export const TermsOfServiceContent: React.FC = () => {
       <section>
         <h2>9. Disponibilidad del servicio</h2>
         <p>
-          ProPatient se ofrece "tal como está" ("as is"), sin garantía de disponibilidad
-          ininterrumpida. En particular, ProPatient no es responsable por:
+          ProPatient Clinic se ofrece "tal como está" ("as is"), sin garantía de disponibilidad
+          ininterrumpida. En particular, ProPatient Clinic no es responsable por:
         </p>
         <ul>
           <li>
@@ -157,9 +157,9 @@ export const TermsOfServiceContent: React.FC = () => {
       <section>
         <h2>10. Limitación de responsabilidad</h2>
         <p>
-          ProPatient no es responsable por decisiones médicas, diagnósticos, tratamientos ni por
+          ProPatient Clinic no es responsable por decisiones médicas, diagnósticos, tratamientos ni por
           cualquier consecuencia derivada del ejercicio profesional del doctor. Salvo negligencia
-          grave comprobada de la plataforma, la responsabilidad económica total de ProPatient frente
+          grave comprobada de la plataforma, la responsabilidad económica total de ProPatient Clinic frente
           al doctor, por cualquier concepto, queda limitada al importe efectivamente pagado por su
           suscripción en los tres meses previos al reclamo.
         </p>
@@ -168,9 +168,9 @@ export const TermsOfServiceContent: React.FC = () => {
       <section>
         <h2>11. Propiedad intelectual</h2>
         <p>
-          El software, el diseño y la marca ProPatient son propiedad de su operador. El doctor
+          El software, el diseño y la marca ProPatient Clinic son propiedad de su operador. El doctor
           conserva la titularidad de la información clínica que él mismo genera sobre sus pacientes;
-          ProPatient solo la trata como encargado, conforme al <Link to="/privacidad">Aviso de
+          ProPatient Clinic solo la trata como encargado, conforme al <Link to="/privacidad">Aviso de
           Privacidad</Link>.
         </p>
       </section>
@@ -178,7 +178,7 @@ export const TermsOfServiceContent: React.FC = () => {
       <section>
         <h2>12. Terminación</h2>
         <p>
-          ProPatient puede suspender o cancelar una cuenta que incumpla estos Términos, use la
+          ProPatient Clinic puede suspender o cancelar una cuenta que incumpla estos Términos, use la
           plataforma para fines ilícitos, o proporcione información falsa durante el registro o la
           validación de cédula. El doctor puede cancelar su propia cuenta en cualquier momento desde
           su Perfil, siempre que no tenga una suscripción activa sin cancelar primero.
