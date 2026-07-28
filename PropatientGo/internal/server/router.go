@@ -280,7 +280,7 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 			billingRoutes := protected.Group("/billing")
 			billingRoutes.Use(auth.RequireDoctorRole())
 			{
-				billingRoutes.GET("/status", handlers.GetBillingStatus(db, billingClient))
+				billingRoutes.GET("/status", handlers.GetBillingStatus(db, billingClient, billingConfig))
 				billingRoutes.POST("/checkout", handlers.CreateCheckoutSession(db, billingClient, billingConfig))
 				billingRoutes.POST("/portal", handlers.CreatePortalSession(db, billingClient))
 				// Capturar el código de invitación de otro doctor ANTES de

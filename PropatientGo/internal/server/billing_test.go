@@ -322,6 +322,140 @@ func TestBilling_GetStatus_PastDue_IncludesGraceDeadline(t *testing.T) {
 	assert.WithinDuration(t, since.Add(billing.PastDuePaymentGraceDuration), got, time.Second)
 }
 
+// TestBilling_CreateCheckoutSession_UsesLaunchPrice_WhenPromoActive
+// confirma el punto central del precio de lanzamiento: mientras la fecha
+// límite (STRIPE_LAUNCH_PRICE_ENDS_AT) no haya pasado, un doctor que se
+// suscribe por primera vez debe ir con el Price de lanzamiento, no el
+// regular (ver billing.Config.CheckoutPriceID).
+func TestBilling_CreateCheckoutSession_UsesLaunchPrice_WhenPromoActive(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	mockBilling := newMockBillingClient()
+	launchEndsAt := time.Now().UTC().Add(48 * time.Hour)
+	cfg := billing.Config{
+		SecretKey:         "sk_test_mock",
+		PriceID:           "price_regular_mock",
+		LaunchPriceID:     "price_launch_mock",
+		LaunchPriceEndsAt: &launchEndsAt,
+	}
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mustLocalStorage(t), cfg, mockBilling, geocoding.NewClient(), nil, nil)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_billing_launch_active", "password123")
+	token := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doRequest(t, router, http.MethodPost, "/api/billing/checkout", token, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	call, ok := mockBilling.lastCheckoutCall()
+	require.True(t, ok)
+	assert.Equal(t, "price_launch_mock", call.PriceID)
+}
+
+// TestBilling_CreateCheckoutSession_UsesRegularPrice_WhenPromoExpired
+// confirma el otro lado: pasada la fecha límite, un doctor NUEVO va con el
+// precio regular — a quien ya se suscribió con el de lanzamiento no le
+// cambia nada (Stripe no reajusta suscripciones ya activas solo porque
+// cambie cuál es el Price "actual").
+func TestBilling_CreateCheckoutSession_UsesRegularPrice_WhenPromoExpired(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	mockBilling := newMockBillingClient()
+	launchEndedAt := time.Now().UTC().Add(-48 * time.Hour)
+	cfg := billing.Config{
+		SecretKey:         "sk_test_mock",
+		PriceID:           "price_regular_mock",
+		LaunchPriceID:     "price_launch_mock",
+		LaunchPriceEndsAt: &launchEndedAt,
+	}
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mustLocalStorage(t), cfg, mockBilling, geocoding.NewClient(), nil, nil)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_billing_launch_expired", "password123")
+	token := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doRequest(t, router, http.MethodPost, "/api/billing/checkout", token, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	call, ok := mockBilling.lastCheckoutCall()
+	require.True(t, ok)
+	assert.Equal(t, "price_regular_mock", call.PriceID)
+}
+
+// TestBilling_CreateCheckoutSession_UsesRegularPrice_WhenLaunchNotConfigured
+// confirma que sin STRIPE_LAUNCH_PRICE_ID/STRIPE_LAUNCH_PRICE_ENDS_AT
+// definidas, no hay ninguna promoción — todos pagan el precio regular
+// desde el primer día, mismo comportamiento que antes de que existiera
+// esta función.
+func TestBilling_CreateCheckoutSession_UsesRegularPrice_WhenLaunchNotConfigured(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	mockBilling := newMockBillingClient()
+	cfg := billing.Config{SecretKey: "sk_test_mock", PriceID: "price_regular_mock"}
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mustLocalStorage(t), cfg, mockBilling, geocoding.NewClient(), nil, nil)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_billing_no_launch", "password123")
+	token := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doRequest(t, router, http.MethodPost, "/api/billing/checkout", token, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	call, ok := mockBilling.lastCheckoutCall()
+	require.True(t, ok)
+	assert.Equal(t, "price_regular_mock", call.PriceID)
+}
+
+// TestBilling_GetStatus_IncludesLaunchPromoInfo confirma que /billing/status
+// le manda al frontend lo necesario para mostrar el descuento ANTES de que
+// el doctor pague: si la promo sigue activa y los dos montos informativos.
+func TestBilling_GetStatus_IncludesLaunchPromoInfo(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	mockBilling := newMockBillingClient()
+	launchEndsAt := time.Now().UTC().Add(48 * time.Hour).Truncate(time.Second)
+	cfg := billing.Config{
+		SecretKey:         "sk_test_mock",
+		PriceID:           "price_regular_mock",
+		LaunchPriceID:     "price_launch_mock",
+		LaunchPriceEndsAt: &launchEndsAt,
+	}
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mustLocalStorage(t), cfg, mockBilling, geocoding.NewClient(), nil, nil)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_billing_launch_status", "password123")
+	token := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doRequest(t, router, http.MethodGet, "/api/billing/status", token, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	body := decodeJSON(t, w)
+	assert.Equal(t, true, body["launchPromoActive"])
+	assert.Equal(t, float64(billing.IndividualLaunchPriceMXN), body["launchPriceMXN"])
+	assert.Equal(t, float64(billing.IndividualRegularPriceMXN), body["regularPriceMXN"])
+	require.NotNil(t, body["launchPromoEndsAt"])
+	got, err := time.Parse(time.RFC3339, body["launchPromoEndsAt"].(string))
+	require.NoError(t, err)
+	assert.WithinDuration(t, launchEndsAt, got, time.Second)
+}
+
+// TestBilling_GetStatus_LaunchPromoInactive_WhenExpired confirma que,
+// pasada la fecha límite, /billing/status ya no marca la promo como
+// activa (aunque las variables sigan configuradas) — el frontend no debe
+// seguir ofreciendo el precio de lanzamiento a quien todavía no se
+// suscribe.
+func TestBilling_GetStatus_LaunchPromoInactive_WhenExpired(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	mockBilling := newMockBillingClient()
+	launchEndedAt := time.Now().UTC().Add(-48 * time.Hour)
+	cfg := billing.Config{
+		SecretKey:         "sk_test_mock",
+		PriceID:           "price_regular_mock",
+		LaunchPriceID:     "price_launch_mock",
+		LaunchPriceEndsAt: &launchEndedAt,
+	}
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mustLocalStorage(t), cfg, mockBilling, geocoding.NewClient(), nil, nil)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_billing_launch_status_expired", "password123")
+	token := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doRequest(t, router, http.MethodGet, "/api/billing/status", token, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	body := decodeJSON(t, w)
+	assert.Equal(t, false, body["launchPromoActive"])
+}
+
 func mustLocalStorage(t *testing.T) storage.Client {
 	t.Helper()
 	client, err := storage.NewClient(t.Context(), storage.Config{})

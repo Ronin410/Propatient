@@ -25,6 +25,13 @@ interface BillingStatus {
   // billing.PastDuePaymentGraceDuration en el backend) — solo viene cuando
   // subscriptionStatus es "past_due" y se registró desde cuándo empezó.
   pastDueGraceEndsAt?: string | null;
+  // Precio de lanzamiento (ver billing.Config.CheckoutPriceID en el
+  // backend): mientras launchPromoActive sea true, suscribirse AHORA deja
+  // el precio en launchPriceMXN para siempre en vez de regularPriceMXN.
+  launchPromoActive?: boolean;
+  launchPriceMXN?: number;
+  regularPriceMXN?: number;
+  launchPromoEndsAt?: string | null;
 }
 
 interface ReferralInfo {
@@ -39,6 +46,10 @@ function daysLeft(dateStr: string | null | undefined): number {
   if (!dateStr) return 0;
   const ms = new Date(dateStr).getTime() - Date.now();
   return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
+}
+
+function discountPercent(regularMXN: number, launchMXN: number): number {
+  return Math.round((1 - launchMXN / regularMXN) * 100);
 }
 
 export const BillingPage: React.FC = () => {
@@ -246,6 +257,32 @@ export const BillingPage: React.FC = () => {
                 </div>
               </div>
             )}
+
+            {status.launchPromoActive &&
+              status.launchPriceMXN != null &&
+              status.regularPriceMXN != null &&
+              !(status.subscriptionStatus === 'active' || status.hasPaymentMethod) && (
+                <div className="billing-promo">
+                  <span className="billing-promo-badge">
+                    {discountPercent(status.regularPriceMXN, status.launchPriceMXN)}% de descuento — precio de
+                    lanzamiento
+                  </span>
+                  <div className="billing-promo-prices">
+                    <span className="billing-promo-regular">
+                      ${status.regularPriceMXN.toLocaleString('es-MX')} MXN/mes
+                    </span>
+                    <span className="billing-promo-launch">
+                      ${status.launchPriceMXN.toLocaleString('es-MX')} MXN/mes
+                    </span>
+                  </div>
+                  <p>
+                    {status.launchPromoEndsAt && <>Válido para quien se suscriba antes del {formatToLocalDate(status.launchPromoEndsAt)}. </>}
+                    Si te suscribes ahora, tu precio se queda en ${status.launchPriceMXN.toLocaleString('es-MX')}{' '}
+                    MXN/mes <strong>para siempre</strong> — nunca sube, aunque el precio normal de la plataforma sea
+                    de ${status.regularPriceMXN.toLocaleString('es-MX')} MXN/mes.
+                  </p>
+                </div>
+              )}
 
             <div className="billing-actions">
               {status.subscriptionStatus === 'active' || status.hasPaymentMethod ? (
