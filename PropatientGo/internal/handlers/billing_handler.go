@@ -24,7 +24,7 @@ import (
 // consulta a Stripe en vivo la fecha de la próxima renovación (ver
 // billing.Client.GetSubscriptionPeriodEnd) — mejor esfuerzo, si Stripe no
 // responde el resto del estatus se manda igual, solo sin esa fecha.
-func GetBillingStatus(db *gorm.DB, client billing.Client) gin.HandlerFunc {
+func GetBillingStatus(db *gorm.DB, client billing.Client, cfg billing.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		doctorID := c.MustGet("doctorID").(uint)
 
@@ -69,6 +69,14 @@ func GetBillingStatus(db *gorm.DB, client billing.Client) gin.HandlerFunc {
 			// cobro fallido (ver billing.PastDuePaymentGraceDuration) — nil
 			// si no está en past_due o si nunca se registró cuándo empezó.
 			"pastDueGraceEndsAt": pastDueGraceEndsAt,
+			// Precio de lanzamiento: mientras launchPromoActive sea true, un
+			// doctor que se suscriba AHORA queda con launchPriceMXN para
+			// siempre (ver Config.CheckoutPriceID) — el frontend usa esto
+			// para mostrar el descuento antes de que pague, no después.
+			"launchPromoActive": cfg.IsLaunchPromoActive(time.Now().UTC()),
+			"launchPriceMXN":    billing.IndividualLaunchPriceMXN,
+			"regularPriceMXN":   billing.IndividualRegularPriceMXN,
+			"launchPromoEndsAt": cfg.LaunchPriceEndsAt,
 		})
 	}
 }
@@ -103,8 +111,12 @@ func CreateCheckoutSession(db *gorm.DB, client billing.Client, cfg billing.Confi
 			DoctorID:           doctorID,
 			CustomerEmail:      doctor.Email,
 			ExistingCustomerID: doctor.StripeCustomerID,
-			SuccessURL:         base + "/billing?checkout=success",
-			CancelURL:          base + "/billing?checkout=cancelled",
+			// Precio de lanzamiento mientras siga vigente, si no el
+			// regular — ver Config.CheckoutPriceID. Una vez que Stripe crea
+			// la suscripción con este precio, se queda ahí para siempre.
+			PriceID:    cfg.CheckoutPriceID(time.Now().UTC()),
+			SuccessURL: base + "/billing?checkout=success",
+			CancelURL:  base + "/billing?checkout=cancelled",
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo iniciar el proceso de pago"})

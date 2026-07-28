@@ -16,6 +16,7 @@ import (
 type mockBillingClient struct {
 	mu sync.Mutex
 
+	checkoutCalls         []billing.CheckoutParams
 	clinicCheckoutCalls   []billing.ClinicCheckoutParams
 	canceledSubscriptions []string
 	extraQtyCalls         []mockExtraQtyCall
@@ -43,7 +44,23 @@ func newMockBillingClient() *mockBillingClient {
 }
 
 func (m *mockBillingClient) CreateCheckoutSession(ctx context.Context, params billing.CheckoutParams) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.checkoutCalls = append(m.checkoutCalls, params)
 	return "https://checkout.stripe.com/mock/doctor", nil
+}
+
+// lastCheckoutCall devuelve el CheckoutParams de la llamada más reciente a
+// CreateCheckoutSession (suscripción individual, no de clínica) — usado
+// para confirmar qué Price de Stripe decidió mandar el handler (ver
+// billing.Config.CheckoutPriceID).
+func (m *mockBillingClient) lastCheckoutCall() (billing.CheckoutParams, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.checkoutCalls) == 0 {
+		return billing.CheckoutParams{}, false
+	}
+	return m.checkoutCalls[len(m.checkoutCalls)-1], true
 }
 
 func (m *mockBillingClient) CreatePortalSession(ctx context.Context, customerID, returnURL string) (string, error) {

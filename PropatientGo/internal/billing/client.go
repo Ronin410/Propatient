@@ -35,10 +35,33 @@ const TrialDuration = 14 * 24 * time.Hour
 // cada uno adicional.
 const ClinicBaseIncludedDoctors = 5
 
+// IndividualLaunchPriceMXN / IndividualRegularPriceMXN: montos
+// informativos (MXN/mes) del plan individual, SOLO para mostrarle al
+// doctor el descuento antes de pagar (ver GetBillingStatus) — el cobro
+// real lo define el Price de Stripe correspondiente
+// (STRIPE_LAUNCH_PRICE_ID / STRIPE_PRICE_ID). Si cambias el precio en
+// Stripe, actualiza también estos dos números para que sigan coincidiendo.
+const (
+	IndividualLaunchPriceMXN  = 600
+	IndividualRegularPriceMXN = 1000
+)
+
 type Config struct {
 	SecretKey     string
-	PriceID       string
+	PriceID       string // precio regular ($1,000/mes) — ver IndividualRegularPriceMXN
 	WebhookSecret string
+
+	// Precio de lanzamiento: mientras "ahora" sea antes de
+	// LaunchPriceEndsAt, un doctor que se suscribe POR PRIMERA VEZ paga
+	// este precio en vez de PriceID (ver Config.CheckoutPriceID). Una vez
+	// que Stripe crea la suscripción con este precio, se queda ahí para
+	// siempre — Stripe no la sube solo porque después cambie cuál es el
+	// precio "actual" — así que funciona como beneficio de lealtad para
+	// quien se suscribió a tiempo, no como una promoción con vencimiento
+	// sobre una suscripción ya activa. Si cualquiera de las dos queda
+	// vacía/sin definir, no hay promoción y todos pagan PriceID.
+	LaunchPriceID     string
+	LaunchPriceEndsAt *time.Time
 
 	// Precios del plan de clínica — ver ClinicBaseIncludedDoctors. Si
 	// cualquiera de las dos queda vacía, la clínica se comporta como una
@@ -50,17 +73,41 @@ type Config struct {
 }
 
 func LoadConfigFromEnv() Config {
-	return Config{
+	cfg := Config{
 		SecretKey:          os.Getenv("STRIPE_SECRET_KEY"),
 		PriceID:            os.Getenv("STRIPE_PRICE_ID"),
 		WebhookSecret:      os.Getenv("STRIPE_WEBHOOK_SECRET"),
+		LaunchPriceID:      os.Getenv("STRIPE_LAUNCH_PRICE_ID"),
 		ClinicBasePriceID:  os.Getenv("STRIPE_CLINIC_BASE_PRICE_ID"),
 		ClinicExtraPriceID: os.Getenv("STRIPE_CLINIC_EXTRA_DOCTOR_PRICE_ID"),
 	}
+	if raw := os.Getenv("STRIPE_LAUNCH_PRICE_ENDS_AT"); raw != "" {
+		if t, err := time.Parse(time.RFC3339, raw); err == nil {
+			cfg.LaunchPriceEndsAt = &t
+		}
+	}
+	return cfg
 }
 
 func (c Config) IsConfigured() bool {
 	return c.SecretKey != "" && c.PriceID != ""
+}
+
+// IsLaunchPromoActive indica si, en este momento, un doctor que se
+// suscriba por primera vez debe recibir el precio de lanzamiento en vez
+// del regular.
+func (c Config) IsLaunchPromoActive(now time.Time) bool {
+	return c.LaunchPriceID != "" && c.LaunchPriceEndsAt != nil && now.Before(*c.LaunchPriceEndsAt)
+}
+
+// CheckoutPriceID decide qué Price de Stripe usar para una suscripción
+// individual NUEVA en este momento: el de lanzamiento mientras la promo
+// siga activa, si no el regular.
+func (c Config) CheckoutPriceID(now time.Time) string {
+	if c.IsLaunchPromoActive(now) {
+		return c.LaunchPriceID
+	}
+	return c.PriceID
 }
 
 // IsClinicConfigured es igual que IsConfigured pero además exige las dos
@@ -77,8 +124,13 @@ type CheckoutParams struct {
 	DoctorID           uint
 	CustomerEmail      string
 	ExistingCustomerID string // si ya existe, reutiliza el mismo Customer de Stripe
-	SuccessURL         string
-	CancelURL          string
+	// PriceID: qué Price de Stripe usar en esta sesión — decidido por el
+	// llamador con Config.CheckoutPriceID, no por el cliente de Stripe
+	// (para que el precio de lanzamiento se calcule con el "ahora" real
+	// de la petición, no con el momento en que se construyó el cliente).
+	PriceID    string
+	SuccessURL string
+	CancelURL  string
 }
 
 // ClinicCheckoutParams son los datos necesarios para armar el Checkout del
@@ -153,13 +205,20 @@ func NewClient(cfg Config) Client {
 }
 
 func (r *realClient) CreateCheckoutSession(ctx context.Context, params CheckoutParams) (string, error) {
+	// Si el llamador no especificó cuál Price usar, cae al regular
+	// configurado al construir el cliente — nunca manda un Price vacío a
+	// Stripe.
+	priceID := params.PriceID
+	if priceID == "" {
+		priceID = r.priceID
+	}
 	sParams := &stripe.CheckoutSessionParams{
 		Mode:              stripe.String(string(stripe.CheckoutSessionModeSubscription)),
 		SuccessURL:        stripe.String(params.SuccessURL),
 		CancelURL:         stripe.String(params.CancelURL),
 		ClientReferenceID: stripe.String(strconv.FormatUint(uint64(params.DoctorID), 10)),
 		LineItems: []*stripe.CheckoutSessionLineItemParams{
-			{Price: stripe.String(r.priceID), Quantity: stripe.Int64(1)},
+			{Price: stripe.String(priceID), Quantity: stripe.Int64(1)},
 		},
 	}
 	if params.ExistingCustomerID != "" {

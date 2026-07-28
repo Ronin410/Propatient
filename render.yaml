@@ -84,6 +84,13 @@ services:
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
+      # Precio de lanzamiento del plan individual (ver .env.example para
+      # la guía completa) — opcional, sin estas dos todos pagan
+      # STRIPE_PRICE_ID desde el primer día.
+      - key: STRIPE_LAUNCH_PRICE_ID
+        sync: false
+      - key: STRIPE_LAUNCH_PRICE_ENDS_AT
+        sync: false # ej. 2026-10-31T23:59:59-06:00
       # Plan de clínica (ver .env.example para la guía). Sin estas dos, el
       # plan de clínica queda deshabilitado (503) pero la suscripción
       # individual de arriba sigue funcionando igual.
