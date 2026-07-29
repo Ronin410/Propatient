@@ -14,7 +14,7 @@ import (
 // versión aceptó cada quien; si el contenido de /terminos o /privacidad
 // cambia de forma material, este valor debe subir para que las nuevas
 // aceptaciones no se confundan con las anteriores.
-const CurrentLegalNoticeVersion = "2026-07-21"
+const CurrentLegalNoticeVersion = "2026-07-29"
 
 // Doctor representa la entidad DOCTOR_USER (Tu Doctor.java)
 type Doctor struct {
@@ -63,7 +63,7 @@ type Doctor struct {
 
 	// Suscripción (Stripe). SubscriptionStatus: "trialing" | "active" |
 	// "past_due" | "canceled". Todo doctor nuevo arranca en "trialing" con
-	// TrialEndsAt = fecha de alta + 14 días (ver auth.newTrialDoctor). El
+	// TrialEndsAt = fecha de alta + 10 días (ver auth.newTrialDoctor). El
 	// middleware RequireActiveSubscription bloquea el resto de la API una
 	// vez que ni la prueba ni una suscripción activa cubren al doctor.
 	SubscriptionStatus   string     `gorm:"default:'trialing'" json:"subscriptionStatus"`

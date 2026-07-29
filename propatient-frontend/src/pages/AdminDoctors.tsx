@@ -21,7 +21,7 @@ interface AdminDoctor {
   username: string;
   cedulaValidated: string;
   subscriptionStatus: string;
-  // Cubre tanto la prueba real de 14 días como un acceso gratuito
+  // Cubre tanto la prueba real de 10 días como un acceso gratuito
   // otorgado a mano (ver GrantFreeAccess) — ambos casos llegan como
   // "trialing" con esta misma fecha. Para un doctor de clínica, ya viene
   // resuelta con la fecha DE LA CLÍNICA (ver GrantClinicFreeAccess), no

@@ -191,7 +191,7 @@ export const Landing: React.FC = () => {
                 <span className="pricing-badge">Precio de lanzamiento — oferta por tiempo limitado</span>
               )}
               <ul className="pricing-features">
-                <li>14 días de prueba gratis</li>
+                <li>10 días de prueba gratis</li>
                 <li>Agenda de citas online</li>
                 <li>Notificaciones automáticas por WhatsApp</li>
                 <li>Expediente clínico digital</li>

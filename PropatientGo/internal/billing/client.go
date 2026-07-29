@@ -21,12 +21,12 @@ import (
 	"github.com/stripe/stripe-go/v81/subscriptionitem"
 )
 
-// TrialDuration es la prueba gratis de todo doctor nuevo (14 días, decisión
+// TrialDuration es la prueba gratis de todo doctor nuevo (10 días, decisión
 // del producto). Usado al dar de alta la cuenta (ver auth.RegisterDoctor y
 // auth.GoogleLoginHandler) y por RequireActiveSubscription para decidir si
 // aún está dentro de la prueba. NO aplica al plan de clínica (ver
 // ClinicBaseIncludedDoctors) — ahí el cobro arranca de inmediato.
-const TrialDuration = 14 * 24 * time.Hour
+const TrialDuration = 10 * 24 * time.Hour
 
 // ClinicBaseIncludedDoctors: cuántos doctores cubre el precio base de la
 // clínica (STRIPE_CLINIC_BASE_PRICE_ID) antes de empezar a cobrar el

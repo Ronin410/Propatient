@@ -239,7 +239,7 @@ consultas ya cerradas (modo solo-lectura).
 
 ## 17. Facturación / Suscripción — `/billing`
 
-- Todo doctor nuevo arranca con **14 días de prueba gratuita**.
+- Todo doctor nuevo arranca con **10 días de prueba gratuita**.
 - Estado de la suscripción (en prueba / activa / vencida / cancelada) y
   fecha de vencimiento.
 - **Suscribirse**: checkout de pago recurrente (Stripe).
@@ -339,7 +339,7 @@ Estructura compartida por las pantallas del consultorio (secciones 7–17).
   automáticos al doctor.
 - **Notificaciones**: correo (Resend) y WhatsApp (Twilio) en los puntos
   clave del flujo de citas.
-- **Cobros**: prueba gratuita de 14 días + suscripción recurrente con
+- **Cobros**: prueba gratuita de 10 días + suscripción recurrente con
   Stripe (checkout y portal de cliente).
 - **Privacidad**: exportar/eliminar mis datos (derechos ARCO), Aviso de
   Privacidad y Términos y Condiciones publicados.

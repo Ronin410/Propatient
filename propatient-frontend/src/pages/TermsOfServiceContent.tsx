@@ -26,7 +26,7 @@ export const TermsOfServiceContent: React.FC = () => {
       </Link>
 
       <h1>Términos y Condiciones</h1>
-      <p className="legal-updated">Última actualización: 21 de julio de 2026</p>
+      <p className="legal-updated">Última actualización: 29 de julio de 2026</p>
 
       <section>
         <h2>1. Identidad del responsable y aceptación</h2>
@@ -92,19 +92,21 @@ export const TermsOfServiceContent: React.FC = () => {
 
       <section>
         <h2>7. Suscripción y pagos</h2>
-        <p>Todo doctor nuevo cuenta con 14 días de prueba gratuita. Al concluir ese periodo:</p>
+        <p>Todo doctor nuevo cuenta con 10 días de prueba gratuita. Al concluir ese periodo:</p>
         <ul>
           <li>
-            <strong>Plan individual:</strong> $1,200.00 MXN mensuales, cobrados automáticamente de
-            forma recurrente a través de Stripe (pasarela de pago externa; ProPatient Clinic nunca ve ni
-            almacena el número de tarjeta). Puedes cancelar en cualquier momento desde el Portal de
-            Cliente de Stripe — la cancelación detiene los cobros futuros, pero no genera reembolso
-            de periodos ya cobrados.
+            <strong>Plan individual:</strong> $1,000.00 MXN mensuales (precio regular; puede aplicar un
+            precio de lanzamiento con descuento vigente al momento del registro, mostrado durante el
+            proceso de suscripción), cobrados automáticamente de forma recurrente a través de Stripe
+            (pasarela de pago externa; ProPatient Clinic nunca ve ni almacena el número de tarjeta).
+            Puedes cancelar en cualquier momento desde el Portal de Cliente de Stripe — la cancelación
+            detiene los cobros futuros, pero no genera reembolso de periodos ya cobrados.
           </li>
           <li>
-            <strong>Plan de clínica:</strong> tarifa base de $3,200.00 MXN mensuales (incluye hasta 5
-            doctores vinculados), más $1,000.00 MXN mensuales por cada doctor adicional. Este plan no
-            tiene periodo de prueba.
+            <strong>Plan de clínica:</strong> tarifa base de $3,000.00 MXN mensuales (incluye hasta 5
+            doctores vinculados), más $800.00 MXN mensuales por cada doctor adicional (precios regulares;
+            puede aplicar un precio de lanzamiento con descuento vigente al momento del registro). Este
+            plan no tiene periodo de prueba.
           </li>
           <li>
             Si tu suscripción vence o se cancela, tu cuenta queda inhabilitada para iniciar sesión,
