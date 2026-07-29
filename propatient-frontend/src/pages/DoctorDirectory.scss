@@ -70,7 +70,14 @@
   width: 100%;
   margin: 0 auto;
   padding: 0 2rem 3rem 2rem;
-  flex: 1;
+  // flex-grow:1 con flex-basis:auto (no "flex: 1", que usa 0% de base):
+  // sigue empujando el footer hacia abajo cuando el contenido es corto,
+  // pero sin flex-basis:0% el elemento parte de su alto natural en vez de
+  // 0 — antes, cuando la lista de doctores no cabía en lo que quedaba del
+  // viewport, flexbox la encogía por debajo de su contenido (la lista
+  // terminaba con apenas ~1 tarjeta visible) en lugar de dejarla crecer y
+  // que la página completa hiciera scroll.
+  flex: 1 0 auto;
   display: grid;
   grid-template-columns: 1fr 380px;
   gap: 1.5rem;
@@ -97,13 +104,12 @@
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
-  max-height: 640px;
+  // Ventana fija de ~3 tarjetas visibles; el resto se ve haciendo scroll
+  // dentro de la lista (antes en móvil no tenía tope y la página entera
+  // crecía sin límite, mostrando prácticamente una tarjeta por scroll).
+  max-height: 360px;
   overflow-y: auto;
   padding-right: 0.3rem;
-
-  @media (max-width: 900px) {
-    max-height: none;
-  }
 }
 
 .directory-empty {
