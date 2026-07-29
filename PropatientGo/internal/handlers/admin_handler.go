@@ -238,7 +238,7 @@ func RejectDoctorCedula(db *gorm.DB) gin.HandlerFunc {
 type grantFreeAccessRequest struct {
 	// Until: fecha (YYYY-MM-DD) hasta la que el doctor tiene acceso sin
 	// pagar. Reutiliza el mismo mecanismo que ya usa la prueba gratis de
-	// 14 días (SubscriptionStatus "trialing" + TrialEndsAt) — no hace
+	// 10 días (SubscriptionStatus "trialing" + TrialEndsAt) — no hace
 	// falta un campo ni un estado nuevo, RequireActiveSubscription ya
 	// sabe leer esto.
 	Until string `json:"until" binding:"required"`
@@ -248,7 +248,7 @@ type grantFreeAccessRequest struct {
 // fecha fija, decidida por el superadmin — pensado para casos que no
 // encajan en el código de invitación automático (ver internal/referral):
 // familiares o conocidos cercanos ayudando a difundir la plataforma,
-// alguien a quien los 14 días de prueba no le alcanzaron, o un trato
+// alguien a quien los 10 días de prueba no le alcanzaron, o un trato
 // informal ("tráeme a 3 colegas y te doy 2 meses gratis"). Funciona sobre
 // cualquier estado previo — "canceled"/"past_due" (destrabar a alguien que
 // ya se había quedado fuera) igual que "trialing" o "active".
@@ -445,7 +445,7 @@ type adminDoctorResponse struct {
 	Username           string `json:"username"`
 	CedulaValidated    string `json:"cedulaValidated"`
 	SubscriptionStatus string `json:"subscriptionStatus"` // ya resuelto: propio, o el de su clínica si aplica
-	// TrialEndsAt cubre tanto la prueba real de 14 días como cualquier
+	// TrialEndsAt cubre tanto la prueba real de 10 días como cualquier
 	// acceso gratuito otorgado a mano (ver GrantFreeAccess) — ambos usan
 	// el mismo campo, así que esta fecha es "hasta cuándo tiene acceso
 	// sin pagar" sin importar cuál de los dos fue.
