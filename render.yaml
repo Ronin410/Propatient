@@ -98,6 +98,13 @@ services:
         sync: false
       - key: STRIPE_CLINIC_EXTRA_DOCTOR_PRICE_ID
         sync: false
+      # Precio de lanzamiento del plan de clínica (ver .env.example para
+      # la guía completa) — opcional, comparte la misma fecha límite que
+      # STRIPE_LAUNCH_PRICE_ENDS_AT de arriba.
+      - key: STRIPE_CLINIC_LAUNCH_BASE_PRICE_ID
+        sync: false
+      - key: STRIPE_CLINIC_LAUNCH_EXTRA_DOCTOR_PRICE_ID
+        sync: false
       # Envío de WhatsApp (Twilio, ver .env.example para la guía completa).
       # Sin estas tres, la app funciona igual, solo no se manda el WhatsApp.
       - key: TWILIO_ACCOUNT_SID

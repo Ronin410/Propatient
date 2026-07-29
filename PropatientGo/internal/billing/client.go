@@ -30,9 +30,7 @@ const TrialDuration = 14 * 24 * time.Hour
 
 // ClinicBaseIncludedDoctors: cuántos doctores cubre el precio base de la
 // clínica (STRIPE_CLINIC_BASE_PRICE_ID) antes de empezar a cobrar el
-// extra por cabeza (STRIPE_CLINIC_EXTRA_DOCTOR_PRICE_ID). Decisión de
-// producto: $3,200 MXN/mes cubre hasta 5 doctores, $1,000 MXN/mes por
-// cada uno adicional.
+// extra por cabeza (STRIPE_CLINIC_EXTRA_DOCTOR_PRICE_ID).
 const ClinicBaseIncludedDoctors = 5
 
 // IndividualLaunchPriceMXN / IndividualRegularPriceMXN: montos
@@ -44,6 +42,20 @@ const ClinicBaseIncludedDoctors = 5
 const (
 	IndividualLaunchPriceMXN  = 600
 	IndividualRegularPriceMXN = 1000
+)
+
+// Clinic*PriceMXN: montos informativos (MXN/mes) del plan de clínica —
+// mismo criterio que los de arriba, solo para mostrar el descuento antes
+// de pagar (ver GetClinic y el endpoint público de precios), el cobro
+// real lo definen los cuatro Price de Stripe correspondientes
+// (STRIPE_CLINIC_[LAUNCH_]BASE_PRICE_ID / STRIPE_CLINIC_[LAUNCH_]EXTRA_
+// DOCTOR_PRICE_ID). El precio base cubre hasta ClinicBaseIncludedDoctors
+// personas; el extra se cobra por cada una que sobrepase eso.
+const (
+	ClinicLaunchBasePriceMXN   = 2000
+	ClinicRegularBasePriceMXN  = 3000
+	ClinicLaunchExtraPriceMXN  = 500
+	ClinicRegularExtraPriceMXN = 800
 )
 
 type Config struct {
@@ -70,16 +82,29 @@ type Config struct {
 	// fallar de forma confusa.
 	ClinicBasePriceID  string
 	ClinicExtraPriceID string
+
+	// Precios de lanzamiento del plan de clínica — mismo criterio que
+	// LaunchPriceID/LaunchPriceEndsAt de arriba (comparten la misma fecha
+	// límite, una sola oferta de lanzamiento para toda la plataforma),
+	// pero con sus propios dos Price de Stripe. Como el cobro por doctor
+	// extra se recalcula cada vez que cambia el conteo (no una sola vez
+	// como el plan individual), la clínica guarda en su propia fila cuál
+	// tarifa le tocó (ver models.Clinic.UsedLaunchPricing) para no
+	// perderla si la promo termina mientras sigue de alta.
+	ClinicLaunchBasePriceID  string
+	ClinicLaunchExtraPriceID string
 }
 
 func LoadConfigFromEnv() Config {
 	cfg := Config{
-		SecretKey:          os.Getenv("STRIPE_SECRET_KEY"),
-		PriceID:            os.Getenv("STRIPE_PRICE_ID"),
-		WebhookSecret:      os.Getenv("STRIPE_WEBHOOK_SECRET"),
-		LaunchPriceID:      os.Getenv("STRIPE_LAUNCH_PRICE_ID"),
-		ClinicBasePriceID:  os.Getenv("STRIPE_CLINIC_BASE_PRICE_ID"),
-		ClinicExtraPriceID: os.Getenv("STRIPE_CLINIC_EXTRA_DOCTOR_PRICE_ID"),
+		SecretKey:                os.Getenv("STRIPE_SECRET_KEY"),
+		PriceID:                  os.Getenv("STRIPE_PRICE_ID"),
+		WebhookSecret:            os.Getenv("STRIPE_WEBHOOK_SECRET"),
+		LaunchPriceID:            os.Getenv("STRIPE_LAUNCH_PRICE_ID"),
+		ClinicBasePriceID:        os.Getenv("STRIPE_CLINIC_BASE_PRICE_ID"),
+		ClinicExtraPriceID:       os.Getenv("STRIPE_CLINIC_EXTRA_DOCTOR_PRICE_ID"),
+		ClinicLaunchBasePriceID:  os.Getenv("STRIPE_CLINIC_LAUNCH_BASE_PRICE_ID"),
+		ClinicLaunchExtraPriceID: os.Getenv("STRIPE_CLINIC_LAUNCH_EXTRA_DOCTOR_PRICE_ID"),
 	}
 	if raw := os.Getenv("STRIPE_LAUNCH_PRICE_ENDS_AT"); raw != "" {
 		if t, err := time.Parse(time.RFC3339, raw); err == nil {
@@ -93,11 +118,18 @@ func (c Config) IsConfigured() bool {
 	return c.SecretKey != "" && c.PriceID != ""
 }
 
+// IsWithinLaunchWindow indica si "ahora" es antes de la fecha límite del
+// lanzamiento — la misma fecha aplica tanto al plan individual como al de
+// clínica, cada uno con sus propios Price de Stripe.
+func (c Config) IsWithinLaunchWindow(now time.Time) bool {
+	return c.LaunchPriceEndsAt != nil && now.Before(*c.LaunchPriceEndsAt)
+}
+
 // IsLaunchPromoActive indica si, en este momento, un doctor que se
-// suscriba por primera vez debe recibir el precio de lanzamiento en vez
-// del regular.
+// suscriba por primera vez debe recibir el precio de lanzamiento
+// individual en vez del regular.
 func (c Config) IsLaunchPromoActive(now time.Time) bool {
-	return c.LaunchPriceID != "" && c.LaunchPriceEndsAt != nil && now.Before(*c.LaunchPriceEndsAt)
+	return c.LaunchPriceID != "" && c.IsWithinLaunchWindow(now)
 }
 
 // CheckoutPriceID decide qué Price de Stripe usar para una suscripción
@@ -108,6 +140,35 @@ func (c Config) CheckoutPriceID(now time.Time) string {
 		return c.LaunchPriceID
 	}
 	return c.PriceID
+}
+
+// IsClinicLaunchPromoActive es el equivalente de IsLaunchPromoActive para
+// el plan de clínica — exige las DOS Price de lanzamiento de clínica
+// configuradas (base y extra van juntas, nunca una sin la otra) además
+// de la fecha límite compartida.
+func (c Config) IsClinicLaunchPromoActive(now time.Time) bool {
+	return c.ClinicLaunchBasePriceID != "" && c.ClinicLaunchExtraPriceID != "" && c.IsWithinLaunchWindow(now)
+}
+
+// ClinicCheckoutBasePriceID decide qué Price de Stripe usar para el
+// cargo base de una clínica NUEVA en este momento.
+func (c Config) ClinicCheckoutBasePriceID(now time.Time) string {
+	if c.IsClinicLaunchPromoActive(now) {
+		return c.ClinicLaunchBasePriceID
+	}
+	return c.ClinicBasePriceID
+}
+
+// ClinicCheckoutExtraPriceID es el equivalente para el cargo por doctor
+// extra — se usa una sola vez, al activarse el pago de la clínica (ver
+// handlers.activateClinicSubscription), para fijar en
+// models.Clinic.StripeExtraDoctorPriceID la tarifa que esa clínica
+// conserva de ahí en adelante.
+func (c Config) ClinicCheckoutExtraPriceID(now time.Time) string {
+	if c.IsClinicLaunchPromoActive(now) {
+		return c.ClinicLaunchExtraPriceID
+	}
+	return c.ClinicExtraPriceID
 }
 
 // IsClinicConfigured es igual que IsConfigured pero además exige las dos
@@ -141,8 +202,12 @@ type CheckoutParams struct {
 type ClinicCheckoutParams struct {
 	ClinicID      uint
 	CustomerEmail string
-	SuccessURL    string
-	CancelURL     string
+	// BasePriceID: qué Price de Stripe usar para el cargo base — decidido
+	// por el llamador con Config.ClinicCheckoutBasePriceID, no por el
+	// cliente de Stripe (mismo criterio que CheckoutParams.PriceID).
+	BasePriceID string
+	SuccessURL  string
+	CancelURL   string
 }
 
 // Client abstrae las llamadas a la API de Stripe que necesita la app:
@@ -160,8 +225,13 @@ type Client interface {
 	// "doctor extra" de la clínica según cuántos sobrepasan el plan base.
 	// extraItemID viene vacío si ese concepto todavía no existe en Stripe
 	// (clínica con ClinicBaseIncludedDoctors o menos desde siempre).
-	// Devuelve el ID del concepto (vacío si quantity llegó a 0 y se borró).
-	SetClinicExtraDoctorQuantity(ctx context.Context, subscriptionID, extraItemID string, quantity int64) (newExtraItemID string, err error)
+	// priceID es la tarifa que ESA clínica tiene congelada (ver
+	// models.Clinic.StripeExtraDoctorPriceID), no necesariamente la
+	// "actual" de Config — así una clínica que se suscribió con la promo
+	// de lanzamiento sigue pagando esa tarifa por cada doctor extra
+	// aunque la promo ya haya terminado. Devuelve el ID del concepto
+	// (vacío si quantity llegó a 0 y se borró).
+	SetClinicExtraDoctorQuantity(ctx context.Context, subscriptionID, extraItemID, priceID string, quantity int64) (newExtraItemID string, err error)
 	// CancelSubscription cancela de inmediato (no al final del periodo) la
 	// suscripción individual de un doctor que se acaba de unir a una
 	// clínica — evita que le sigan cobrando dos veces.
@@ -278,6 +348,10 @@ func ParseClinicClientReferenceID(ref string) (clinicID uint, ok bool) {
 }
 
 func (r *realClient) CreateClinicCheckoutSession(ctx context.Context, params ClinicCheckoutParams) (string, error) {
+	basePriceID := params.BasePriceID
+	if basePriceID == "" {
+		basePriceID = r.clinicBasePriceID
+	}
 	sParams := &stripe.CheckoutSessionParams{
 		Mode:              stripe.String(string(stripe.CheckoutSessionModeSubscription)),
 		SuccessURL:        stripe.String(params.SuccessURL),
@@ -285,7 +359,7 @@ func (r *realClient) CreateClinicCheckoutSession(ctx context.Context, params Cli
 		ClientReferenceID: stripe.String(ClinicClientReferenceID(params.ClinicID)),
 		CustomerEmail:     stripe.String(params.CustomerEmail),
 		LineItems: []*stripe.CheckoutSessionLineItemParams{
-			{Price: stripe.String(r.clinicBasePriceID), Quantity: stripe.Int64(1)},
+			{Price: stripe.String(basePriceID), Quantity: stripe.Int64(1)},
 		},
 	}
 	sParams.Context = ctx
@@ -297,7 +371,10 @@ func (r *realClient) CreateClinicCheckoutSession(ctx context.Context, params Cli
 	return sess.URL, nil
 }
 
-func (r *realClient) SetClinicExtraDoctorQuantity(ctx context.Context, subscriptionID, extraItemID string, quantity int64) (string, error) {
+func (r *realClient) SetClinicExtraDoctorQuantity(ctx context.Context, subscriptionID, extraItemID, priceID string, quantity int64) (string, error) {
+	if priceID == "" {
+		priceID = r.clinicExtraPriceID
+	}
 	if quantity <= 0 {
 		if extraItemID == "" {
 			return "", nil // ya estaba en 0, nada que hacer
@@ -313,7 +390,7 @@ func (r *realClient) SetClinicExtraDoctorQuantity(ctx context.Context, subscript
 	if extraItemID == "" {
 		newParams := &stripe.SubscriptionItemParams{
 			Subscription: stripe.String(subscriptionID),
-			Price:        stripe.String(r.clinicExtraPriceID),
+			Price:        stripe.String(priceID),
 			Quantity:     stripe.Int64(quantity),
 		}
 		newParams.Context = ctx

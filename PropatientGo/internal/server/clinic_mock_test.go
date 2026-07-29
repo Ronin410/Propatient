@@ -36,6 +36,7 @@ type mockExtendCall struct {
 type mockExtraQtyCall struct {
 	SubscriptionID string
 	ExtraItemID    string
+	PriceID        string
 	Quantity       int64
 }
 
@@ -74,10 +75,10 @@ func (m *mockBillingClient) CreateClinicCheckoutSession(ctx context.Context, par
 	return "https://checkout.stripe.com/mock/clinic", nil
 }
 
-func (m *mockBillingClient) SetClinicExtraDoctorQuantity(ctx context.Context, subscriptionID, extraItemID string, quantity int64) (string, error) {
+func (m *mockBillingClient) SetClinicExtraDoctorQuantity(ctx context.Context, subscriptionID, extraItemID, priceID string, quantity int64) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.extraQtyCalls = append(m.extraQtyCalls, mockExtraQtyCall{SubscriptionID: subscriptionID, ExtraItemID: extraItemID, Quantity: quantity})
+	m.extraQtyCalls = append(m.extraQtyCalls, mockExtraQtyCall{SubscriptionID: subscriptionID, ExtraItemID: extraItemID, PriceID: priceID, Quantity: quantity})
 	if quantity <= 0 {
 		return "", nil
 	}

@@ -81,6 +81,164 @@ func TestClinic_CreateClinic_CreatesOrphanRow_DoctorNotLinkedYet(t *testing.T) {
 	assert.Equal(t, clinic.ID, mock.clinicCheckoutCalls[0].ClinicID)
 }
 
+// clinicLaunchBillingConfig extiende clinicBillingConfig con el precio de
+// lanzamiento de clínica configurado y una fecha límite futura.
+func clinicLaunchBillingConfig(endsAt time.Time) billing.Config {
+	cfg := clinicBillingConfig()
+	cfg.LaunchPriceEndsAt = &endsAt
+	cfg.ClinicLaunchBasePriceID = "price_clinic_base_launch_mock"
+	cfg.ClinicLaunchExtraPriceID = "price_clinic_extra_launch_mock"
+	return cfg
+}
+
+// TestClinic_CreateClinic_UsesLaunchPricing_WhenPromoActive confirma que,
+// con la promo de lanzamiento vigente, una clínica NUEVA arma el Checkout
+// con el Price base de lanzamiento y guarda de una vez la tarifa que le
+// tocó (ver models.Clinic.UsedLaunchPricing/StripeExtraDoctorPriceID) —
+// para que el cobro por doctor extra que se agregue después siga usando
+// esa misma tarifa aunque la promo ya haya terminado.
+func TestClinic_CreateClinic_UsesLaunchPricing_WhenPromoActive(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	mock := newMockBillingClient()
+	cfg := clinicLaunchBillingConfig(time.Now().UTC().Add(48 * time.Hour))
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mustLocalStorage(t), cfg, mock, geocoding.NewClient(), nil, nil)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_clinic_launch_active", "password123")
+	token := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doRequest(t, router, http.MethodPost, "/api/clinic", token, map[string]any{"name": "Clínica de Lanzamiento"})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	require.Len(t, mock.clinicCheckoutCalls, 1)
+	assert.Equal(t, "price_clinic_base_launch_mock", mock.clinicCheckoutCalls[0].BasePriceID)
+
+	var clinic models.Clinic
+	require.NoError(t, db.Where("owner_doctor_id = ?", doc.ID).First(&clinic).Error)
+	assert.True(t, clinic.UsedLaunchPricing)
+	assert.Equal(t, "price_clinic_extra_launch_mock", clinic.StripeExtraDoctorPriceID)
+}
+
+// TestClinic_CreateClinic_UsesRegularPricing_WhenPromoExpired confirma el
+// otro lado: pasada la fecha límite, una clínica NUEVA paga los precios
+// regulares y queda marcada como tal.
+func TestClinic_CreateClinic_UsesRegularPricing_WhenPromoExpired(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	mock := newMockBillingClient()
+	cfg := clinicLaunchBillingConfig(time.Now().UTC().Add(-48 * time.Hour))
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mustLocalStorage(t), cfg, mock, geocoding.NewClient(), nil, nil)
+
+	doc := testutil.CreateTestDoctor(t, db, "doc_clinic_launch_expired", "password123")
+	token := testutil.TokenFor(t, doc.ID, doc.Username)
+
+	w := doRequest(t, router, http.MethodPost, "/api/clinic", token, map[string]any{"name": "Clínica Regular"})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	require.Len(t, mock.clinicCheckoutCalls, 1)
+	assert.Equal(t, "price_clinic_base_mock", mock.clinicCheckoutCalls[0].BasePriceID)
+
+	var clinic models.Clinic
+	require.NoError(t, db.Where("owner_doctor_id = ?", doc.ID).First(&clinic).Error)
+	assert.False(t, clinic.UsedLaunchPricing)
+	assert.Equal(t, "price_clinic_extra_mock", clinic.StripeExtraDoctorPriceID)
+}
+
+// TestClinic_SyncDoctorCount_UsesFrozenExtraPrice_EvenAfterPromoExpires
+// es el punto central de todo el mecanismo: una clínica que se suscribió
+// con la promo de lanzamiento debe seguir pagando esa tarifa por cada
+// doctor extra que se sume, AUNQUE la promo ya haya terminado para
+// cuando se una ese doctor — el Price a usar viene de lo que la clínica
+// ya tenía congelado (StripeExtraDoctorPriceID), no de la configuración
+// "actual".
+func TestClinic_SyncDoctorCount_UsesFrozenExtraPrice_EvenAfterPromoExpires(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	mock := newMockBillingClient()
+	// La promo YA terminó al momento de este test — si el código mirara
+	// la configuración actual en vez de la tarifa congelada de la
+	// clínica, usaría el Price regular en vez del de lanzamiento.
+	cfg := clinicLaunchBillingConfig(time.Now().UTC().Add(-48 * time.Hour))
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mustLocalStorage(t), cfg, mock, geocoding.NewClient(), nil, nil)
+
+	owner := testutil.CreateTestDoctor(t, db, "doc_clinic_owner_frozen", "password123")
+	clinic := models.Clinic{
+		Name:                     "Clínica Congelada",
+		OwnerDoctorID:            owner.ID,
+		SubscriptionStatus:       "active",
+		StripeSubscriptionID:     "sub_clinic_frozen",
+		UsedLaunchPricing:        true,
+		StripeExtraDoctorPriceID: "price_clinic_extra_launch_mock",
+	}
+	require.NoError(t, db.Create(&clinic).Error)
+	require.NoError(t, db.Model(&owner).Updates(map[string]any{"clinic_id": clinic.ID, "is_clinic_owner": true}).Error)
+
+	for i := 0; i < 4; i++ {
+		filler := testutil.CreateTestDoctor(t, db, "doc_clinic_frozen_filler_"+string(rune('a'+i)), "password123")
+		require.NoError(t, db.Model(&filler).Update("clinic_id", clinic.ID).Error)
+	}
+
+	invitee := testutil.CreateTestDoctor(t, db, "doc_clinic_frozen_invitee", "password123")
+	expires := time.Now().UTC().Add(72 * time.Hour)
+	require.NoError(t, db.Model(&invitee).Updates(map[string]any{
+		"pending_clinic_id":              clinic.ID,
+		"clinic_invite_token":            "test-token-frozen",
+		"clinic_invite_token_expires_at": expires,
+	}).Error)
+
+	token := testutil.TokenFor(t, invitee.ID, invitee.Username)
+	w := doRequest(t, router, http.MethodPost, "/api/clinic/invitations/test-token-frozen/accept", token, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	call, ok := mock.lastExtraQtyCall()
+	require.True(t, ok)
+	assert.Equal(t, "sub_clinic_frozen", call.SubscriptionID)
+	assert.Equal(t, "price_clinic_extra_launch_mock", call.PriceID)
+	assert.Equal(t, int64(1), call.Quantity)
+}
+
+// TestClinic_GetClinic_ShowsLaunchPriceDisplay_WhenUsedLaunchPricing
+// confirma que el desglose informativo de GetClinic refleja la tarifa
+// que ESTA clínica congeló, no la que esté vigente ahora mismo.
+func TestClinic_GetClinic_ShowsLaunchPriceDisplay_WhenUsedLaunchPricing(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	owner := testutil.CreateTestDoctor(t, db, "doc_clinic_owner_display", "password123")
+	clinic := models.Clinic{
+		Name:               "Clínica Mostrar Precio",
+		OwnerDoctorID:      owner.ID,
+		SubscriptionStatus: "active",
+		UsedLaunchPricing:  true,
+	}
+	require.NoError(t, db.Create(&clinic).Error)
+	require.NoError(t, db.Model(&owner).Updates(map[string]any{"clinic_id": clinic.ID, "is_clinic_owner": true}).Error)
+
+	token := testutil.TokenFor(t, owner.ID, owner.Username)
+	w := doRequest(t, router, http.MethodGet, "/api/clinic", token, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	body := decodeJSON(t, w)
+	assert.Equal(t, float64(billing.ClinicLaunchBasePriceMXN), body["basePriceDisplay"])
+	assert.Equal(t, float64(billing.ClinicLaunchExtraPriceMXN), body["extraPriceDisplay"])
+}
+
+// TestClinic_GetClinic_ShowsRegularPriceDisplay_ByDefault confirma el
+// caso normal: una clínica que nunca usó la promo muestra los precios
+// regulares.
+func TestClinic_GetClinic_ShowsRegularPriceDisplay_ByDefault(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	owner := testutil.CreateTestDoctor(t, db, "doc_clinic_owner_display_reg", "password123")
+	clinic := models.Clinic{Name: "Clínica Regular Mostrar Precio", OwnerDoctorID: owner.ID, SubscriptionStatus: "active"}
+	require.NoError(t, db.Create(&clinic).Error)
+	require.NoError(t, db.Model(&owner).Updates(map[string]any{"clinic_id": clinic.ID, "is_clinic_owner": true}).Error)
+
+	token := testutil.TokenFor(t, owner.ID, owner.Username)
+	w := doRequest(t, router, http.MethodGet, "/api/clinic", token, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	body := decodeJSON(t, w)
+	assert.Equal(t, float64(billing.ClinicRegularBasePriceMXN), body["basePriceDisplay"])
+	assert.Equal(t, float64(billing.ClinicRegularExtraPriceMXN), body["extraPriceDisplay"])
+}
+
 // TestClinic_CreateClinic_AlreadyInClinic_Returns409 evita que un doctor
 // que ya pertenece a una clínica cree otra por encima.
 func TestClinic_CreateClinic_AlreadyInClinic_Returns409(t *testing.T) {
