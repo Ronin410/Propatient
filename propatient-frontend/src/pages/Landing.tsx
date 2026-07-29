@@ -9,6 +9,27 @@ import { useAuth } from '../context/AuthContext';
 import logo from '../assets/logo.png';
 import './Landing.scss';
 
+// Precios y estado de la promo de lanzamiento (ver GetPublicPricing en el
+// backend) — sin sesión, alimenta la sección de planes de abajo. Los
+// montos son solo informativos (billing.Individual*/Clinic*PriceMXN); el
+// cobro real lo definen los Price configurados en Stripe.
+interface PublicPricing {
+  individual: {
+    launchPromoActive: boolean;
+    launchPriceMXN: number;
+    regularPriceMXN: number;
+  };
+  clinic: {
+    launchPromoActive: boolean;
+    launchBasePriceMXN: number;
+    regularBasePriceMXN: number;
+    launchExtraPriceMXN: number;
+    regularExtraPriceMXN: number;
+    baseIncludedDoctors: number;
+  };
+  launchPromoEndsAt: string | null;
+}
+
 const ROTATION_MS = 5000;
 // Cuántas tarjetas se muestran a la vez (se acomodan en una sola columna
 // en móvil vía CSS, sin cambiar esta lógica) — antes solo se mostraba UN
@@ -20,6 +41,13 @@ export const Landing: React.FC = () => {
   const { isAuthenticated } = useAuth();
   const [doctors, setDoctors] = useState<PublicDoctor[]>([]);
   const [groupStart, setGroupStart] = useState(0);
+  const [pricing, setPricing] = useState<PublicPricing | null>(null);
+
+  useEffect(() => {
+    api.get('/public/pricing')
+      .then((res) => setPricing(res.data))
+      .catch(() => setPricing(null));
+  }, []);
 
   useEffect(() => {
     api.get('/public/doctors')
@@ -134,17 +162,120 @@ export const Landing: React.FC = () => {
         </div>
       </section>
 
-      <section className="landing-doctors-cta">
+      <section className="landing-pricing">
         <h2>¿Eres doctor?</h2>
-        <p>
+        <p className="pricing-intro">
           Gestiona tu agenda, tus pacientes y tu expediente clínico digital, y aparece
           en el directorio para que nuevos pacientes te encuentren.
         </p>
-        {isAuthenticated ? (
-          <Link to="/inicio" className="btn-primary-lg">Ir a mi panel</Link>
-        ) : (
-          <Link to="/login" className="btn-primary-lg">Crear mi cuenta</Link>
+
+        {pricing && (
+          <div className="pricing-cards">
+            <div className="pricing-card">
+              <h3>Plan Individual</h3>
+              <div className="pricing-price">
+                {pricing.individual.launchPromoActive && (
+                  <span className="pricing-price-regular">
+                    ${pricing.individual.regularPriceMXN.toLocaleString('es-MX')} MXN/mes
+                  </span>
+                )}
+                <span className="pricing-price-main">
+                  ${(pricing.individual.launchPromoActive
+                    ? pricing.individual.launchPriceMXN
+                    : pricing.individual.regularPriceMXN
+                  ).toLocaleString('es-MX')}{' '}
+                  MXN/mes
+                </span>
+              </div>
+              {pricing.individual.launchPromoActive && (
+                <span className="pricing-badge">Precio de lanzamiento — oferta por tiempo limitado</span>
+              )}
+              <ul className="pricing-features">
+                <li>14 días de prueba gratis</li>
+                <li>Agenda de citas online</li>
+                <li>Notificaciones automáticas por WhatsApp</li>
+                <li>Expediente clínico digital</li>
+                <li>Perfil público en el directorio</li>
+              </ul>
+              {isAuthenticated ? (
+                <Link to="/inicio" className="btn-primary-lg">Ir a mi panel</Link>
+              ) : (
+                <Link to="/login" className="btn-primary-lg">Crear mi cuenta</Link>
+              )}
+            </div>
+
+            <div className="pricing-card">
+              <h3>Plan Clínica</h3>
+              <div className="pricing-price">
+                {pricing.clinic.launchPromoActive && (
+                  <span className="pricing-price-regular">
+                    ${pricing.clinic.regularBasePriceMXN.toLocaleString('es-MX')} MXN/mes
+                  </span>
+                )}
+                <span className="pricing-price-main">
+                  ${(pricing.clinic.launchPromoActive
+                    ? pricing.clinic.launchBasePriceMXN
+                    : pricing.clinic.regularBasePriceMXN
+                  ).toLocaleString('es-MX')}{' '}
+                  MXN/mes
+                </span>
+              </div>
+              <p className="pricing-extra-note">
+                Incluye hasta {pricing.clinic.baseIncludedDoctors} personas · $
+                {(pricing.clinic.launchPromoActive
+                  ? pricing.clinic.launchExtraPriceMXN
+                  : pricing.clinic.regularExtraPriceMXN
+                ).toLocaleString('es-MX')}{' '}
+                MXN/mes por persona adicional
+              </p>
+              {pricing.clinic.launchPromoActive && (
+                <span className="pricing-badge">Precio de lanzamiento — oferta por tiempo limitado</span>
+              )}
+              <ul className="pricing-features">
+                <li>Todo lo del plan individual</li>
+                <li>Varios doctores en un solo consultorio</li>
+                <li>Personal de recepción con su propio acceso</li>
+                <li>Un solo directorio para toda la clínica</li>
+              </ul>
+              {isAuthenticated ? (
+                <Link to="/inicio" className="btn-primary-lg">Ir a mi panel</Link>
+              ) : (
+                <Link to="/login" className="btn-primary-lg">Crear mi cuenta</Link>
+              )}
+            </div>
+          </div>
         )}
+      </section>
+
+      <section className="landing-features">
+        <h2>¿Quieres saber más?</h2>
+        <div className="features-grid">
+          <div className="feature-item">
+            <span className="material-icons-outlined">event_available</span>
+            <h4>Agendado de citas</h4>
+            <p>Tus pacientes agendan solos desde tu perfil público — tú confirmas o rechazas cada solicitud.</p>
+          </div>
+          <div className="feature-item">
+            <span className="material-icons-outlined">chat</span>
+            <h4>WhatsApp automático</h4>
+            <p>Confirmaciones, recordatorios 24 horas antes y avisos de cancelación, sin que muevas un dedo.</p>
+          </div>
+          <div className="feature-item">
+            <span className="material-icons-outlined">qr_code_2</span>
+            <h4>QR para tu consultorio</h4>
+            <p>Tu paciente escanea un código y sube sus documentos antes de la consulta, sin que tengas que pedirlos tú.</p>
+          </div>
+          <div className="feature-item">
+            <span className="material-icons-outlined">folder_shared</span>
+            <h4>Expediente clínico digital</h4>
+            <p>Notas de consulta, historial completo y recetas en PDF, todo en un solo lugar.</p>
+          </div>
+          <div className="feature-item">
+            <span className="material-icons-outlined">travel_explore</span>
+            <h4>Apareces en el directorio</h4>
+            <p>Pacientes nuevos te encuentran por especialidad o ubicación, sin costo extra.</p>
+          </div>
+        </div>
       </section>
 
       <Footer />

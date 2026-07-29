@@ -81,6 +81,39 @@ func GetBillingStatus(db *gorm.DB, client billing.Client, cfg billing.Config) gi
 	}
 }
 
+// GetPublicPricing expone los precios y el estado de la promo de
+// lanzamiento SIN necesitar sesión — a diferencia de GetBillingStatus
+// (que es para un doctor ya autenticado viendo SU propio estatus), esto
+// es lo que alimenta la sección de planes de la página de inicio, antes
+// de que exista ninguna cuenta. Los montos son los mismos informativos
+// que ya usan GetBillingStatus/GetClinic (billing.Individual*/Clinic*
+// PriceMXN) — si cambias un precio en Stripe, actualiza también esas
+// constantes para que no queden desincronizadas.
+func GetPublicPricing(cfg billing.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		now := time.Now().UTC()
+		c.JSON(http.StatusOK, gin.H{
+			"individual": gin.H{
+				"launchPromoActive": cfg.IsLaunchPromoActive(now),
+				"launchPriceMXN":    billing.IndividualLaunchPriceMXN,
+				"regularPriceMXN":   billing.IndividualRegularPriceMXN,
+			},
+			"clinic": gin.H{
+				"launchPromoActive":    cfg.IsClinicLaunchPromoActive(now),
+				"launchBasePriceMXN":   billing.ClinicLaunchBasePriceMXN,
+				"regularBasePriceMXN":  billing.ClinicRegularBasePriceMXN,
+				"launchExtraPriceMXN":  billing.ClinicLaunchExtraPriceMXN,
+				"regularExtraPriceMXN": billing.ClinicRegularExtraPriceMXN,
+				"baseIncludedDoctors":  billing.ClinicBaseIncludedDoctors,
+			},
+			// Fecha límite compartida por las dos promos (ver
+			// billing.Config.IsWithinLaunchWindow) — nil si no hay ninguna
+			// fecha configurada.
+			"launchPromoEndsAt": cfg.LaunchPriceEndsAt,
+		})
+	}
+}
+
 // CreateCheckoutSession arma la URL de Stripe Checkout para que el doctor
 // suscriba su consultorio. Debe quedar fuera de RequireActiveSubscription:
 // un doctor con la prueba vencida necesita poder llegar aquí para pagar.

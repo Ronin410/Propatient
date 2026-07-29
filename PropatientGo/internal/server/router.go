@@ -267,6 +267,10 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 			// no permitir spamear archivos con un link real interceptado.
 			public.GET("/upload/:token", handlers.GetPublicUploadInfo(db))
 			public.POST("/upload/:token", publicBookingLimiter.Middleware(), handlers.PublicUploadDocuments(db, storageClient))
+			// Precios y estado de la promo de lanzamiento para la sección de
+			// planes de la página de inicio — sin sesión, antes de que
+			// exista ninguna cuenta.
+			public.GET("/pricing", handlers.GetPublicPricing(billingConfig))
 		}
 
 		// --- RUTAS PROTEGIDAS ---

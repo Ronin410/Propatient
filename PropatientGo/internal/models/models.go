@@ -246,6 +246,19 @@ type Clinic struct {
 	StripeSubscriptionID string `json:"-"`
 	StripeBaseItemID     string `json:"-"`
 	StripeExtraItemID    string `json:"-"`
+
+	// UsedLaunchPricing y StripeExtraDoctorPriceID se fijan UNA sola vez,
+	// al activarse el pago (ver handlers.activateClinicSubscription),
+	// según si en ESE momento la promo de lanzamiento del plan de clínica
+	// seguía vigente (ver billing.Config.IsClinicLaunchPromoActive). A
+	// diferencia del plan individual (donde Stripe ya deja fija la
+	// tarifa de una suscripción activa sin que haya que guardar nada),
+	// aquí sí hace falta: el cobro por doctor extra se recalcula cada vez
+	// que cambia el conteo (ver syncClinicDoctorCount), así que sin esto
+	// usaría la tarifa "actual" en vez de la que esta clínica congeló al
+	// suscribirse.
+	UsedLaunchPricing        bool   `gorm:"default:false" json:"-"`
+	StripeExtraDoctorPriceID string `json:"-"`
 }
 
 // ClinicEmailInvite es una invitación a la clínica para un correo que

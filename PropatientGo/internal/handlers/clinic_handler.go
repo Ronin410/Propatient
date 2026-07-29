@@ -71,7 +71,7 @@ func syncClinicDoctorCount(ctx context.Context, db *gorm.DB, client billing.Clie
 	if count > billing.ClinicBaseIncludedDoctors {
 		extra = count - billing.ClinicBaseIncludedDoctors
 	}
-	newItemID, err := client.SetClinicExtraDoctorQuantity(ctx, clinic.StripeSubscriptionID, clinic.StripeExtraItemID, extra)
+	newItemID, err := client.SetClinicExtraDoctorQuantity(ctx, clinic.StripeSubscriptionID, clinic.StripeExtraItemID, clinic.StripeExtraDoctorPriceID, extra)
 	if err != nil {
 		return err
 	}
@@ -123,10 +123,32 @@ func CreateClinic(db *gorm.DB, client billing.Client, cfg billing.Config) gin.Ha
 			return
 		}
 
+		// La tarifa (de lanzamiento o regular) se decide AQUÍ, en el mismo
+		// momento en que Stripe va a fijar el precio base del Checkout, y
+		// se guarda de una vez en la clínica — así el cargo por doctor
+		// extra que se agregue más adelante (ver syncClinicDoctorCount)
+		// usa la tarifa que esta clínica congeló al suscribirse, sin
+		// importar que la promo termine mientras sigue de alta.
+		now := time.Now().UTC()
+		basePriceID := cfg.ClinicCheckoutBasePriceID(now)
+		usedLaunchPricing := cfg.IsClinicLaunchPromoActive(now)
+		extraPriceID := cfg.ClinicExtraPriceID
+		if usedLaunchPricing {
+			extraPriceID = cfg.ClinicLaunchExtraPriceID
+		}
+		if err := db.Model(&clinic).Updates(map[string]interface{}{
+			"used_launch_pricing":          usedLaunchPricing,
+			"stripe_extra_doctor_price_id": extraPriceID,
+		}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo crear la clínica"})
+			return
+		}
+
 		base := frontendRedirectBase()
 		url, err := client.CreateClinicCheckoutSession(c.Request.Context(), billing.ClinicCheckoutParams{
 			ClinicID:      clinic.ID,
 			CustomerEmail: doctor.Email,
+			BasePriceID:   basePriceID,
 			SuccessURL:    base + "/clinica?checkout=success",
 			CancelURL:     base + "/clinica?checkout=cancelled",
 		})
@@ -274,6 +296,19 @@ func GetClinic(db *gorm.DB) gin.HandlerFunc {
 			pastDueGraceEndsAt = &t
 		}
 
+		// Montos informativos (MXN/mes) — el cobro real vive en Stripe,
+		// esto es solo para que el dueño vea el desglose sin tener que
+		// entrar al portal de facturación. Refleja la tarifa que ESTA
+		// clínica congeló al suscribirse (ver clinic.UsedLaunchPricing,
+		// fijado una sola vez en CreateClinic), no la que esté vigente
+		// ahora mismo para clínicas nuevas.
+		basePriceDisplay := billing.ClinicRegularBasePriceMXN
+		extraPriceDisplay := billing.ClinicRegularExtraPriceMXN
+		if clinic.UsedLaunchPricing {
+			basePriceDisplay = billing.ClinicLaunchBasePriceMXN
+			extraPriceDisplay = billing.ClinicLaunchExtraPriceMXN
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"id":                  clinic.ID,
 			"name":                clinic.Name,
@@ -283,11 +318,8 @@ func GetClinic(db *gorm.DB) gin.HandlerFunc {
 			"doctors":             items,
 			"baseIncludedDoctors": billing.ClinicBaseIncludedDoctors,
 			"extraDoctors":        extraDoctors,
-			// Montos informativos (MXN/mes) — el cobro real vive en Stripe,
-			// esto es solo para que el dueño vea el desglose sin tener que
-			// entrar al portal de facturación.
-			"basePriceDisplay":  3200,
-			"extraPriceDisplay": 1000,
+			"basePriceDisplay":    basePriceDisplay,
+			"extraPriceDisplay":   extraPriceDisplay,
 			// Ubicación única de la clínica (ver UpdateClinicLocation) — el
 			// directorio público la usa para TODOS los doctores de esta
 			// clínica en vez de la dirección individual de cada quien.

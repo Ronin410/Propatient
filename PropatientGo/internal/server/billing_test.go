@@ -456,6 +456,68 @@ func TestBilling_GetStatus_LaunchPromoInactive_WhenExpired(t *testing.T) {
 	assert.Equal(t, false, body["launchPromoActive"])
 }
 
+// TestPublicPricing_ReflectsLaunchAndClinicConfig confirma que
+// /public/pricing (sin sesión) expone los mismos precios y estado de
+// promo que alimentan la sección de planes de la página de inicio, tanto
+// para el plan individual como para el de clínica.
+func TestPublicPricing_ReflectsLaunchAndClinicConfig(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	launchEndsAt := time.Now().UTC().Add(48 * time.Hour).Truncate(time.Second)
+	cfg := billing.Config{
+		SecretKey:                "sk_test_mock",
+		PriceID:                  "price_individual_regular",
+		LaunchPriceID:            "price_individual_launch",
+		LaunchPriceEndsAt:        &launchEndsAt,
+		ClinicBasePriceID:        "price_clinic_base",
+		ClinicExtraPriceID:       "price_clinic_extra",
+		ClinicLaunchBasePriceID:  "price_clinic_base_launch",
+		ClinicLaunchExtraPriceID: "price_clinic_extra_launch",
+	}
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mustLocalStorage(t), cfg, newMockBillingClient(), geocoding.NewClient(), nil, nil)
+
+	w := doRequest(t, router, http.MethodGet, "/api/public/pricing", "", nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	body := decodeJSON(t, w)
+
+	individual, ok := body["individual"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, true, individual["launchPromoActive"])
+	assert.Equal(t, float64(billing.IndividualLaunchPriceMXN), individual["launchPriceMXN"])
+	assert.Equal(t, float64(billing.IndividualRegularPriceMXN), individual["regularPriceMXN"])
+
+	clinic, ok := body["clinic"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, true, clinic["launchPromoActive"])
+	assert.Equal(t, float64(billing.ClinicLaunchBasePriceMXN), clinic["launchBasePriceMXN"])
+	assert.Equal(t, float64(billing.ClinicRegularBasePriceMXN), clinic["regularBasePriceMXN"])
+	assert.Equal(t, float64(billing.ClinicLaunchExtraPriceMXN), clinic["launchExtraPriceMXN"])
+	assert.Equal(t, float64(billing.ClinicRegularExtraPriceMXN), clinic["regularExtraPriceMXN"])
+	assert.Equal(t, float64(billing.ClinicBaseIncludedDoctors), clinic["baseIncludedDoctors"])
+
+	require.NotNil(t, body["launchPromoEndsAt"])
+	got, err := time.Parse(time.RFC3339, body["launchPromoEndsAt"].(string))
+	require.NoError(t, err)
+	assert.WithinDuration(t, launchEndsAt, got, time.Second)
+}
+
+// TestPublicPricing_NoPromoConfigured_ReportsInactive confirma que sin
+// STRIPE_LAUNCH_PRICE_ENDS_AT definida, ninguna de las dos promos se
+// marca como activa.
+func TestPublicPricing_NoPromoConfigured_ReportsInactive(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	w := doRequest(t, router, http.MethodGet, "/api/public/pricing", "", nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	body := decodeJSON(t, w)
+
+	individual := body["individual"].(map[string]any)
+	assert.Equal(t, false, individual["launchPromoActive"])
+	clinic := body["clinic"].(map[string]any)
+	assert.Equal(t, false, clinic["launchPromoActive"])
+	assert.Nil(t, body["launchPromoEndsAt"])
+}
+
 func mustLocalStorage(t *testing.T) storage.Client {
 	t.Helper()
 	client, err := storage.NewClient(t.Context(), storage.Config{})

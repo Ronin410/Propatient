@@ -35,7 +35,7 @@ func (m *mockBillingClient) CreatePortalSession(ctx context.Context, customerID,
 func (m *mockBillingClient) CreateClinicCheckoutSession(ctx context.Context, params billing.ClinicCheckoutParams) (string, error) {
 	return "", nil
 }
-func (m *mockBillingClient) SetClinicExtraDoctorQuantity(ctx context.Context, subscriptionID, extraItemID string, quantity int64) (string, error) {
+func (m *mockBillingClient) SetClinicExtraDoctorQuantity(ctx context.Context, subscriptionID, extraItemID, priceID string, quantity int64) (string, error) {
 	return "", nil
 }
 func (m *mockBillingClient) CancelSubscription(ctx context.Context, subscriptionID string) error {
