@@ -9,6 +9,11 @@ import { useAuth } from '../context/AuthContext';
 import logo from '../assets/logo.png';
 import './Landing.scss';
 
+// Mismo número/patrón que el link "Soporte" del Footer y el botón "¿Necesitas
+// ayuda?" del sidebar del doctor (ver DashboardLayout.tsx) — wa.me quiere el
+// número completo en formato internacional, sin "+" ni espacios ni guiones.
+const supportWhatsAppNumber = (import.meta.env.VITE_SUPPORT_WHATSAPP_NUMBER as string | undefined)?.replace(/[^0-9]/g, '');
+
 // Precios y estado de la promo de lanzamiento (ver GetPublicPricing en el
 // backend) — sin sesión, alimenta la sección de planes de abajo. Los
 // montos son solo informativos (billing.Individual*/Clinic*PriceMXN); el
@@ -276,6 +281,21 @@ export const Landing: React.FC = () => {
             <p>Pacientes nuevos te encuentran por especialidad o ubicación, sin costo extra.</p>
           </div>
         </div>
+
+        {supportWhatsAppNumber && (
+          <div className="landing-whatsapp-cta">
+            <p>¿Tienes dudas? Para más información, escríbenos por WhatsApp.</p>
+            <a
+              href={`https://wa.me/${supportWhatsAppNumber}?text=${encodeURIComponent('Hola, quiero más información sobre ProPatient Clinic.')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-outline-lg"
+            >
+              <span className="material-icons-outlined">chat</span>
+              Escríbenos por WhatsApp
+            </a>
+          </div>
+        )}
       </section>
 
       <Footer />

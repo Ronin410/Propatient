@@ -412,5 +412,27 @@
     h4 { color: var(--color-heading); margin: 0.8rem 0 0.5rem 0; }
     p { color: var(--color-secondary); font-size: 0.9rem; margin: 0; line-height: 1.5; }
   }
+
+  .landing-whatsapp-cta {
+    margin: 2.5rem auto 0 auto;
+    max-width: 480px;
+
+    p { color: var(--color-secondary); margin: 0 0 1rem 0; }
+
+    .btn-outline-lg {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      border: 1px solid var(--border-strong);
+      color: var(--color-heading);
+      background: var(--bg);
+      padding: 0.9rem 1.8rem;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 1rem;
+
+      &:hover { border-color: var(--color-primary); color: var(--color-primary); }
+    }
+  }
 }
 
