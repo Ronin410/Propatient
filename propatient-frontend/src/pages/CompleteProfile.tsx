@@ -34,6 +34,30 @@ export const CompleteProfile = () => {
     }
   }, []);
 
+  // Si el doctor ya guardó este paso antes (le dio "Siguiente Paso" y
+  // luego regresó aquí desde el paso 2), precarga el formulario con lo
+  // que ya está en el backend — antes el formulario siempre arrancaba
+  // vacío al volver a montar este componente, así que aunque los datos
+  // ya estaban guardados, había que volver a escribirlos todos para
+  // poder avanzar de nuevo.
+  useEffect(() => {
+    api.get('/doctor/me').then((res) => {
+      const d = res.data;
+      setFormData((prev) => ({
+        fullName: d.fullName || prev.fullName,
+        phone: d.phone || prev.phone,
+        birthDate: d.birthDate ? String(d.birthDate).slice(0, 10) : prev.birthDate,
+        address: d.address || prev.address,
+        postalCode: d.postalCode || prev.postalCode,
+        medicalSpecialty: d.medicalSpecialty || prev.medicalSpecialty,
+        university: d.university || prev.university,
+      }));
+      if (d.latitude != null && d.longitude != null) {
+        setLocation({ latitude: d.latitude, longitude: d.longitude });
+      }
+    }).catch(() => {});
+  }, []);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: name === 'phone' ? sanitizePhoneInput(value) : value });
