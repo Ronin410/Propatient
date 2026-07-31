@@ -188,6 +188,19 @@ export const BillingPage: React.FC = () => {
     );
   }
 
+  // Decide si el botón manda al Portal de Cliente de Stripe ("Gestionar
+  // suscripción") o abre un Checkout nuevo ("Suscribirse"). OJO:
+  // status.hasPaymentMethod es en realidad "alguna vez tuvo un Customer de
+  // Stripe" (ver GetBillingStatus) — se queda en true PARA SIEMPRE una vez
+  // que existe, incluso después de que Stripe cancele la suscripción por
+  // completo. Por eso NO basta con mirar hasPaymentMethod solo: para
+  // "canceled" la suscripción ya no existe en Stripe, así que el Portal no
+  // tiene nada que gestionar (solo muestra método de pago e historial,
+  // sin forma de volver a suscribirse) — hace falta un Checkout nuevo. En
+  // "past_due" sí sigue viva, ahí el Portal puede reactivarla de verdad.
+  const canManagePortal = status?.subscriptionStatus === 'active' ||
+    (status?.subscriptionStatus === 'past_due' && status?.hasPaymentMethod === true);
+
   return (
     <div className="billing-container">
       <div className="card billing-card">
@@ -251,8 +264,15 @@ export const BillingPage: React.FC = () => {
                       {daysLeft(status.pastDueGraceEndsAt) === 1 ? '' : 's'} para actualizar tu método de pago antes
                       de perder el acceso.
                     </p>
-                  ) : (
+                  ) : status.subscriptionStatus === 'past_due' ? (
                     <p>Actualiza tu método de pago para reactivar el acceso completo.</p>
+                  ) : (
+                    // Una suscripción "canceled" ya no existe en Stripe (a
+                    // diferencia de "past_due", donde el cobro solo falló
+                    // pero la suscripción sigue viva) — no hay nada que
+                    // "reactivar" desde el portal, hace falta un Checkout
+                    // nuevo (ver canManagePortal más abajo).
+                    <p>Vuelve a suscribirte para recuperar el acceso completo.</p>
                   )}
                 </div>
               </div>
@@ -261,7 +281,7 @@ export const BillingPage: React.FC = () => {
             {status.launchPromoActive &&
               status.launchPriceMXN != null &&
               status.regularPriceMXN != null &&
-              !(status.subscriptionStatus === 'active' || status.hasPaymentMethod) && (
+              !canManagePortal && (
                 <div className="billing-promo">
                   <span className="billing-promo-badge">
                     {discountPercent(status.regularPriceMXN, status.launchPriceMXN)}% de descuento — precio de
@@ -285,7 +305,7 @@ export const BillingPage: React.FC = () => {
               )}
 
             <div className="billing-actions">
-              {status.subscriptionStatus === 'active' || status.hasPaymentMethod ? (
+              {canManagePortal ? (
                 <button className="btn-primary" onClick={handleManage} disabled={actionLoading}>
                   {actionLoading ? 'Abriendo...' : 'Gestionar suscripción'}
                 </button>
