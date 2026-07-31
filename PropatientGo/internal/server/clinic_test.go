@@ -920,3 +920,144 @@ func TestClinic_UpdateClinicLocation_Success_PersistsAddressAndCoordinates(t *te
 	assert.InDelta(t, 20.6597, *updated.Latitude, 0.0001)
 	assert.InDelta(t, -103.3496, *updated.Longitude, 0.0001)
 }
+
+// TestClinic_SetClinicCapacity_OnlyOwner_Returns403 confirma que un
+// doctor de clínica que no es dueño no puede reservar capacidad.
+func TestClinic_SetClinicCapacity_OnlyOwner_Returns403(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	owner := testutil.CreateTestDoctor(t, db, "doc_clinic_cap_owner1", "password123")
+	clinic := models.Clinic{Name: "Clínica Cap 1", OwnerDoctorID: owner.ID, SubscriptionStatus: "active"}
+	require.NoError(t, db.Create(&clinic).Error)
+	require.NoError(t, db.Model(&owner).Updates(map[string]any{"clinic_id": clinic.ID, "is_clinic_owner": true}).Error)
+
+	member := testutil.CreateTestDoctor(t, db, "doc_clinic_cap_member1", "password123")
+	require.NoError(t, db.Model(&member).Update("clinic_id", clinic.ID).Error)
+
+	token := testutil.TokenFor(t, member.ID, member.Username)
+	w := doRequest(t, router, http.MethodPut, "/api/clinic/capacity", token, map[string]any{"reservedTotalDoctors": 10})
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+// TestClinic_SetClinicCapacity_BelowCurrentCount_Returns400 confirma que
+// no se puede reservar menos capacidad de la que ya está ocupada — para
+// bajar el conteo hay que quitar doctores primero, no "desreservar".
+func TestClinic_SetClinicCapacity_BelowCurrentCount_Returns400(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	router := server.NewRouter(db)
+
+	owner := testutil.CreateTestDoctor(t, db, "doc_clinic_cap_owner2", "password123")
+	clinic := models.Clinic{Name: "Clínica Cap 2", OwnerDoctorID: owner.ID, SubscriptionStatus: "active"}
+	require.NoError(t, db.Create(&clinic).Error)
+	require.NoError(t, db.Model(&owner).Updates(map[string]any{"clinic_id": clinic.ID, "is_clinic_owner": true}).Error)
+
+	for i := 0; i < 3; i++ {
+		d := testutil.CreateTestDoctor(t, db, "doc_clinic_cap_filler_"+string(rune('a'+i)), "password123")
+		require.NoError(t, db.Model(&d).Update("clinic_id", clinic.ID).Error)
+	}
+	// 4 doctores en total (dueño + 3) — pedir una reserva de 3 debe
+	// rechazarse porque ya hay 4.
+
+	token := testutil.TokenFor(t, owner.ID, owner.Username)
+	w := doRequest(t, router, http.MethodPut, "/api/clinic/capacity", token, map[string]any{"reservedTotalDoctors": 3})
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// TestClinic_SetClinicCapacity_ReservesAheadOfInvites_BillsImmediately
+// confirma el caso "quiero una clínica de 10 desde ya, aunque todavía no
+// invite a nadie": el dueño reserva capacidad para 10 (5 extra) sin haber
+// invitado a nadie más, y eso ya debe reflejarse en el cobro de Stripe de
+// inmediato.
+func TestClinic_SetClinicCapacity_ReservesAheadOfInvites_BillsImmediately(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	mock := newMockBillingClient()
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mustLocalStorage(t), clinicBillingConfig(), mock, geocoding.NewClient(), nil, nil)
+
+	owner := testutil.CreateTestDoctor(t, db, "doc_clinic_cap_owner3", "password123")
+	clinic := models.Clinic{
+		Name:                 "Clínica Cap 3",
+		OwnerDoctorID:        owner.ID,
+		SubscriptionStatus:   "active",
+		StripeSubscriptionID: "sub_clinic_cap3",
+	}
+	require.NoError(t, db.Create(&clinic).Error)
+	require.NoError(t, db.Model(&owner).Updates(map[string]any{"clinic_id": clinic.ID, "is_clinic_owner": true}).Error)
+
+	token := testutil.TokenFor(t, owner.ID, owner.Username)
+	w := doRequest(t, router, http.MethodPut, "/api/clinic/capacity", token, map[string]any{"reservedTotalDoctors": 10})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var updated models.Clinic
+	require.NoError(t, db.First(&updated, clinic.ID).Error)
+	assert.Equal(t, 10, updated.ReservedTotalDoctors)
+
+	call, ok := mock.lastExtraQtyCall()
+	require.True(t, ok)
+	assert.Equal(t, int64(5), call.Quantity, "solo está el dueño (1 doctor), pero la reserva de 10 ya debe cobrar 5 extra")
+}
+
+// TestClinic_ReservedCapacity_FillingVacancy_DoesNotChangeBill confirma el
+// punto central de la feature: con capacidad reservada activa, cuando un
+// doctor se sale y luego se invita/une a otro para llenar el hueco, el
+// cobro de "doctor extra" en Stripe se queda igual todo el tiempo — nunca
+// baja al salirse el primero, ni sube al entrar el segundo, porque ambos
+// conteos siguen dentro de lo reservado.
+func TestClinic_ReservedCapacity_FillingVacancy_DoesNotChangeBill(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	mock := newMockBillingClient()
+	router := server.NewRouterWithDeps(db, googlecalendar.Config{}, nil, mustLocalStorage(t), clinicBillingConfig(), mock, geocoding.NewClient(), nil, nil)
+
+	owner := testutil.CreateTestDoctor(t, db, "doc_clinic_cap_owner4", "password123")
+	clinic := models.Clinic{
+		Name:                 "Clínica Cap 4",
+		OwnerDoctorID:        owner.ID,
+		SubscriptionStatus:   "active",
+		StripeSubscriptionID: "sub_clinic_cap4",
+	}
+	require.NoError(t, db.Create(&clinic).Error)
+	require.NoError(t, db.Model(&owner).Updates(map[string]any{"clinic_id": clinic.ID, "is_clinic_owner": true}).Error)
+
+	// 6 doctores más (7 en total) y reserva de 8 (3 extra) — así queda un
+	// "hueco" de 1 dentro de lo ya reservado.
+	var toRemove models.Doctor
+	for i := 0; i < 6; i++ {
+		d := testutil.CreateTestDoctor(t, db, "doc_clinic_cap_vac_"+string(rune('a'+i)), "password123")
+		require.NoError(t, db.Model(&d).Update("clinic_id", clinic.ID).Error)
+		toRemove = d
+	}
+
+	ownerToken := testutil.TokenFor(t, owner.ID, owner.Username)
+	w := doRequest(t, router, http.MethodPut, "/api/clinic/capacity", ownerToken, map[string]any{"reservedTotalDoctors": 8})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	call, ok := mock.lastExtraQtyCall()
+	require.True(t, ok)
+	assert.Equal(t, int64(3), call.Quantity, "7 doctores reales - 5 base = 2, pero la reserva de 8 (3 extra) manda")
+
+	// El doctor "toRemove" se sale de la clínica — el conteo real baja a
+	// 6, pero la reserva de 8 sigue cubriendo esa capacidad.
+	w = doRequest(t, router, http.MethodDelete, "/api/clinic/doctors/"+itoa(toRemove.ID), ownerToken, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	call, ok = mock.lastExtraQtyCall()
+	require.True(t, ok)
+	assert.Equal(t, int64(3), call.Quantity, "el hueco no debe bajar el cobro mientras siga dentro de la capacidad reservada")
+
+	// Se invita (flujo real) a un doctor nuevo para llenar el hueco.
+	replacement := testutil.CreateTestDoctor(t, db, "doc_clinic_cap_replacement", "password123")
+	w = doRequest(t, router, http.MethodPost, "/api/clinic/invite", ownerToken, map[string]any{"email": replacement.Email})
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+
+	var invited models.Doctor
+	require.NoError(t, db.First(&invited, replacement.ID).Error)
+	require.NotEmpty(t, invited.ClinicInviteToken)
+
+	replacementToken := testutil.TokenFor(t, replacement.ID, replacement.Username)
+	w = doRequest(t, router, http.MethodPost, "/api/clinic/invitations/"+invited.ClinicInviteToken+"/accept", replacementToken, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	call, ok = mock.lastExtraQtyCall()
+	require.True(t, ok)
+	assert.Equal(t, int64(3), call.Quantity, "llenar el hueco tampoco debe subir el cobro más allá de lo ya reservado")
+}

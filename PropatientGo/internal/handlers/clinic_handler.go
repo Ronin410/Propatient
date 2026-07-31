@@ -52,13 +52,33 @@ func clinicInviteWrongAccountMessage(db *gorm.DB, token string) (string, bool) {
 	return fmt.Sprintf("Esta invitación es para la cuenta %s. Cierra sesión e inicia con esa cuenta para aceptarla.", maskEmail(tokenOwner.Email)), true
 }
 
+// billedExtraDoctors decide cuántos "doctores extra" se cobran: lo que
+// sea MAYOR entre los que de verdad hay ahora mismo y la capacidad que el
+// dueño reservó por adelantado (ver Clinic.ReservedTotalDoctors) — así,
+// si alguien se sale y el conteo real baja, el cobro no baja mientras
+// siga dentro de lo reservado (nada de prorrateos de ida y vuelta cuando
+// se vuelve a llenar el hueco), y si el dueño reserva capacidad sin
+// haber invitado a nadie todavía, ya se le cobra por adelantado.
+func billedExtraDoctors(actualCount int64, reservedTotal int) int64 {
+	extra := actualCount - billing.ClinicBaseIncludedDoctors
+	if extra < 0 {
+		extra = 0
+	}
+	reservedExtra := int64(reservedTotal - billing.ClinicBaseIncludedDoctors)
+	if reservedExtra > extra {
+		extra = reservedExtra
+	}
+	return extra
+}
+
 // syncClinicDoctorCount recalcula cuántos doctores tiene la clínica y
 // sincroniza el concepto de "doctor extra" en Stripe (se crea/actualiza/
-// borra según cruce o no billing.ClinicBaseIncludedDoctors). Se llama
-// después de aceptar una invitación o de quitar a un doctor — los dos
-// únicos momentos en que el conteo cambia. client puede ser nil (Stripe
-// no configurado); en ese caso no hace nada, mismo criterio de mejor
-// esfuerzo que el resto de integraciones opcionales.
+// borra según billedExtraDoctors cruce o no billing.ClinicBaseIncludedDoctors).
+// Se llama después de aceptar una invitación, de quitar a un doctor, o de
+// ajustar la capacidad reservada — los momentos en que el cobro podría
+// cambiar. client puede ser nil (Stripe no configurado); en ese caso no
+// hace nada, mismo criterio de mejor esfuerzo que el resto de
+// integraciones opcionales.
 func syncClinicDoctorCount(ctx context.Context, db *gorm.DB, client billing.Client, clinic *models.Clinic) error {
 	if client == nil || clinic.StripeSubscriptionID == "" {
 		return nil
@@ -67,10 +87,7 @@ func syncClinicDoctorCount(ctx context.Context, db *gorm.DB, client billing.Clie
 	if err := db.Model(&models.Doctor{}).Where("clinic_id = ?", clinic.ID).Count(&count).Error; err != nil {
 		return err
 	}
-	var extra int64
-	if count > billing.ClinicBaseIncludedDoctors {
-		extra = count - billing.ClinicBaseIncludedDoctors
-	}
+	extra := billedExtraDoctors(count, clinic.ReservedTotalDoctors)
 	newItemID, err := client.SetClinicExtraDoctorQuantity(ctx, clinic.StripeSubscriptionID, clinic.StripeExtraItemID, clinic.StripeExtraDoctorPriceID, extra)
 	if err != nil {
 		return err
@@ -256,6 +273,19 @@ func GetClinic(db *gorm.DB) gin.HandlerFunc {
 			extraDoctors = len(doctors) - billing.ClinicBaseIncludedDoctors
 		}
 
+		// billedExtra: lo que Stripe cobra de verdad (ver
+		// billedExtraDoctors) — puede ser MAYOR a extraDoctors si el dueño
+		// reservó capacidad que todavía no ocupa por completo.
+		billedExtra := billedExtraDoctors(int64(len(doctors)), clinic.ReservedTotalDoctors)
+
+		// availableWithoutExtraCost: cuántos doctores más se pueden
+		// invitar sin que suba el cobro — solo tiene sentido si hay
+		// capacidad reservada por encima de lo que ya hay ocupado.
+		availableWithoutExtraCost := 0
+		if clinic.ReservedTotalDoctors > len(doctors) {
+			availableWithoutExtraCost = clinic.ReservedTotalDoctors - len(doctors)
+		}
+
 		// Invitaciones a correos que todavía no tenían cuenta cuando se
 		// mandaron (ver inviteClinicByEmail) — visibles mientras no se
 		// consuman ni venzan, para que el dueño sepa a quién ya invitó y
@@ -320,6 +350,12 @@ func GetClinic(db *gorm.DB) gin.HandlerFunc {
 			"extraDoctors":        extraDoctors,
 			"basePriceDisplay":    basePriceDisplay,
 			"extraPriceDisplay":   extraPriceDisplay,
+			// Capacidad reservada (ver Clinic.ReservedTotalDoctors y
+			// SetClinicCapacity) — 0 significa que no hay reserva activa y
+			// el cobro es 100% reactivo al conteo real, como siempre.
+			"reservedTotalDoctors":      clinic.ReservedTotalDoctors,
+			"billedExtraDoctors":        billedExtra,
+			"availableWithoutExtraCost": availableWithoutExtraCost,
 			// Ubicación única de la clínica (ver UpdateClinicLocation) — el
 			// directorio público la usa para TODOS los doctores de esta
 			// clínica en vez de la dirección individual de cada quien.
@@ -391,6 +427,74 @@ func UpdateClinicLocation(db *gorm.DB, geoClient geocoding.Client) gin.HandlerFu
 			"address":   clinic.Address,
 			"latitude":  clinic.Latitude,
 			"longitude": clinic.Longitude,
+		})
+	}
+}
+
+type setClinicCapacityRequest struct {
+	ReservedTotalDoctors int `json:"reservedTotalDoctors"`
+}
+
+// SetClinicCapacity deja que el dueño reserve (o suelte) capacidad para
+// más doctores de los que tiene ahora mismo — pensado para dos casos: (1)
+// "quiero una clínica de 10 desde ya, aunque todavía no invite a nadie",
+// pagando por adelantado esa capacidad, y (2) llenar el hueco de un
+// doctor que se salió sin que el cobro baje y vuelva a subir cada vez
+// (ver billedExtraDoctors). 0 quita la reserva por completo y regresa al
+// cobro 100% reactivo de antes. Solo el dueño.
+func SetClinicCapacity(db *gorm.DB, client billing.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		doctorID := c.MustGet("doctorID").(uint)
+
+		var self models.Doctor
+		if err := db.First(&self, doctorID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Doctor no encontrado"})
+			return
+		}
+		if self.ClinicID == nil || !self.IsClinicOwner {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Solo el dueño de la clínica puede ajustar la capacidad reservada"})
+			return
+		}
+
+		var req setClinicCapacityRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Datos inválidos"})
+			return
+		}
+		if req.ReservedTotalDoctors < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "La capacidad no puede ser negativa"})
+			return
+		}
+
+		var clinic models.Clinic
+		if err := db.First(&clinic, *self.ClinicID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Clínica no encontrada"})
+			return
+		}
+
+		var count int64
+		if err := db.Model(&models.Doctor{}).Where("clinic_id = ?", clinic.ID).Count(&count).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo verificar el conteo de doctores"})
+			return
+		}
+		if int64(req.ReservedTotalDoctors) < count {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Ya tienes %d doctores — no puedes reservar capacidad para menos. Para bajar, primero quita a alguien de la clínica.", count)})
+			return
+		}
+
+		if err := db.Model(&clinic).Update("reserved_total_doctors", req.ReservedTotalDoctors).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo guardar la capacidad reservada"})
+			return
+		}
+		clinic.ReservedTotalDoctors = req.ReservedTotalDoctors
+
+		if err := syncClinicDoctorCount(c.Request.Context(), db, client, &clinic); err != nil {
+			log.Printf("⚠️ No se pudo sincronizar el conteo de doctores de la clínica %d tras ajustar su capacidad: %v", clinic.ID, err)
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message":              "Capacidad de la clínica actualizada",
+			"reservedTotalDoctors": clinic.ReservedTotalDoctors,
 		})
 	}
 }

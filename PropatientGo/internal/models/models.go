@@ -259,6 +259,18 @@ type Clinic struct {
 	// suscribirse.
 	UsedLaunchPricing        bool   `gorm:"default:false" json:"-"`
 	StripeExtraDoctorPriceID string `json:"-"`
+
+	// ReservedTotalDoctors: capacidad que el dueño quiere PAGAR de una vez,
+	// separada de cuántos doctores tiene ahora mismo (ver
+	// handlers.syncClinicDoctorCount) — así puede "reservar" lugares para
+	// ir invitando después, o volver a llenar el hueco de alguien que se
+	// salió sin que le bajen el cobro y le vuelva a subir cuando invite al
+	// reemplazo. 0 significa "sin reserva": el cobro sigue siendo 100%
+	// reactivo al conteo real, como era antes de este campo. Nunca baja
+	// solo — solo el dueño lo ajusta explícitamente (ver
+	// handlers.SetClinicCapacity), y no se le deja bajarlo por debajo de
+	// los doctores que ya tiene.
+	ReservedTotalDoctors int `gorm:"default:0" json:"reservedTotalDoctors"`
 }
 
 // ClinicEmailInvite es una invitación a la clínica para un correo que
