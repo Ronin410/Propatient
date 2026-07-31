@@ -317,6 +317,7 @@ func NewRouterWithDeps(db *gorm.DB, calendarConfig googlecalendar.Config, calend
 				clinicRoutes.POST("", handlers.CreateClinic(db, billingClient, billingConfig))
 				clinicRoutes.GET("", handlers.GetClinic(db))
 				clinicRoutes.PUT("/location", handlers.UpdateClinicLocation(db, geoClient))
+				clinicRoutes.PUT("/capacity", handlers.SetClinicCapacity(db, billingClient))
 				clinicRoutes.POST("/portal", handlers.CreateClinicPortalSession(db, billingClient))
 				clinicRoutes.POST("/invite", handlers.InviteDoctorToClinic(db))
 				clinicRoutes.GET("/invitations/:token", handlers.GetClinicInvite(db))

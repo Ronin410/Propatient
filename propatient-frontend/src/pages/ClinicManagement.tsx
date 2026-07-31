@@ -38,6 +38,13 @@ interface ClinicInfo {
   extraDoctors: number;
   basePriceDisplay: number;
   extraPriceDisplay: number;
+  // Capacidad reservada (ver Clinic.ReservedTotalDoctors en el backend) —
+  // 0 significa que no hay reserva activa y el cobro es 100% reactivo al
+  // conteo real, como siempre. billedExtraDoctors puede ser mayor a
+  // extraDoctors si hay capacidad reservada sin ocupar todavía.
+  reservedTotalDoctors: number;
+  billedExtraDoctors: number;
+  availableWithoutExtraCost: number;
   address: string;
   latitude: number | null;
   longitude: number | null;
@@ -98,6 +105,12 @@ export const ClinicManagement: React.FC = () => {
   const [locationLng, setLocationLng] = useState<number | null>(null);
   const [savingLocation, setSavingLocation] = useState(false);
 
+  // Capacidad reservada — solo el dueño la ajusta (ver
+  // handlers.SetClinicCapacity). Se guarda como texto para que el input
+  // pueda estar vacío mientras se escribe, sin forzar un 0 a medio tecleo.
+  const [capacityInput, setCapacityInput] = useState('');
+  const [savingCapacity, setSavingCapacity] = useState(false);
+
   const [popupConfig, setPopupConfig] = useState({
     isOpen: false,
     type: 'success' as 'success' | 'error',
@@ -137,6 +150,7 @@ export const ClinicManagement: React.FC = () => {
     setLocationAddress(clinic.address || '');
     setLocationLat(clinic.latitude ?? null);
     setLocationLng(clinic.longitude ?? null);
+    setCapacityInput(clinic.reservedTotalDoctors > 0 ? String(clinic.reservedTotalDoctors) : '');
   }, [clinic]);
 
   const handleSaveLocation = async (e: React.FormEvent) => {
@@ -164,6 +178,33 @@ export const ClinicManagement: React.FC = () => {
       });
     } finally {
       setSavingLocation(false);
+    }
+  };
+
+  const handleSaveCapacity = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingCapacity(true);
+    try {
+      const reservedTotalDoctors = capacityInput.trim() === '' ? 0 : parseInt(capacityInput, 10);
+      await api.put('/clinic/capacity', { reservedTotalDoctors });
+      setPopupConfig({
+        isOpen: true,
+        type: 'success',
+        title: 'Capacidad actualizada',
+        message: reservedTotalDoctors > 0
+          ? `Ya se cobra la capacidad reservada para ${reservedTotalDoctors} personas, aunque todavía no la ocupes por completo.`
+          : 'Se quitó la reserva — el cobro vuelve a depender solo de cuántos doctores tengas en cada momento.',
+      });
+      fetchClinic();
+    } catch (err: unknown) {
+      setPopupConfig({
+        isOpen: true,
+        type: 'error',
+        title: 'No se pudo actualizar la capacidad',
+        message: getErrorMessage(err, 'Ocurrió un error al guardar la capacidad reservada.'),
+      });
+    } finally {
+      setSavingCapacity(false);
     }
   };
 
@@ -412,6 +453,13 @@ export const ClinicManagement: React.FC = () => {
               {clinic.doctors.length} doctor{clinic.doctors.length === 1 ? '' : 'es'} en la clínica
               {clinic.extraDoctors > 0 && ` (${clinic.extraDoctors} adicional${clinic.extraDoctors === 1 ? '' : 'es'} sobre el plan base)`}
             </p>
+            {clinic.reservedTotalDoctors > clinic.doctors.length && (
+              <p className="clinic-muted">
+                Capacidad reservada para {clinic.reservedTotalDoctors} en total — ya se cobran{' '}
+                {clinic.billedExtraDoctors} doctor{clinic.billedExtraDoctors === 1 ? '' : 'es'} extra aunque solo
+                tengas {clinic.extraDoctors} ocupado{clinic.extraDoctors === 1 ? '' : 's'}.
+              </p>
+            )}
             {clinic.subscriptionStatus === 'past_due' && clinic.pastDueGraceEndsAt && (
               <p className="clinic-alert">
                 El banco rechazó el último cobro. Tienen {daysLeft(clinic.pastDueGraceEndsAt)} día
@@ -468,6 +516,41 @@ export const ClinicManagement: React.FC = () => {
       </section>
 
       {clinic.isOwner && (
+        <section className="card">
+          <h3>Capacidad de la clínica</h3>
+          <p className="clinic-muted">
+            Reserva espacio para más doctores de los que tienes ahora mismo — útil si sabes que vas a
+            invitar a alguien más adelante, o si quieres llenar el hueco de alguien que se salió sin que
+            el cobro baje y te vuelva a subir cada vez.
+          </p>
+          {clinic.reservedTotalDoctors > 0 && (
+            <p>
+              Capacidad reservada: {clinic.reservedTotalDoctors} persona{clinic.reservedTotalDoctors === 1 ? '' : 's'} en
+              total.
+              {clinic.availableWithoutExtraCost > 0 && (
+                <> Puedes invitar a {clinic.availableWithoutExtraCost} más sin que suba el cobro.</>
+              )}
+            </p>
+          )}
+          <form className="clinic-create-form" onSubmit={handleSaveCapacity}>
+            <div className="form-group">
+              <label>Reservar capacidad para (total de personas, contándote a ti)</label>
+              <input
+                type="number"
+                min={clinic.doctors.length}
+                value={capacityInput}
+                onChange={(e) => setCapacityInput(e.target.value)}
+                placeholder={`Mínimo ${clinic.doctors.length} (ya tienes ${clinic.doctors.length})`}
+              />
+            </div>
+            <button type="submit" className="btn-primary" disabled={savingCapacity}>
+              {savingCapacity ? 'Guardando...' : 'Guardar capacidad'}
+            </button>
+          </form>
+        </section>
+      )}
+
+      {clinic.isOwner && (
         <section className="card invite-card">
           <h3>Invitar a un doctor</h3>
           <p className="clinic-muted">
@@ -475,7 +558,12 @@ export const ClinicManagement: React.FC = () => {
             une. Si todavía no tiene cuenta, le mandamos una invitación a registrarse — en cuanto su
             cuenta quede aprobada, se une a la clínica automáticamente, sin ningún paso extra.
           </p>
-          {clinic.doctors.length >= clinic.baseIncludedDoctors && (
+          {clinic.availableWithoutExtraCost > 0 ? (
+            <p className="clinic-alert success">
+              Tienes capacidad reservada para {clinic.availableWithoutExtraCost} persona
+              {clinic.availableWithoutExtraCost === 1 ? '' : 's'} más sin costo adicional — ya la estás pagando.
+            </p>
+          ) : clinic.doctors.length >= clinic.baseIncludedDoctors && (
             <p className="clinic-alert">
               Ya tienes {clinic.doctors.length} de {clinic.baseIncludedDoctors} personas incluidas en tu
               plan base (contándote a ti). Este doctor se cobrará ${clinic.extraPriceDisplay.toLocaleString('es-MX')}{' '}
